@@ -1,7 +1,5 @@
 import asyncio
-import time
 import logging
-
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
@@ -10,6 +8,7 @@ from telegram.ext import (
     ConversationHandler,
     MessageHandler,
     CallbackQueryHandler,
+    PollAnswerHandler,
     filters,
 )
 
@@ -19,9 +18,7 @@ from config import (
     MIN_PLAYERS,
     JOIN_SECONDS,
     QUESTION_SECONDS,
-    SPEED_BONUS_SECONDS,
     CORRECT_POINTS,
-    SPEED_BONUS_POINTS,
 )
 
 from database import (
@@ -31,100 +28,116 @@ from database import (
     ensure_player,
     add_points,
     get_group_leaderboard,
-    get_global_leaderboard,
 )
 
-logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    level=logging.INFO,
-)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 QUESTION, A, B, C, D, CORRECT = range(6)
 
-active_games = {}
-user_last_click = {}
-
 ROUNDS_PER_GAME = 5
-SPAM_SECONDS = 1.0
+
+active_games = {}
+poll_map = {}
 
 
-def get_name(user):
-    if user.username:
-        return f"@{user.username}"
-    return user.full_name
-
-
-def create_safe_task(coro):
+# =========================
+# SAFE TASK
+# =========================
+def safe_task(coro):
     async def wrapper():
         try:
             await coro
         except Exception:
             logger.exception("Background task crashed")
-
     return asyncio.create_task(wrapper())
 
 
+# =========================
+# BASIC COMMANDS
+# =========================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Quiz Game Bot is running!")
 
 
 async def myid(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(f"Your ID: {update.effective_user.id}")
+    await update.message.reply_text(str(update.effective_user.id))
+
+
+# =========================
+# STOP GAME
+# =========================
+async def stop_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat = update.effective_chat
+
+    if update.effective_user.id != ADMIN_ID:
+        await update.message.reply_text("Only admin can stop the game.")
+        return
+
+    if chat.id not in active_games:
+        await update.message.reply_text("No game is currently running.")
+        return
+
+    game = active_games.get(chat.id)
+
+    poll_id = game.get("current_poll_id")
+    if poll_id in poll_map:
+        poll_map.pop(poll_id, None)
+
+    active_games.pop(chat.id, None)
+
+    await update.message.reply_text("Game stopped.")
 
 
 # =========================
 # ADD QUESTION
 # =========================
 async def add_question_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
     if update.effective_user.id != ADMIN_ID:
-        await update.message.reply_text("Only admin can use this command.")
+        await update.message.reply_text("Admin only.")
         return ConversationHandler.END
 
-    context.user_data.clear()
     await update.message.reply_text("Send the question text:")
     return QUESTION
 
 
 async def question_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["question"] = update.message.text.strip()
-    await update.message.reply_text("Send option A:")
+    context.user_data["q"] = update.message.text
+    await update.message.reply_text("Option A:")
     return A
 
 
 async def a_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["a"] = update.message.text.strip()
-    await update.message.reply_text("Send option B:")
+    context.user_data["a"] = update.message.text
+    await update.message.reply_text("Option B:")
     return B
 
 
 async def b_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["b"] = update.message.text.strip()
-    await update.message.reply_text("Send option C:")
+    context.user_data["b"] = update.message.text
+    await update.message.reply_text("Option C:")
     return C
 
 
 async def c_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["c"] = update.message.text.strip()
-    await update.message.reply_text("Send option D:")
+    context.user_data["c"] = update.message.text
+    await update.message.reply_text("Option D:")
     return D
 
 
 async def d_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["d"] = update.message.text.strip()
-    await update.message.reply_text("Which option is correct? Send only A, B, C, or D")
+    context.user_data["d"] = update.message.text
+    await update.message.reply_text("Correct option (A/B/C/D):")
     return CORRECT
 
 
 async def correct_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    correct = update.message.text.strip().upper()
 
-    if correct not in ["A", "B", "C", "D"]:
-        await update.message.reply_text("Invalid answer. Send only A, B, C, or D.")
-        return CORRECT
+    correct = update.message.text.upper()
 
     add_question(
-        context.user_data["question"],
+        context.user_data["q"],
         context.user_data["a"],
         context.user_data["b"],
         context.user_data["c"],
@@ -132,92 +145,110 @@ async def correct_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
         correct,
     )
 
-    context.user_data.clear()
-    await update.message.reply_text("Question added successfully ✅")
-    return ConversationHandler.END
-
-
-async def cancel_add_question(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data.clear()
-    await update.message.reply_text("Cancelled.")
+    await update.message.reply_text("Question added.")
     return ConversationHandler.END
 
 
 # =========================
-# GAME START
+# START GAME
 # =========================
 async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat = update.effective_chat
 
-    if chat.type == "private":
-        await update.message.reply_text("Use /startgame inside a group.")
+    chat_id = update.effective_chat.id
+
+    if chat_id in active_games:
+        await update.message.reply_text(
+            "A game is already running here.\nUse /stopgame to reset it."
+        )
         return
 
-    if chat.id in active_games:
-        await update.message.reply_text("A game is already running in this group.")
-        return
-
-    active_games[chat.id] = {
+    active_games[chat_id] = {
         "status": "joining",
         "players": {},
         "scores": {},
         "round": 0,
-        "answers": {},
-        "question_started_at": None,
+        "answered": set(),
+        "current_poll_id": None,
         "correct": None,
-        "question_id": None,
-        "countdown_message_id": None,
     }
 
-    keyboard = [[InlineKeyboardButton("🎮 Join Game", callback_data=f"join|{chat.id}")]]
+    keyboard = [[InlineKeyboardButton("🎮 Join Game", callback_data=f"join|{chat_id}")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     await update.message.reply_text(
-        f"🎮 New Quiz Game!\n\n"
-        f"Rounds: {ROUNDS_PER_GAME}\n"
-        f"Minimum players: {MIN_PLAYERS}\n"
-        f"Join time: {JOIN_SECONDS} seconds\n\n"
-        f"Press Join to play!",
+        f"New quiz game!\n\nJoin within {JOIN_SECONDS} seconds.",
         reply_markup=reply_markup,
     )
 
-    create_safe_task(begin_game_after_join(chat.id, context))
+    safe_task(begin_game_after_join(chat_id, context))
 
 
 async def begin_game_after_join(chat_id, context):
+
     await asyncio.sleep(JOIN_SECONDS)
 
     game = active_games.get(chat_id)
+
     if not game:
         return
 
     if len(game["players"]) < MIN_PLAYERS:
+
         await context.bot.send_message(
             chat_id=chat_id,
-            text=f"Not enough players. Need at least {MIN_PLAYERS} players."
+            text=f"Not enough players (need {MIN_PLAYERS}).",
         )
+
         active_games.pop(chat_id, None)
         return
 
-    players_text = "\n".join(
-        f"{i+1}. {player['name']}"
-        for i, player in enumerate(game["players"].values())
-    )
+    await context.bot.send_message(chat_id, "Game starting!")
 
-    await context.bot.send_message(
-        chat_id=chat_id,
-        text=f"Players joined:\n\n{players_text}\n\nGame starting..."
-    )
-
-    await asyncio.sleep(2)
     await send_question(chat_id, context)
 
 
 # =========================
-# QUESTION FLOW
+# JOIN BUTTON
+# =========================
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    query = update.callback_query
+    await query.answer()
+
+    data = query.data.split("|")
+
+    if data[0] != "join":
+        return
+
+    chat_id = int(data[1])
+    game = active_games.get(chat_id)
+
+    if not game:
+        return
+
+    user = query.from_user
+
+    if user.id in game["players"]:
+        await query.answer("Already joined.", show_alert=True)
+        return
+
+    name = user.username or user.full_name
+
+    game["players"][user.id] = name
+    game["scores"][user.id] = 0
+
+    ensure_player(user.id, user.username, user.full_name)
+
+    await query.answer("Joined!", show_alert=True)
+
+
+# =========================
+# SEND QUESTION
 # =========================
 async def send_question(chat_id, context):
+
     game = active_games.get(chat_id)
+
     if not game:
         return
 
@@ -228,284 +259,195 @@ async def send_question(chat_id, context):
         return
 
     question = get_random_question()
+
     if not question:
-        await context.bot.send_message(chat_id=chat_id, text="No questions available.")
-        active_games.pop(chat_id, None)
+        await context.bot.send_message(chat_id, "No questions.")
         return
 
     q_id, q_text, a, b, c, d, correct = question
 
-    game["status"] = "question"
-    game["question_id"] = q_id
-    game["correct"] = correct
-    game["answers"] = {}
-    game["question_started_at"] = time.time()
+    options = [a, b, c, d]
+    correct_index = ["A", "B", "C", "D"].index(correct)
 
-    keyboard = [
-        [
-            InlineKeyboardButton(f"A) {a}", callback_data=f"ans|{chat_id}|{q_id}|A"),
-            InlineKeyboardButton(f"B) {b}", callback_data=f"ans|{chat_id}|{q_id}|B"),
-        ],
-        [
-            InlineKeyboardButton(f"C) {c}", callback_data=f"ans|{chat_id}|{q_id}|C"),
-            InlineKeyboardButton(f"D) {d}", callback_data=f"ans|{chat_id}|{q_id}|D"),
-        ],
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
+    game["correct"] = correct_index
+    game["answered"] = set()
 
-    await context.bot.send_message(
-        chat_id=chat_id,
-        text=(
-            f"Round {game['round']}/{ROUNDS_PER_GAME}\n\n"
-            f"{q_text}\n\n"
-            f"Choose your answer below."
-        ),
-        reply_markup=reply_markup,
+    msg = await context.bot.send_poll(
+        chat_id,
+        question=f"Round {game['round']}/{ROUNDS_PER_GAME}\n\n{q_text}",
+        options=options,
+        type="quiz",
+        correct_option_id=correct_index,
+        is_anonymous=False,
+        open_period=QUESTION_SECONDS,
     )
 
-    countdown_msg = await context.bot.send_message(
-        chat_id=chat_id,
-        text=f"⏳ Time left: {QUESTION_SECONDS}s"
-    )
-    game["countdown_message_id"] = countdown_msg.message_id
+    game["current_poll_id"] = msg.poll.id
+    poll_map[msg.poll.id] = chat_id
 
-    create_safe_task(run_round_timer(chat_id, context, q_id))
+    safe_task(next_question_timer(msg.poll.id, context))
 
 
-async def run_round_timer(chat_id, context, q_id):
-    for remaining in range(QUESTION_SECONDS - 1, -1, -1):
-        await asyncio.sleep(1)
+# =========================
+# POLL ANSWERS
+# =========================
+async def receive_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-        game = active_games.get(chat_id)
-        if not game:
-            return
+    answer = update.poll_answer
+    poll_id = answer.poll_id
 
-        if game["status"] != "question":
-            return
+    if poll_id not in poll_map:
+        return
 
-        if game["question_id"] != q_id:
-            return
-
-        try:
-            await context.bot.edit_message_text(
-                chat_id=chat_id,
-                message_id=game["countdown_message_id"],
-                text=f"⏳ Time left: {remaining}s"
-            )
-        except Exception as e:
-            logger.warning("Countdown edit failed: %s", e)
-
+    chat_id = poll_map[poll_id]
     game = active_games.get(chat_id)
+
     if not game:
         return
 
-    if game["status"] != "question":
+    user = answer.user
+
+    if user.id not in game["players"]:
         return
 
-    if game["question_id"] != q_id:
+    if user.id in game["answered"]:
         return
 
-    game["status"] = "round_end"
+    game["answered"].add(user.id)
 
-    await context.bot.send_message(
-        chat_id=chat_id,
-        text=f"⏰ Time's up!\nCorrect answer: {game['correct']}"
-    )
+    if answer.option_ids and answer.option_ids[0] == game["correct"]:
+
+        game["scores"][user.id] += CORRECT_POINTS
+
+        add_points(
+            user.id,
+            user.username,
+            user.full_name,
+            chat_id,
+            CORRECT_POINTS,
+        )
+
+
+# =========================
+# NEXT QUESTION TIMER
+# =========================
+async def next_question_timer(poll_id, context):
+
+    await asyncio.sleep(QUESTION_SECONDS + 2)
+
+    chat_id = poll_map.get(poll_id)
+
+    if not chat_id:
+        return
+
+    game = active_games.get(chat_id)
+
+    if not game:
+        return
 
     await send_round_leaderboard(chat_id, context)
 
     await asyncio.sleep(2)
+
     await send_question(chat_id, context)
 
 
 async def send_round_leaderboard(chat_id, context):
+
     game = active_games.get(chat_id)
-    if not game:
-        return
 
-    winners = sorted(game["scores"].items(), key=lambda x: x[1], reverse=True)
+    ranking = sorted(
+        game["scores"].items(),
+        key=lambda x: x[1],
+        reverse=True,
+    )
 
-    if not winners:
-        await context.bot.send_message(chat_id=chat_id, text="No points scored yet.")
-        return
+    text = f"Leaderboard after round {game['round']}\n\n"
 
-    text = f"📊 Leaderboard after round {game['round']}\n\n"
-    for i, (user_id, points) in enumerate(winners[:10], start=1):
-        name = game["players"].get(user_id, {}).get("name", str(user_id))
-        text += f"{i}. {name} — {points} pts\n"
+    for i, (uid, pts) in enumerate(ranking[:10]):
+        name = game["players"][uid]
+        text += f"{i+1}. {name} — {pts} pts\n"
 
-    await context.bot.send_message(chat_id=chat_id, text=text)
-
-
-# =========================
-# CALLBACKS
-# =========================
-async def answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    user = query.from_user
-    data = query.data.split("|")
-
-    now = time.time()
-    last_click = user_last_click.get(user.id, 0)
-    if now - last_click < SPAM_SECONDS:
-        await query.answer("Too fast. Wait a moment.")
-        return
-    user_last_click[user.id] = now
-
-    if data[0] == "join":
-        chat_id = int(data[1])
-        game = active_games.get(chat_id)
-
-        if not game or game["status"] != "joining":
-            await query.answer("Joining time is over.", show_alert=True)
-            return
-
-        if user.id in game["players"]:
-            await query.answer("You already joined.", show_alert=True)
-            return
-
-        game["players"][user.id] = {
-            "name": get_name(user),
-            "username": user.username,
-            "full_name": user.full_name,
-        }
-        game["scores"][user.id] = 0
-
-        ensure_player(user.id, user.username, user.full_name)
-
-        await query.answer("You joined the game!", show_alert=True)
-        return
-
-    if data[0] == "ans":
-        chat_id = int(data[1])
-        q_id = int(data[2])
-        user_answer = data[3]
-
-        game = active_games.get(chat_id)
-        if not game:
-            await query.answer("No active game.")
-            return
-
-        if game["status"] != "question":
-            await query.answer("This round is closed.", show_alert=True)
-            return
-
-        if user.id not in game["players"]:
-            await query.answer("You must join first.", show_alert=True)
-            return
-
-        if q_id != game["question_id"]:
-            await query.answer("Old question.", show_alert=True)
-            return
-
-        if user.id in game["answers"]:
-            await query.answer("You already answered.", show_alert=True)
-            return
-
-        elapsed = time.time() - game["question_started_at"]
-        points = 0
-
-        if user_answer == game["correct"]:
-            points = CORRECT_POINTS
-            if elapsed <= SPEED_BONUS_SECONDS:
-                points += SPEED_BONUS_POINTS
-
-            add_points(user.id, user.username, user.full_name, chat_id, points)
-            game["scores"][user.id] = game["scores"].get(user.id, 0) + points
-
-        game["answers"][user.id] = user_answer
-
-        if points > 0:
-            await query.answer(f"Correct! +{points} points")
-        else:
-            await query.answer("Wrong answer.")
+    await context.bot.send_message(chat_id, text)
 
 
 # =========================
-# LEADERBOARDS
-# =========================
-async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    rows = get_group_leaderboard(update.effective_chat.id)
-
-    if not rows:
-        await update.message.reply_text("No group scores yet.")
-        return
-
-    text = "🏆 Group Leaderboard\n\n"
-    for i, r in enumerate(rows, start=1):
-        name = f"@{r[1]}" if r[1] else r[0]
-        text += f"{i}. {name} — {r[2]} pts\n"
-
-    await update.message.reply_text(text)
-
-
-async def global_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    rows = get_global_leaderboard()
-
-    if not rows:
-        await update.message.reply_text("No global scores yet.")
-        return
-
-    text = "🌍 Global Leaderboard\n\n"
-    for i, r in enumerate(rows, start=1):
-        name = f"@{r[1]}" if r[1] else r[0]
-        text += f"{i}. {name} — {r[2]} pts\n"
-
-    await update.message.reply_text(text)
-
-
-# =========================
-# END GAME
+# FINAL PODIUM
 # =========================
 async def end_game(chat_id, context):
+
     game = active_games.get(chat_id)
-    if not game:
-        return
 
-    winners = sorted(game["scores"].items(), key=lambda x: x[1], reverse=True)
+    ranking = sorted(
+        game["scores"].items(),
+        key=lambda x: x[1],
+        reverse=True,
+    )
 
-    if not winners:
-        text = "Game ended. Nobody scored any points."
-    else:
-        text = "🏆 Final Winners\n\n"
-        for i, (user_id, points) in enumerate(winners[:10], start=1):
-            name = game["players"].get(user_id, {}).get("name", str(user_id))
-            text += f"{i}. {name} — {points} pts\n"
+    text = "🏆 Final Winners\n\n"
 
-    await context.bot.send_message(chat_id=chat_id, text=text)
+    medals = ["🥇", "🥈", "🥉"]
+
+    for i, (uid, pts) in enumerate(ranking[:3]):
+        name = game["players"][uid]
+        text += f"{medals[i]} {name} — {pts} pts\n"
+
+    await context.bot.send_message(chat_id, text)
+
     active_games.pop(chat_id, None)
+
+
+# =========================
+# LEADERBOARD
+# =========================
+async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    rows = get_group_leaderboard(update.effective_chat.id)
+
+    text = "🏆 Leaderboard\n\n"
+
+    for i, r in enumerate(rows):
+        name = r[1] or r[0]
+        text += f"{i+1}. {name} — {r[2]} pts\n"
+
+    await update.message.reply_text(text)
 
 
 # =========================
 # MAIN
 # =========================
 def main():
+
     create_tables()
 
     app = Application.builder().token(BOT_TOKEN).build()
 
-    add_question_handler = ConversationHandler(
+    add_q_handler = ConversationHandler(
         entry_points=[CommandHandler("addquestion", add_question_start)],
         states={
-            QUESTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, question_step)],
-            A: [MessageHandler(filters.TEXT & ~filters.COMMAND, a_step)],
-            B: [MessageHandler(filters.TEXT & ~filters.COMMAND, b_step)],
-            C: [MessageHandler(filters.TEXT & ~filters.COMMAND, c_step)],
-            D: [MessageHandler(filters.TEXT & ~filters.COMMAND, d_step)],
-            CORRECT: [MessageHandler(filters.TEXT & ~filters.COMMAND, correct_step)],
+            QUESTION: [MessageHandler(filters.TEXT, question_step)],
+            A: [MessageHandler(filters.TEXT, a_step)],
+            B: [MessageHandler(filters.TEXT, b_step)],
+            C: [MessageHandler(filters.TEXT, c_step)],
+            D: [MessageHandler(filters.TEXT, d_step)],
+            CORRECT: [MessageHandler(filters.TEXT, correct_step)],
         },
-        fallbacks=[CommandHandler("cancel", cancel_add_question)],
+        fallbacks=[],
     )
 
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("myid", myid))
-    app.add_handler(add_question_handler)
     app.add_handler(CommandHandler("startgame", start_game))
+    app.add_handler(CommandHandler("stopgame", stop_game))
     app.add_handler(CommandHandler("leaderboard", leaderboard))
-    app.add_handler(CommandHandler("global", global_leaderboard))
-    app.add_handler(CallbackQueryHandler(answer))
+    app.add_handler(CommandHandler("myid", myid))
+
+    app.add_handler(add_q_handler)
+
+    app.add_handler(CallbackQueryHandler(button_handler))
+    app.add_handler(PollAnswerHandler(receive_poll_answer))
 
     print("Bot running...")
+
     app.run_polling()
 
 

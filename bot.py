@@ -1,5 +1,6 @@
 import asyncio
 import time
+import logging
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -33,6 +34,12 @@ from database import (
     get_global_leaderboard,
 )
 
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    level=logging.INFO,
+)
+logger = logging.getLogger(__name__)
+
 QUESTION, A, B, C, D, CORRECT = range(6)
 
 active_games = {}
@@ -48,12 +55,26 @@ def get_name(user):
     return user.full_name
 
 
+def create_safe_task(coro):
+    async def wrapper():
+        try:
+            await coro
+        except Exception as e:
+            logger.exception("Background task crashed: %s", e)
+
+    return asyncio.create_task(wrapper())
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Quiz Game Bot is running!")
 
 
+async def myid(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(f"Your ID: {update.effective_user.id}")
+
+
 # =========================
-# ADD QUESTION SYSTEM
+# ADD QUESTION
 # =========================
 async def add_question_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
@@ -102,13 +123,14 @@ async def correct_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Invalid answer. Send only A, B, C, or D.")
         return CORRECT
 
-    question = context.user_data["question"]
-    a = context.user_data["a"]
-    b = context.user_data["b"]
-    c = context.user_data["c"]
-    d = context.user_data["d"]
-
-    add_question(question, a, b, c, d, correct)
+    add_question(
+        context.user_data["question"],
+        context.user_data["a"],
+        context.user_data["b"],
+        context.user_data["c"],
+        context.user_data["d"],
+        correct
+    )
 
     context.user_data.clear()
     await update.message.reply_text("Question added successfully ✅")
@@ -144,7 +166,6 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "question_started_at": None,
         "correct": None,
         "question_id": None,
-        "answered_order": [],
         "countdown_message_id": None,
     }
 
@@ -160,12 +181,9 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=reply_markup,
     )
 
-    asyncio.create_task(begin_game_after_join(chat.id, context))
+    create_safe_task(begin_game_after_join(chat.id, context))
 
 
-# =========================
-# JOIN PERIOD
-# =========================
 async def begin_game_after_join(chat_id, context):
     await asyncio.sleep(JOIN_SECONDS)
 
@@ -221,7 +239,6 @@ async def send_question(chat_id, context):
     game["question_id"] = q_id
     game["correct"] = correct
     game["answers"] = {}
-    game["answered_order"] = []
     game["question_started_at"] = time.time()
     game["countdown_message_id"] = None
 
@@ -253,12 +270,12 @@ async def send_question(chat_id, context):
     )
     game["countdown_message_id"] = countdown_msg.message_id
 
-    asyncio.create_task(run_countdown(chat_id, context, q_id))
-    asyncio.create_task(finish_round(chat_id, context, q_id))
+    create_safe_task(run_countdown(chat_id, context, q_id))
+    create_safe_task(finish_round(chat_id, context, q_id))
 
 
 # =========================
-# COUNTDOWN TIMER
+# COUNTDOWN
 # =========================
 async def run_countdown(chat_id, context, q_id):
     for remaining in range(QUESTION_SECONDS - 1, -1, -1):
@@ -268,10 +285,7 @@ async def run_countdown(chat_id, context, q_id):
         if not game:
             return
 
-        if game["question_id"] != q_id:
-            return
-
-        if game["status"] != "question":
+        if game["question_id"] != q_id or game["status"] != "question":
             return
 
         try:
@@ -297,36 +311,32 @@ async def finish_round(chat_id, context, q_id):
     if game["question_id"] != q_id:
         return
 
+    if game["status"] != "question":
+        return
+
     game["status"] = "round_end"
-    correct = game["correct"]
 
     await context.bot.send_message(
         chat_id=chat_id,
-        text=f"⏰ Time's up!\nCorrect answer: {correct}"
+        text=f"⏰ Time's up!\nCorrect answer: {game['correct']}"
     )
 
     await send_round_leaderboard(chat_id, context)
 
-    await asyncio.sleep(3)
+    await asyncio.sleep(2)
     await send_question(chat_id, context)
 
 
-# =========================
-# ROUND LEADERBOARD
-# =========================
 async def send_round_leaderboard(chat_id, context):
     game = active_games.get(chat_id)
     if not game:
         return
 
-    if not game["scores"]:
-        await context.bot.send_message(
-            chat_id=chat_id,
-            text="No points scored yet."
-        )
-        return
-
     winners = sorted(game["scores"].items(), key=lambda x: x[1], reverse=True)
+
+    if not winners:
+        await context.bot.send_message(chat_id=chat_id, text="No points scored yet.")
+        return
 
     text = f"📊 Leaderboard after round {game['round']}\n\n"
     for i, (user_id, points) in enumerate(winners[:10], start=1):
@@ -337,25 +347,21 @@ async def send_round_leaderboard(chat_id, context):
 
 
 # =========================
-# CALLBACK HANDLER
+# BUTTON HANDLER
 # =========================
 async def answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user = query.from_user
+    data = query.data.split("|")
 
-    # anti-spam click limiter
     now = time.time()
     last_click = user_last_click.get(user.id, 0)
     if now - last_click < SPAM_SECONDS:
-        await query.answer("Too fast. Wait a moment.", show_alert=False)
+        await query.answer("Too fast. Wait a moment.")
         return
     user_last_click[user.id] = now
 
-    data = query.data.split("|")
-
     if data[0] == "join":
-        await query.answer()
-
         chat_id = int(data[1])
         game = active_games.get(chat_id)
 
@@ -372,7 +378,7 @@ async def answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "username": user.username,
             "full_name": user.full_name,
         }
-        game["scores"][user.id] = game["scores"].get(user.id, 0)
+        game["scores"][user.id] = 0
 
         ensure_player(user.id, user.username, user.full_name)
 
@@ -380,14 +386,13 @@ async def answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if data[0] == "ans":
-        await query.answer()
-
         chat_id = int(data[1])
         q_id = int(data[2])
         user_answer = data[3]
 
         game = active_games.get(chat_id)
         if not game:
+            await query.answer("No active game.")
             return
 
         if game["status"] != "question":
@@ -395,7 +400,7 @@ async def answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         if user.id not in game["players"]:
-            await query.answer("You must join the game first.", show_alert=True)
+            await query.answer("You must join first.", show_alert=True)
             return
 
         if q_id != game["question_id"]:
@@ -414,49 +419,15 @@ async def answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if elapsed <= SPEED_BONUS_SECONDS:
                 points += SPEED_BONUS_POINTS
 
-            add_points(
-                user.id,
-                user.username,
-                user.full_name,
-                chat_id,
-                points
-            )
-
+            add_points(user.id, user.username, user.full_name, chat_id, points)
             game["scores"][user.id] = game["scores"].get(user.id, 0) + points
 
-        game["answers"][user.id] = {
-            "answer": user_answer,
-            "points": points,
-            "time": round(elapsed, 2),
-        }
-        game["answered_order"].append(user.id)
+        game["answers"][user.id] = user_answer
 
         if points > 0:
-            await query.answer(f"Correct! +{points} points", show_alert=False)
+            await query.answer(f"Correct! +{points} points")
         else:
-            await query.answer("Wrong answer.", show_alert=False)
-
-
-# =========================
-# FINAL GAME END
-# =========================
-async def end_game(chat_id, context):
-    game = active_games.get(chat_id)
-    if not game:
-        return
-
-    winners = sorted(game["scores"].items(), key=lambda x: x[1], reverse=True)
-
-    if not winners:
-        text = "Game ended. Nobody scored any points."
-    else:
-        text = "🏆 Final Winners\n\n"
-        for i, (user_id, points) in enumerate(winners[:10], start=1):
-            name = game["players"].get(user_id, {}).get("name", str(user_id))
-            text += f"{i}. {name} — {points} pts\n"
-
-    await context.bot.send_message(chat_id=chat_id, text=text)
-    active_games.pop(chat_id, None)
+            await query.answer("Wrong answer.")
 
 
 # =========================
@@ -493,6 +464,28 @@ async def global_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 
 # =========================
+# END GAME
+# =========================
+async def end_game(chat_id, context):
+    game = active_games.get(chat_id)
+    if not game:
+        return
+
+    winners = sorted(game["scores"].items(), key=lambda x: x[1], reverse=True)
+
+    if not winners:
+        text = "Game ended. Nobody scored any points."
+    else:
+        text = "🏆 Final Winners\n\n"
+        for i, (user_id, points) in enumerate(winners[:10], start=1):
+            name = game["players"].get(user_id, {}).get("name", str(user_id))
+            text += f"{i}. {name} — {points} pts\n"
+
+    await context.bot.send_message(chat_id=chat_id, text=text)
+    active_games.pop(chat_id, None)
+
+
+# =========================
 # MAIN
 # =========================
 def main():
@@ -514,6 +507,7 @@ def main():
     )
 
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("myid", myid))
     app.add_handler(add_question_handler)
     app.add_handler(CommandHandler("startgame", start_game))
     app.add_handler(CommandHandler("leaderboard", leaderboard))

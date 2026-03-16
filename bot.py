@@ -28,6 +28,10 @@ from database import (
     ensure_player,
     add_points,
     get_group_leaderboard,
+    get_global_leaderboard,
+    get_player_profile,
+    record_correct_answer,
+    record_game_played,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -88,8 +92,57 @@ async def stop_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if poll_id in poll_map:
         poll_map.pop(poll_id, None)
 
+    for pid in game.get("round_poll_ids", set()):
+        poll_map.pop(pid, None)
+
     active_games.pop(chat.id, None)
     await update.message.reply_text("Game stopped.")
+
+
+# =========================
+# PROFILE / GLOBAL
+# =========================
+async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+
+    ensure_player(user.id, user.username, user.full_name)
+    profile_data, rank = get_player_profile(user.id)
+
+    if not profile_data:
+        await update.message.reply_text("No profile data yet.")
+        return
+
+    full_name, username, global_points, games_played, correct_answers = profile_data
+    display_name = f"@{username}" if username else full_name
+
+    text = (
+        "👤 Player Profile\n\n"
+        f"Name: {display_name}\n"
+        f"Games played: {games_played}\n"
+        f"Correct answers: {correct_answers}\n"
+        f"Total points: {global_points}\n"
+        f"Global rank: #{rank}"
+    )
+
+    await update.message.reply_text(text)
+
+
+async def global_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    rows = get_global_leaderboard()
+
+    if not rows:
+        await update.message.reply_text("No global scores yet.")
+        return
+
+    medals = ["🥇", "🥈", "🥉"]
+    text = "🌍 Global Leaderboard\n\n"
+
+    for i, row in enumerate(rows, start=1):
+        name = f"@{row[1]}" if row[1] else row[0]
+        prefix = medals[i - 1] if i <= 3 else f"{i}."
+        text += f"{prefix} {name} — {row[2]} pts\n"
+
+    await update.message.reply_text(text)
 
 
 # =========================
@@ -338,7 +391,7 @@ async def send_question(chat_id, context):
 
     msg = await context.bot.send_poll(
         chat_id=chat_id,
-        question=f"Round {game['round']}/{ROUNDS_PER_GAME}\n\n{q_text}",
+        question=f"[{game['round']}/{ROUNDS_PER_GAME}] {q_text}",
         options=options,
         type="quiz",
         correct_option_id=correct_index,
@@ -400,6 +453,7 @@ async def receive_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
             chat_id,
             CORRECT_POINTS,
         )
+        record_correct_answer(user.id)
 
 
 # =========================
@@ -460,6 +514,8 @@ async def end_game(chat_id, context):
     if not game:
         return
 
+    record_game_played(list(game["players"].keys()))
+
     ranking = sorted(
         game["scores"].items(),
         key=lambda x: x[1],
@@ -493,7 +549,7 @@ async def end_game(chat_id, context):
 
 
 # =========================
-# LEADERBOARD
+# LEADERBOARDS
 # =========================
 async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     rows = get_group_leaderboard(update.effective_chat.id)
@@ -536,6 +592,8 @@ def main():
     app.add_handler(CommandHandler("startgame", start_game))
     app.add_handler(CommandHandler("stopgame", stop_game))
     app.add_handler(CommandHandler("leaderboard", leaderboard))
+    app.add_handler(CommandHandler("global", global_leaderboard))
+    app.add_handler(CommandHandler("profile", profile))
     app.add_handler(CommandHandler("myid", myid))
     app.add_handler(add_q_handler)
     app.add_handler(CallbackQueryHandler(button_handler))

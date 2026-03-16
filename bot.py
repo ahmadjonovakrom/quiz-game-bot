@@ -59,8 +59,8 @@ def create_safe_task(coro):
     async def wrapper():
         try:
             await coro
-        except Exception as e:
-            logger.exception("Background task crashed: %s", e)
+        except Exception:
+            logger.exception("Background task crashed")
 
     return asyncio.create_task(wrapper())
 
@@ -129,7 +129,7 @@ async def correct_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["b"],
         context.user_data["c"],
         context.user_data["d"],
-        correct
+        correct,
     )
 
     context.user_data.clear()
@@ -214,7 +214,7 @@ async def begin_game_after_join(chat_id, context):
 
 
 # =========================
-# SEND QUESTION
+# QUESTION FLOW
 # =========================
 async def send_question(chat_id, context):
     game = active_games.get(chat_id)
@@ -240,7 +240,6 @@ async def send_question(chat_id, context):
     game["correct"] = correct
     game["answers"] = {}
     game["question_started_at"] = time.time()
-    game["countdown_message_id"] = None
 
     keyboard = [
         [
@@ -270,14 +269,10 @@ async def send_question(chat_id, context):
     )
     game["countdown_message_id"] = countdown_msg.message_id
 
-    create_safe_task(run_countdown(chat_id, context, q_id))
-    create_safe_task(finish_round(chat_id, context, q_id))
+    create_safe_task(run_round_timer(chat_id, context, q_id))
 
 
-# =========================
-# COUNTDOWN
-# =========================
-async def run_countdown(chat_id, context, q_id):
+async def run_round_timer(chat_id, context, q_id):
     for remaining in range(QUESTION_SECONDS - 1, -1, -1):
         await asyncio.sleep(1)
 
@@ -285,7 +280,10 @@ async def run_countdown(chat_id, context, q_id):
         if not game:
             return
 
-        if game["question_id"] != q_id or game["status"] != "question":
+        if game["status"] != "question":
+            return
+
+        if game["question_id"] != q_id:
             return
 
         try:
@@ -294,24 +292,17 @@ async def run_countdown(chat_id, context, q_id):
                 message_id=game["countdown_message_id"],
                 text=f"⏳ Time left: {remaining}s"
             )
-        except Exception:
-            pass
-
-
-# =========================
-# FINISH ROUND
-# =========================
-async def finish_round(chat_id, context, q_id):
-    await asyncio.sleep(QUESTION_SECONDS)
+        except Exception as e:
+            logger.warning("Countdown edit failed: %s", e)
 
     game = active_games.get(chat_id)
     if not game:
         return
 
-    if game["question_id"] != q_id:
+    if game["status"] != "question":
         return
 
-    if game["status"] != "question":
+    if game["question_id"] != q_id:
         return
 
     game["status"] = "round_end"
@@ -347,7 +338,7 @@ async def send_round_leaderboard(chat_id, context):
 
 
 # =========================
-# BUTTON HANDLER
+# CALLBACKS
 # =========================
 async def answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query

@@ -1,7 +1,5 @@
-import os
-
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-DB_PATH = os.getenv("DB_PATH", "quiz.db")
+BOT_TOKEN = "8724770854:AAHWT7nltZyq55y46hL2TZlA5ooP1wf-sy0"
+DB_PATH = "quiz.db"
 
 ADMIN_ID = 8368997991
 

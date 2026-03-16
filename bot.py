@@ -25,6 +25,10 @@ from database import (
     create_tables,
     add_question,
     get_random_question,
+    get_question_by_id,
+    get_all_questions,
+    update_question,
+    delete_question,
     ensure_player,
     add_points,
     get_group_leaderboard,
@@ -38,10 +42,17 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 QUESTION, A, B, C, D, CORRECT = range(6)
+EDIT_ID, EDIT_Q, EDIT_A, EDIT_B, EDIT_C, EDIT_D, EDIT_CORRECT = range(6, 13)
+DELETE_ID = 13
+
 ROUNDS_PER_GAME = 5
 
 active_games = {}
 poll_map = {}
+
+
+def is_admin(user_id: int) -> bool:
+    return user_id == ADMIN_ID
 
 
 def safe_task(coro):
@@ -78,7 +89,7 @@ async def myid(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def stop_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
 
-    if update.effective_user.id != ADMIN_ID:
+    if not is_admin(update.effective_user.id):
         await update.message.reply_text("Only admin can stop the game.")
         return
 
@@ -149,7 +160,7 @@ async def global_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE)
 # ADD QUESTION
 # =========================
 async def add_question_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID:
+    if not is_admin(update.effective_user.id):
         await update.message.reply_text("Admin only.")
         return ConversationHandler.END
 
@@ -205,13 +216,188 @@ async def correct_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     context.user_data.clear()
-    await update.message.reply_text("Question added.")
+    await update.message.reply_text("Question added globally for all groups.")
     return ConversationHandler.END
 
 
 async def cancel_add_question(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
     await update.message.reply_text("Cancelled.")
+    return ConversationHandler.END
+
+
+# =========================
+# QUESTIONS LIST
+# =========================
+async def questions_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id):
+        await update.message.reply_text("Admin only.")
+        return
+
+    rows = get_all_questions(limit=100)
+
+    if not rows:
+        await update.message.reply_text("No questions saved yet.")
+        return
+
+    chunks = []
+    current = "📚 Saved Questions\n\n"
+
+    for row in rows:
+        qid, q, a, b, c, d, correct = row
+        line = f"{qid}. {q} [Correct: {correct}]\n"
+        if len(current) + len(line) > 3500:
+            chunks.append(current)
+            current = ""
+        current += line
+
+    if current:
+        chunks.append(current)
+
+    for chunk in chunks:
+        await update.message.reply_text(chunk)
+
+
+# =========================
+# EDIT QUESTION
+# =========================
+async def edit_question_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id):
+        await update.message.reply_text("Admin only.")
+        return ConversationHandler.END
+
+    context.user_data.clear()
+    await update.message.reply_text("Send the question ID you want to edit:")
+    return EDIT_ID
+
+
+async def edit_id_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text.strip()
+
+    if not text.isdigit():
+        await update.message.reply_text("Send a valid numeric ID.")
+        return EDIT_ID
+
+    qid = int(text)
+    row = get_question_by_id(qid)
+
+    if not row:
+        await update.message.reply_text("Question not found. Send another ID.")
+        return EDIT_ID
+
+    _, q, a, b, c, d, correct = row
+
+    context.user_data["edit_id"] = qid
+    context.user_data["q"] = q
+    context.user_data["a"] = a
+    context.user_data["b"] = b
+    context.user_data["c"] = c
+    context.user_data["d"] = d
+    context.user_data["correct"] = correct
+
+    await update.message.reply_text(
+        f"Current question:\n\n"
+        f"ID: {qid}\n"
+        f"Q: {q}\n"
+        f"A: {a}\n"
+        f"B: {b}\n"
+        f"C: {c}\n"
+        f"D: {d}\n"
+        f"Correct: {correct}\n\n"
+        f"Now send the NEW question text:"
+    )
+    return EDIT_Q
+
+
+async def edit_q_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["q"] = update.message.text.strip()
+    await update.message.reply_text("Send new option A:")
+    return EDIT_A
+
+
+async def edit_a_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["a"] = update.message.text.strip()
+    await update.message.reply_text("Send new option B:")
+    return EDIT_B
+
+
+async def edit_b_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["b"] = update.message.text.strip()
+    await update.message.reply_text("Send new option C:")
+    return EDIT_C
+
+
+async def edit_c_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["c"] = update.message.text.strip()
+    await update.message.reply_text("Send new option D:")
+    return EDIT_D
+
+
+async def edit_d_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["d"] = update.message.text.strip()
+    await update.message.reply_text("Send the new correct option (A/B/C/D):")
+    return EDIT_CORRECT
+
+
+async def edit_correct_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    correct = update.message.text.strip().upper()
+
+    if correct not in ["A", "B", "C", "D"]:
+        await update.message.reply_text("Send only A, B, C, or D.")
+        return EDIT_CORRECT
+
+    changed = update_question(
+        context.user_data["edit_id"],
+        context.user_data["q"],
+        context.user_data["a"],
+        context.user_data["b"],
+        context.user_data["c"],
+        context.user_data["d"],
+        correct,
+    )
+
+    context.user_data.clear()
+
+    if changed:
+        await update.message.reply_text("Question updated successfully.")
+    else:
+        await update.message.reply_text("Question update failed.")
+    return ConversationHandler.END
+
+
+# =========================
+# DELETE QUESTION
+# =========================
+async def delete_question_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id):
+        await update.message.reply_text("Admin only.")
+        return ConversationHandler.END
+
+    await update.message.reply_text("Send the question ID you want to delete:")
+    return DELETE_ID
+
+
+async def delete_id_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text.strip()
+
+    if not text.isdigit():
+        await update.message.reply_text("Send a valid numeric ID.")
+        return DELETE_ID
+
+    qid = int(text)
+    row = get_question_by_id(qid)
+
+    if not row:
+        await update.message.reply_text("Question not found.")
+        return ConversationHandler.END
+
+    deleted = delete_question(qid)
+
+    if deleted:
+        await update.message.reply_text(f"Question {qid} deleted.")
+    else:
+        await update.message.reply_text("Delete failed.")
+
     return ConversationHandler.END
 
 
@@ -264,6 +450,7 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "correct": None,
         "join_message_id": msg.message_id,
         "round_poll_ids": set(),
+        "used_question_ids": set(),
     }
 
     safe_task(begin_game_after_join(chat.id, context))
@@ -375,13 +562,17 @@ async def send_question(chat_id, context):
         await end_game(chat_id, context)
         return
 
-    question = get_random_question()
+    question = get_random_question(exclude_ids=list(game["used_question_ids"]))
     if not question:
-        await context.bot.send_message(chat_id, "No questions.")
-        active_games.pop(chat_id, None)
+        await context.bot.send_message(
+            chat_id,
+            "Not enough unique questions left for this game. Ending early."
+        )
+        await end_game(chat_id, context)
         return
 
     q_id, q_text, a, b, c, d, correct = question
+    game["used_question_ids"].add(q_id)
 
     options = [a, b, c, d]
     correct_index = ["A", "B", "C", "D"].index(correct)
@@ -588,14 +779,41 @@ def main():
         fallbacks=[CommandHandler("cancel", cancel_add_question)],
     )
 
+    edit_q_handler = ConversationHandler(
+        entry_points=[CommandHandler("editquestion", edit_question_start)],
+        states={
+            EDIT_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_id_step)],
+            EDIT_Q: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_q_step)],
+            EDIT_A: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_a_step)],
+            EDIT_B: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_b_step)],
+            EDIT_C: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_c_step)],
+            EDIT_D: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_d_step)],
+            EDIT_CORRECT: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_correct_step)],
+        },
+        fallbacks=[CommandHandler("cancel", cancel_add_question)],
+    )
+
+    delete_q_handler = ConversationHandler(
+        entry_points=[CommandHandler("deletequestion", delete_question_start)],
+        states={
+            DELETE_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, delete_id_step)],
+        },
+        fallbacks=[CommandHandler("cancel", cancel_add_question)],
+    )
+
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("startgame", start_game))
     app.add_handler(CommandHandler("stopgame", stop_game))
     app.add_handler(CommandHandler("leaderboard", leaderboard))
     app.add_handler(CommandHandler("global", global_leaderboard))
     app.add_handler(CommandHandler("profile", profile))
+    app.add_handler(CommandHandler("questions", questions_list))
     app.add_handler(CommandHandler("myid", myid))
+
     app.add_handler(add_q_handler)
+    app.add_handler(edit_q_handler)
+    app.add_handler(delete_q_handler)
+
     app.add_handler(CallbackQueryHandler(button_handler))
     app.add_handler(PollAnswerHandler(receive_poll_answer))
 

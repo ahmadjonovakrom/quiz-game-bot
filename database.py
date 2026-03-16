@@ -42,7 +42,6 @@ def create_tables():
         )
         """)
 
-        # safe migration for older DBs
         try:
             cursor.execute("ALTER TABLE players ADD COLUMN games_played INTEGER DEFAULT 0")
         except sqlite3.OperationalError:
@@ -63,15 +62,69 @@ def add_question(question, a, b, c, d, correct):
         """, (question, a, b, c, d, correct))
 
 
-def get_random_question():
+def get_question_by_id(question_id):
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
         SELECT id, question, option_a, option_b, option_c, option_d, correct_option
         FROM questions
-        ORDER BY RANDOM()
-        LIMIT 1
-        """)
+        WHERE id = ?
+        """, (question_id,))
+        return cursor.fetchone()
+
+
+def get_all_questions(limit=100):
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+        SELECT id, question, option_a, option_b, option_c, option_d, correct_option
+        FROM questions
+        ORDER BY id ASC
+        LIMIT ?
+        """, (limit,))
+        return cursor.fetchall()
+
+
+def update_question(question_id, question, a, b, c, d, correct):
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+        UPDATE questions
+        SET question = ?, option_a = ?, option_b = ?, option_c = ?, option_d = ?, correct_option = ?
+        WHERE id = ?
+        """, (question, a, b, c, d, correct, question_id))
+        return cursor.rowcount
+
+
+def delete_question(question_id):
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM questions WHERE id = ?", (question_id,))
+        return cursor.rowcount
+
+
+def get_random_question(exclude_ids=None):
+    with get_connection() as conn:
+        cursor = conn.cursor()
+
+        if exclude_ids:
+            placeholders = ",".join("?" for _ in exclude_ids)
+            query = f"""
+            SELECT id, question, option_a, option_b, option_c, option_d, correct_option
+            FROM questions
+            WHERE id NOT IN ({placeholders})
+            ORDER BY RANDOM()
+            LIMIT 1
+            """
+            cursor.execute(query, tuple(exclude_ids))
+        else:
+            cursor.execute("""
+            SELECT id, question, option_a, option_b, option_c, option_d, correct_option
+            FROM questions
+            ORDER BY RANDOM()
+            LIMIT 1
+            """)
+
         return cursor.fetchone()
 
 

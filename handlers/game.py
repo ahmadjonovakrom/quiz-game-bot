@@ -317,7 +317,7 @@ async def receive_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
         record_correct_answer(user.id)
 
         if got_speed_bonus:
-    await context.bot.send_message(
+         await context.bot.send_message(
         chat_id,
         f"⚡ {user.full_name} got a speed bonus! +{SPEED_BONUS_POINTS} points"
     )

@@ -1,6 +1,7 @@
 import time
 import asyncio
 import logging
+from datetime import date
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
@@ -31,6 +32,7 @@ logger = logging.getLogger(__name__)
 
 active_games = {}
 poll_map = {}
+daily_quiz_players = {}
 
 ROUNDS_PER_GAME = 5
 
@@ -48,7 +50,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Welcome to English Lemon 🍋!\n\n"
         "Practice vocabulary, play quiz games, and climb the leaderboard.",
         reply_markup=reply_markup,
-    ) 
+    )
+
 
 async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -56,13 +59,13 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     data = query.data
 
-    keyboard = [[InlineKeyboardButton("⬅️ Back", callback_data="menu_back")]]
+    back_keyboard = [[InlineKeyboardButton("⬅️ Back", callback_data="menu_back")]]
 
     if data == "menu_play":
         await query.edit_message_text(
             "To start a quiz game, add me to a group and use:\n\n"
             "/startgame",
-            reply_markup=InlineKeyboardMarkup(keyboard),
+            reply_markup=InlineKeyboardMarkup(back_keyboard),
         )
 
     elif data == "menu_leaderboard":
@@ -70,13 +73,13 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Leaderboard options:\n\n"
             "/leaderboard - group ranking\n"
             "/global - global ranking",
-            reply_markup=InlineKeyboardMarkup(keyboard),
+            reply_markup=InlineKeyboardMarkup(back_keyboard),
         )
 
     elif data == "menu_profile":
         await query.edit_message_text(
             "Use /profile to see your stats.",
-            reply_markup=InlineKeyboardMarkup(keyboard),
+            reply_markup=InlineKeyboardMarkup(back_keyboard),
         )
 
     elif data == "menu_help":
@@ -85,11 +88,12 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "/start - open the main menu\n"
             "/startgame - start a new game in a group\n"
             "/stopgame - stop the current game\n"
+            "/dailyquiz - play one daily quiz\n"
             "/leaderboard - group leaderboard\n"
             "/global - global leaderboard\n"
             "/profile - your profile\n"
             "/questions - view saved questions",
-            reply_markup=InlineKeyboardMarkup(keyboard),
+            reply_markup=InlineKeyboardMarkup(back_keyboard),
         )
 
     elif data == "menu_back":
@@ -105,9 +109,55 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Practice vocabulary, play quiz games, and climb the leaderboard.",
             reply_markup=InlineKeyboardMarkup(keyboard),
         )
-        
+
+
 async def myid(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(str(update.effective_user.id))
+
+
+async def daily_quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    chat = update.effective_chat
+
+    today = str(date.today())
+
+    if user.id in daily_quiz_players and daily_quiz_players[user.id] == today:
+        await update.message.reply_text("You already played today’s daily quiz.")
+        return
+
+    question = get_random_question(exclude_ids=[])
+    if not question:
+        await update.message.reply_text("No questions available.")
+        return
+
+    q_id, q_text, a, b, c, d, correct = question
+    options = [a, b, c, d]
+
+    try:
+        correct_index = ["A", "B", "C", "D"].index(correct.upper())
+    except ValueError:
+        await update.message.reply_text("This daily question has an invalid correct answer.")
+        return
+
+    msg = await context.bot.send_poll(
+        chat_id=chat.id,
+        question=f"📅 Daily Quiz\n\n{q_text}",
+        options=options,
+        type="quiz",
+        correct_option_id=correct_index,
+        is_anonymous=False,
+        open_period=QUESTION_SECONDS,
+    )
+
+    poll_map[msg.poll.id] = {
+        "chat_id": chat.id,
+        "round": "daily",
+        "daily_user_id": user.id,
+        "daily_date": today,
+        "correct_index": correct_index,
+    }
+
+    daily_quiz_players[user.id] = today
 
 
 async def stop_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -361,6 +411,11 @@ async def wait_and_continue(chat_id, context, poll_id, round_number):
         logger.exception("Error in wait_and_continue")
 
 
+async def delete_later(context, chat_id, message_id, delay):
+    await asyncio.sleep(delay)
+    await safe_delete_message(context.bot, chat_id, message_id)
+
+
 async def receive_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     answer = update.poll_answer
     poll_id = answer.poll_id
@@ -369,6 +424,39 @@ async def receive_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
     if not info:
         return
 
+    # Daily quiz
+    if info.get("round") == "daily":
+        user = answer.user
+
+        if user.id != info.get("daily_user_id"):
+            return
+
+        if answer.option_ids and answer.option_ids[0] == info["correct_index"]:
+            add_points(
+                user.id,
+                user.username,
+                user.full_name,
+                info["chat_id"],
+                CORRECT_POINTS,
+            )
+            record_correct_answer(user.id)
+
+            msg = await context.bot.send_message(
+                info["chat_id"],
+                f"📅 Daily Quiz\n✅ {user.full_name} got it right!\n🍋 +{CORRECT_POINTS} points"
+            )
+            safe_task(delete_later(context, info["chat_id"], msg.message_id, 4))
+        else:
+            msg = await context.bot.send_message(
+                info["chat_id"],
+                f"📅 Daily Quiz\n❌ {user.full_name} got it wrong."
+            )
+            safe_task(delete_later(context, info["chat_id"], msg.message_id, 4))
+
+        poll_map.pop(poll_id, None)
+        return
+
+    # Normal game
     chat_id = info["chat_id"]
     game = active_games.get(chat_id)
 
@@ -411,11 +499,16 @@ async def receive_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
 
         record_correct_answer(user.id)
 
+        reward_text = (
+            f"🎯 {user.full_name}\n"
+            f"🍋 +{CORRECT_POINTS} points"
+        )
+
         if got_speed_bonus:
-            await context.bot.send_message(
-                chat_id,
-                f"⚡ {user.full_name} got a speed bonus! +{SPEED_BONUS_POINTS} points"
-            )
+            reward_text += f"\n⚡ +{SPEED_BONUS_POINTS} speed bonus!"
+
+        msg = await context.bot.send_message(chat_id, reward_text)
+        safe_task(delete_later(context, chat_id, msg.message_id, 4))
 
 
 async def end_game(chat_id, context):

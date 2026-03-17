@@ -20,6 +20,7 @@ from handlers.game import (
     button_handler,
     receive_poll_answer,
     menu_handler,
+    daily_quiz,
 )
 
 from handlers.profile import (
@@ -82,6 +83,7 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("startgame", start_game))
     app.add_handler(CommandHandler("stopgame", stop_game))
+    app.add_handler(CommandHandler("dailyquiz", daily_quiz))
     app.add_handler(CommandHandler("leaderboard", leaderboard))
     app.add_handler(CommandHandler("global", global_leaderboard))
     app.add_handler(CommandHandler("profile", profile))

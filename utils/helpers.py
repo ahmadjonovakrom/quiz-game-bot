@@ -21,7 +21,7 @@ def safe_task(coro):
 
 def build_join_text(game, remaining):
     if not game["players"]:
-        return f"Registration is open ({remaining}s)\n\nJoin"
+        return f"Registration is open ({remaining}s)"
 
     players_text = ", ".join(game["players"].values())
 

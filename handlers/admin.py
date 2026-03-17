@@ -54,38 +54,7 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         return QUESTION
 
     if data == "admin_list":
-        rows = get_all_questions(limit=50)
-
-        if not rows:
-            await query.message.reply_text("No questions saved yet.")
-            return ConversationHandler.END
-
-        chunks = []
-        current = "📚 Saved Questions\n\n"
-
-        for row in rows:
-            block = (
-                f"ID: {row[0]}\n"
-                f"Q: {row[1]}\n"
-                f"A) {row[2]}\n"
-                f"B) {row[3]}\n"
-                f"C) {row[4]}\n"
-                f"D) {row[5]}\n"
-                f"Correct: {row[6]}\n\n"
-            )
-
-            if len(current) + len(block) > 3500:
-                chunks.append(current)
-                current = block
-            else:
-                current += block
-
-        if current.strip():
-            chunks.append(current)
-
-        for chunk in chunks:
-            await query.message.reply_text(chunk)
-
+        await send_questions_with_buttons(query.message, context)
         return ConversationHandler.END
 
     if data == "admin_edit":
@@ -98,7 +67,82 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         await query.message.reply_text("Send question ID to delete.\n\nUse /cancel to stop.")
         return DELETE_ID
 
+    if data.startswith("qedit|"):
+        qid = int(data.split("|")[1])
+        row = get_question_by_id(qid)
+
+        if not row:
+            await query.message.reply_text("Question not found.")
+            return ConversationHandler.END
+
+        context.user_data.clear()
+        context.user_data["edit_id"] = qid
+
+        await query.message.reply_text(
+            "Current question:\n\n"
+            f"Q: {row[1]}\n"
+            f"A) {row[2]}\n"
+            f"B) {row[3]}\n"
+            f"C) {row[4]}\n"
+            f"D) {row[5]}\n"
+            f"Correct: {row[6]}\n\n"
+            "Send the new question text:"
+        )
+        return EDIT_QUESTION
+
+    if data.startswith("qdelete|"):
+        qid = int(data.split("|")[1])
+        row = get_question_by_id(qid)
+
+        if not row:
+            await query.message.reply_text("Question not found.")
+            return ConversationHandler.END
+
+        context.user_data.clear()
+        context.user_data["delete_id"] = qid
+
+        preview = (
+            f"⚠️ Delete this question?\n\n"
+            f"ID: {row[0]}\n"
+            f"Q: {row[1]}\n"
+            f"A) {row[2]}\n"
+            f"B) {row[3]}\n"
+            f"C) {row[4]}\n"
+            f"D) {row[5]}\n"
+            f"Correct: {row[6]}\n\n"
+            "Reply with YES to confirm or NO to cancel."
+        )
+
+        await query.message.reply_text(preview)
+        return DELETE_CONFIRM
+
     return ConversationHandler.END
+
+
+async def send_questions_with_buttons(message, context):
+    rows = get_all_questions(limit=50)
+
+    if not rows:
+        await message.reply_text("No questions saved yet.")
+        return
+
+    for row in rows:
+        text = (
+            f"ID: {row[0]}\n"
+            f"Q: {row[1]}\n"
+            f"A) {row[2]}\n"
+            f"B) {row[3]}\n"
+            f"C) {row[4]}\n"
+            f"D) {row[5]}\n"
+            f"Correct: {row[6]}"
+        )
+
+        keyboard = [[
+            InlineKeyboardButton("✏️ Edit", callback_data=f"qedit|{row[0]}"),
+            InlineKeyboardButton("🗑 Delete", callback_data=f"qdelete|{row[0]}"),
+        ]]
+
+        await message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
 
 
 async def add_question_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -197,37 +241,7 @@ async def correct_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def questions_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    rows = get_all_questions(limit=50)
-
-    if not rows:
-        await update.message.reply_text("No questions saved yet.")
-        return
-
-    chunks = []
-    current = "📚 Saved Questions\n\n"
-
-    for row in rows:
-        block = (
-            f"ID: {row[0]}\n"
-            f"Q: {row[1]}\n"
-            f"A) {row[2]}\n"
-            f"B) {row[3]}\n"
-            f"C) {row[4]}\n"
-            f"D) {row[5]}\n"
-            f"Correct: {row[6]}\n\n"
-        )
-
-        if len(current) + len(block) > 3500:
-            chunks.append(current)
-            current = block
-        else:
-            current += block
-
-    if current.strip():
-        chunks.append(current)
-
-    for chunk in chunks:
-        await update.message.reply_text(chunk)
+    await send_questions_with_buttons(update.message, context)
 
 
 async def delete_question_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -265,7 +279,7 @@ async def delete_id_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"C) {row[4]}\n"
         f"D) {row[5]}\n"
         f"Correct: {row[6]}\n\n"
-        f"Reply with YES to confirm or NO to cancel."
+        "Reply with YES to confirm or NO to cancel."
     )
 
     await update.message.reply_text(preview)

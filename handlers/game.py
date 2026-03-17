@@ -72,12 +72,12 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [[InlineKeyboardButton("Join", callback_data=f"join|{chat.id}")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    msg = await update.message.reply_text(
-        build_join_text({"players": {}}, JOIN_SECONDS),
-        reply_markup=reply_markup,
-        parse_mode="HTML",
-    )
-
+    msg = await context.bot.send_message(
+    chat_id=chat.id,
+    text=build_join_text({"players": {}}, JOIN_SECONDS),
+    reply_markup=reply_markup,
+    parse_mode="HTML",
+)
     active_games[chat.id] = {
         "status": "joining",
         "players": {},

@@ -69,19 +69,27 @@ def build_join_text(game):
     if not game["players"]:
         return (
             "Registration is open\n\n"
-            f"Joined:\nnone\n\n"
-            f"Total: 0\n"
-            f"Minimum needed: {MIN_PLAYERS}"
+            "Registered:\n"
+            "Nobody yet\n\n"
+            f"Minimum number of players - {MIN_PLAYERS}"
         )
 
     players_text = ", ".join(game["players"].values())
 
     return (
         "Registration is open\n\n"
-        f"Joined:\n{players_text}\n\n"
-        f"Total: {len(game['players'])}\n"
-        f"Minimum needed: {MIN_PLAYERS}"
+        f"Registered:\n{players_text}\n\n"
+        f"{len(game['players'])} players registered so far."
     )
+
+
+async def safe_delete_message(bot, chat_id, message_id):
+    if not message_id:
+        return
+    try:
+        await bot.delete_message(chat_id=chat_id, message_id=message_id)
+    except Exception:
+        pass
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -111,6 +119,8 @@ async def stop_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     for pid in game.get("round_poll_ids", set()):
         poll_map.pop(pid, None)
+
+    await safe_delete_message(context.bot, chat.id, game.get("join_message_id"))
 
     active_games.pop(chat.id, None)
     await update.message.reply_text("Game stopped.")
@@ -157,7 +167,7 @@ async def global_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE)
     for i, row in enumerate(rows, start=1):
         name = f"@{row[1]}" if row[1] else row[0]
         prefix = medals[i - 1] if i <= 3 else f"{i}."
-        text += f"{prefix} {name} — {row[2]} pts\n"
+        text += f"{prefix} {name} — {row[2]} 🍋\n"
 
     await update.message.reply_text(text)
 
@@ -423,7 +433,7 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    keyboard = [[InlineKeyboardButton("Join", callback_data=f"join|{chat.id}")]]
+    keyboard = [[InlineKeyboardButton("🕴 Join", callback_data=f"join|{chat.id}")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     msg = await update.message.reply_text(
@@ -431,15 +441,6 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=reply_markup,
         parse_mode="HTML",
     )
-
-    try:
-        await context.bot.pin_chat_message(
-            chat_id=chat.id,
-            message_id=msg.message_id,
-            disable_notification=True
-        )
-    except Exception:
-        pass
 
     active_games[chat.id] = {
         "status": "joining",
@@ -468,18 +469,15 @@ async def begin_game_after_join(chat_id, context):
         return
 
     if len(game["players"]) < MIN_PLAYERS:
-        try:
-            await context.bot.edit_message_text(
-                chat_id=chat_id,
-                message_id=game["join_message_id"],
-                text=build_join_text(game) + f"\n\nNot enough players. Need at least {MIN_PLAYERS}.",
-                parse_mode="HTML",
-            )
-        except Exception:
-            await context.bot.send_message(
-                chat_id=chat_id,
-                text=f"Not enough players (need {MIN_PLAYERS}).",
-            )
+        await safe_delete_message(context.bot, chat_id, game.get("join_message_id"))
+
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=(
+                "Not enough players to start the game...\n\n"
+                f"Minimum number of players - {MIN_PLAYERS}"
+            ),
+        )
 
         active_games.pop(chat_id, None)
         return
@@ -490,13 +488,17 @@ async def begin_game_after_join(chat_id, context):
         await context.bot.edit_message_text(
             chat_id=chat_id,
             message_id=game["join_message_id"],
-            text=build_join_text(game) + "\n\nRegistration closed. Game starting...",
+            text=build_join_text(game) + "\n\nGame starting...",
             parse_mode="HTML",
         )
     except Exception:
         await context.bot.send_message(chat_id, "Game starting!")
 
     await asyncio.sleep(2)
+
+    await safe_delete_message(context.bot, chat_id, game.get("join_message_id"))
+    game["join_message_id"] = None
+
     await send_question(chat_id, context)
 
 
@@ -528,14 +530,15 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer("Already joined.")
         return
 
-    name = f'<a href="tg://user?id={user.id}">{html.escape(user.first_name)}</a>'
+    safe_name = html.escape(user.full_name or user.first_name or "Player")
+    clickable_name = f'<a href="tg://user?id={user.id}">{safe_name}</a>'
 
-    game["players"][user.id] = name
+    game["players"][user.id] = clickable_name
     game["scores"][user.id] = 0
 
     ensure_player(user.id, user.username, user.full_name)
 
-    keyboard = [[InlineKeyboardButton("Join", callback_data=f"join|{chat_id}")]]
+    keyboard = [[InlineKeyboardButton("🕴 Join", callback_data=f"join|{chat_id}")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     try:
@@ -673,7 +676,6 @@ async def next_question_timer(poll_id, round_number, context):
     if game["current_poll_id"] != poll_id:
         return
 
-    await asyncio.sleep(2)
     await send_question(chat_id, context)
 
 
@@ -685,6 +687,8 @@ async def end_game(chat_id, context):
     if not game:
         return
 
+    await safe_delete_message(context.bot, chat_id, game.get("join_message_id"))
+
     record_game_played(list(game["players"].keys()))
 
     ranking = sorted(
@@ -695,19 +699,19 @@ async def end_game(chat_id, context):
 
     if not ranking:
         await context.bot.send_message(chat_id, "Game ended. Nobody scored any points.")
+        for pid in game.get("round_poll_ids", set()):
+            poll_map.pop(pid, None)
         active_games.pop(chat_id, None)
         return
 
     text = "🏆 Game Results\n\n"
     medals = ["🥇", "🥈", "🥉"]
 
-    for i, (uid, pts) in enumerate(ranking[:3]):
+    for i, (uid, pts) in enumerate(ranking[:10], start=1):
         name = game["players"][uid]
-        text += f"{medals[i]} {name} — {pts} 🍋\n"
-
-    if len(ranking) > 3:
-        for i, (uid, pts) in enumerate(ranking[3:], start=4):
-            name = game["players"][uid]
+        if i <= 3:
+            text += f"{medals[i - 1]} {name} — {pts} 🍋\n"
+        else:
             text += f"{i}. {name} — {pts} 🍋\n"
 
     await context.bot.send_message(chat_id, text.strip(), parse_mode="HTML")
@@ -732,7 +736,7 @@ async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     for i, r in enumerate(rows, start=1):
         name = f"@{r[1]}" if r[1] else r[0]
-        text += f"{i}. {name} — {r[2]} pts\n"
+        text += f"{i}. {name} — {r[2]} 🍋\n"
 
     await update.message.reply_text(text)
 

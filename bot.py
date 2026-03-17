@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import html
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
@@ -422,7 +423,8 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     msg = await update.message.reply_text(
         "Registration is open",
-        reply_markup=reply_markup
+        reply_markup=reply_markup,
+        parse_mode="HTML",
     )
 
     try:
@@ -466,6 +468,7 @@ async def begin_game_after_join(chat_id, context):
                 chat_id=chat_id,
                 message_id=game["join_message_id"],
                 text=build_join_text(game) + f"\n\nNot enough players. Need at least {MIN_PLAYERS}.",
+                parse_mode="HTML",
             )
         except Exception:
             await context.bot.send_message(
@@ -483,6 +486,7 @@ async def begin_game_after_join(chat_id, context):
             chat_id=chat_id,
             message_id=game["join_message_id"],
             text=build_join_text(game) + "\n\nRegistration closed. Game starting...",
+            parse_mode="HTML",
         )
     except Exception:
         await context.bot.send_message(chat_id, "Game starting!")
@@ -516,10 +520,10 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = query.from_user
 
     if user.id in game["players"]:
-        await query.answer("Already joined.", show_alert=True)
+        await query.answer("Already joined.")
         return
 
-    name = user.first_name
+    name = f'<a href="tg://user?id={user.id}">{html.escape(user.first_name)}</a>'
 
     game["players"][user.id] = name
     game["scores"][user.id] = 0
@@ -535,11 +539,12 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             message_id=game["join_message_id"],
             text=build_join_text(game),
             reply_markup=reply_markup,
+            parse_mode="HTML",
         )
     except Exception:
         pass
 
-    await query.answer("Joined!", show_alert=True)
+    await query.answer()
 
 
 # =========================
@@ -688,7 +693,7 @@ async def send_round_leaderboard(chat_id, context):
             name = game["players"][uid]
             text += f"{i}. {name} — {pts} pts\n"
 
-    await context.bot.send_message(chat_id, text)
+    await context.bot.send_message(chat_id, text, parse_mode="HTML")
 
 
 # =========================
@@ -725,7 +730,7 @@ async def end_game(chat_id, context):
             name = game["players"][uid]
             text += f"{i}. {name} — {pts} pts\n"
 
-    await context.bot.send_message(chat_id, text.strip())
+    await context.bot.send_message(chat_id, text.strip(), parse_mode="HTML")
 
     for pid in game.get("round_poll_ids", set()):
         poll_map.pop(pid, None)

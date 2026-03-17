@@ -138,7 +138,7 @@ def main():
     app.add_handler(delete_question_conv)
     app.add_handler(edit_question_conv)
 
-    app.add_handler(CallbackQueryHandler(admin_button_handler, pattern="^admin_list$"))
+    app.add_handler(CallbackQueryHandler(admin_button_handler, pattern=r"^(admin_|qedit\||qdelete\|)"))
     app.add_handler(CallbackQueryHandler(button_handler, pattern=r"^join\|"))
     app.add_handler(PollAnswerHandler(receive_poll_answer))
 

@@ -37,6 +37,7 @@ ROUNDS_PER_GAME = 5
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
+        [InlineKeyboardButton("🎮 Play Quiz", callback_data="menu_play")],
         [InlineKeyboardButton("🏆 Leaderboard", callback_data="menu_leaderboard")],
         [InlineKeyboardButton("👤 My Profile", callback_data="menu_profile")],
         [InlineKeyboardButton("❓ Help", callback_data="menu_help")],
@@ -47,14 +48,21 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Welcome to English Lemon 🍋!\n\n"
         "Practice vocabulary, play quiz games, and climb the leaderboard.",
         reply_markup=reply_markup,
-    )
+    ) 
+
 async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
     data = query.data
 
-    if data == "menu_leaderboard":
+    if data == "menu_play":
+        await query.message.reply_text(
+            "To start a quiz game, add me to a group and use:\n\n"
+            "/startgame"
+        )
+
+    elif data == "menu_leaderboard":
         await query.message.reply_text(
             "Use /leaderboard to see the group ranking.\n"
             "Use /global to see the global ranking."

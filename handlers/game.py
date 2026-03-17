@@ -317,15 +317,10 @@ async def receive_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
         record_correct_answer(user.id)
 
         if got_speed_bonus:
-            await context.bot.send_message(
-                chat_id,
-                f"⚡ {user.full_name} got a speed bonus! +{SPEED_BONUS_POINTS} points"
-            )
-        elif elapsed is not None:
-            await context.bot.send_message(
-                chat_id,
-                f"{user.full_name} answered correctly, but no speed bonus. Elapsed: {elapsed:.2f}s"
-            )
+    await context.bot.send_message(
+        chat_id,
+        f"⚡ {user.full_name} got a speed bonus! +{SPEED_BONUS_POINTS} points"
+    )
 
 
 async def end_game(chat_id, context):

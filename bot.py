@@ -74,6 +74,15 @@ def get_time_left(game):
     return max(0, remaining)
 
 
+def get_display_time_left(game):
+    remaining = get_time_left(game)
+    if remaining is None:
+        return None
+    if remaining <= 0:
+        return 0
+    return ((remaining + 9) // 10) * 10
+
+
 def build_join_text(game, time_left=None):
     players = list(game["players"].values())
 
@@ -468,14 +477,15 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "round_poll_ids": set(),
         "used_question_ids": set(),
         "join_end_time": join_end_time,
-        "last_timer_value": JOIN_SECONDS,
     }
 
     safe_task(begin_game_after_join(chat.id, context))
 
 
 async def begin_game_after_join(chat_id, context):
-    while True:
+    steps = list(range(JOIN_SECONDS, 0, -10))
+
+    for remaining in steps:
         game = active_games.get(chat_id)
         if not game:
             return
@@ -483,30 +493,20 @@ async def begin_game_after_join(chat_id, context):
         if game["status"] != "joining":
             return
 
-        remaining = get_time_left(game)
-        if remaining is None:
-            return
+        try:
+            await context.bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=game["join_message_id"],
+                text=build_join_text(game, remaining),
+                reply_markup=InlineKeyboardMarkup(
+                    [[InlineKeyboardButton("Join", callback_data=f"join|{chat_id}")]]
+                ),
+                parse_mode="HTML",
+            )
+        except Exception:
+            pass
 
-        if remaining <= 0:
-            break
-
-        if game.get("last_timer_value") != remaining:
-            game["last_timer_value"] = remaining
-
-            try:
-                await context.bot.edit_message_text(
-                    chat_id=chat_id,
-                    message_id=game["join_message_id"],
-                    text=build_join_text(game, remaining),
-                    reply_markup=InlineKeyboardMarkup(
-                        [[InlineKeyboardButton("Join", callback_data=f"join|{chat_id}")]]
-                    ),
-                    parse_mode="HTML",
-                )
-            except Exception:
-                pass
-
-        await asyncio.sleep(0.4)
+        await asyncio.sleep(10)
 
     game = active_games.get(chat_id)
     if not game:
@@ -586,9 +586,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     ensure_player(user.id, user.username, user.full_name)
 
-    remaining = get_time_left(game)
-    if remaining is None:
-        remaining = 0
+    display_remaining = get_display_time_left(game)
+    if display_remaining is None:
+        display_remaining = 0
 
     keyboard = [[InlineKeyboardButton("Join", callback_data=f"join|{chat_id}")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -597,7 +597,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.edit_message_text(
             chat_id=chat_id,
             message_id=game["join_message_id"],
-            text=build_join_text(game, remaining),
+            text=build_join_text(game, display_remaining),
             reply_markup=reply_markup,
             parse_mode="HTML",
         )

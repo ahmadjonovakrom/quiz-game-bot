@@ -65,15 +65,15 @@ def safe_task(coro):
 
 
 def build_join_text(game):
-    if game["players"]:
-        players_text = "\n".join(game["players"].values())
-    else:
-        players_text = "Nobody yet."
+    if not game["players"]:
+        return "Registration is open"
+
+    players_text = ", ".join(game["players"].values())
 
     return (
-        "📋 Registration is open\n\n"
-        f"Joined players:\n{players_text}\n\n"
-        f"Total: {len(game['players'])} players\n"
+        "Registration is open\n\n"
+        f"Joined:\n{players_text}\n\n"
+        f"Total: {len(game['players'])}\n"
         f"Minimum needed: {MIN_PLAYERS}"
     )
 
@@ -417,19 +417,13 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    keyboard = [[InlineKeyboardButton("🎮 Join Game", callback_data=f"join|{chat.id}")]]
+    keyboard = [[InlineKeyboardButton("Join", callback_data=f"join|{chat.id}")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    join_text = (
-        "📋 Registration is open\n\n"
-        "Joined players:\n"
-        "Nobody yet.\n\n"
-        f"Total: 0 players\n"
-        f"Minimum needed: {MIN_PLAYERS}\n"
-        f"Time: {JOIN_SECONDS} seconds"
+    msg = await update.message.reply_text(
+        "Registration is open",
+        reply_markup=reply_markup
     )
-
-    msg = await update.message.reply_text(join_text, reply_markup=reply_markup)
 
     try:
         await context.bot.pin_chat_message(
@@ -471,7 +465,7 @@ async def begin_game_after_join(chat_id, context):
             await context.bot.edit_message_text(
                 chat_id=chat_id,
                 message_id=game["join_message_id"],
-                text=build_join_text(game) + f"\n\n❌ Not enough players. Need at least {MIN_PLAYERS}.",
+                text=build_join_text(game) + f"\n\nNot enough players. Need at least {MIN_PLAYERS}.",
             )
         except Exception:
             await context.bot.send_message(
@@ -488,7 +482,7 @@ async def begin_game_after_join(chat_id, context):
         await context.bot.edit_message_text(
             chat_id=chat_id,
             message_id=game["join_message_id"],
-            text=build_join_text(game) + "\n\n✅ Registration closed. Game starting...",
+            text=build_join_text(game) + "\n\nRegistration closed. Game starting...",
         )
     except Exception:
         await context.bot.send_message(chat_id, "Game starting!")
@@ -525,14 +519,14 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer("Already joined.", show_alert=True)
         return
 
-    name = f"@{user.username}" if user.username else user.full_name
+    name = user.first_name
 
     game["players"][user.id] = name
     game["scores"][user.id] = 0
 
     ensure_player(user.id, user.username, user.full_name)
 
-    keyboard = [[InlineKeyboardButton("🎮 Join Game", callback_data=f"join|{chat_id}")]]
+    keyboard = [[InlineKeyboardButton("Join", callback_data=f"join|{chat_id}")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     try:

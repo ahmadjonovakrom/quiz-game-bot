@@ -216,13 +216,15 @@ async def send_question(chat_id, context):
     try:
         correct_index = ["A", "B", "C", "D"].index(correct.upper())
     except ValueError:
-        await context.bot.send_message(chat_id, f"Question ID {q_id} has an invalid correct option.")
+        await context.bot.send_message(
+            chat_id,
+            f"Question ID {q_id} has an invalid correct option."
+        )
         await end_game(chat_id, context)
         return
 
     game["correct"] = correct_index
     game["answered"] = set()
-    game["question_started_at"] = time.time()
     game["speed_bonus_awarded"] = {}
 
     msg = await context.bot.send_poll(
@@ -235,6 +237,7 @@ async def send_question(chat_id, context):
         open_period=QUESTION_SECONDS,
     )
 
+    game["question_started_at"] = time.monotonic()
     game["current_poll_id"] = msg.poll.id
     poll_map[msg.poll.id] = {"chat_id": chat_id, "round": game["round"]}
 
@@ -290,10 +293,11 @@ async def receive_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
     if answer.option_ids and answer.option_ids[0] == game["correct"]:
         points_to_add = CORRECT_POINTS
         got_speed_bonus = False
+        elapsed = None
 
         started_at = game.get("question_started_at")
         if started_at is not None:
-            elapsed = time.time() - started_at
+            elapsed = time.monotonic() - started_at
             if elapsed <= SPEED_BONUS_SECONDS:
                 points_to_add += SPEED_BONUS_POINTS
                 got_speed_bonus = True
@@ -317,6 +321,11 @@ async def receive_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
             await context.bot.send_message(
                 chat_id,
                 f"⚡ {user.full_name} got a speed bonus! +{SPEED_BONUS_POINTS} points"
+            )
+        elif elapsed is not None:
+            await context.bot.send_message(
+                chat_id,
+                f"{user.full_name} answered correctly, but no speed bonus. Elapsed: {elapsed:.2f}s"
             )
 
 

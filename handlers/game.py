@@ -56,25 +56,31 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     data = query.data
 
+    keyboard = [[InlineKeyboardButton("⬅️ Back", callback_data="menu_back")]]
+
     if data == "menu_play":
-        await query.message.reply_text(
+        await query.edit_message_text(
             "To start a quiz game, add me to a group and use:\n\n"
-            "/startgame"
+            "/startgame",
+            reply_markup=InlineKeyboardMarkup(keyboard),
         )
 
     elif data == "menu_leaderboard":
-        await query.message.reply_text(
-            "Use /leaderboard to see the group ranking.\n"
-            "Use /global to see the global ranking."
+        await query.edit_message_text(
+            "Leaderboard options:\n\n"
+            "/leaderboard - group ranking\n"
+            "/global - global ranking",
+            reply_markup=InlineKeyboardMarkup(keyboard),
         )
 
     elif data == "menu_profile":
-        await query.message.reply_text(
-            "Use /profile to see your stats."
+        await query.edit_message_text(
+            "Use /profile to see your stats.",
+            reply_markup=InlineKeyboardMarkup(keyboard),
         )
 
     elif data == "menu_help":
-        await query.message.reply_text(
+        await query.edit_message_text(
             "English Lemon 🍋 Commands:\n\n"
             "/start - open the main menu\n"
             "/startgame - start a new game in a group\n"
@@ -82,9 +88,24 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "/leaderboard - group leaderboard\n"
             "/global - global leaderboard\n"
             "/profile - your profile\n"
-            "/questions - view saved questions"
+            "/questions - view saved questions",
+            reply_markup=InlineKeyboardMarkup(keyboard),
         )
 
+    elif data == "menu_back":
+        keyboard = [
+            [InlineKeyboardButton("🎮 Play Quiz", callback_data="menu_play")],
+            [InlineKeyboardButton("🏆 Leaderboard", callback_data="menu_leaderboard")],
+            [InlineKeyboardButton("👤 My Profile", callback_data="menu_profile")],
+            [InlineKeyboardButton("❓ Help", callback_data="menu_help")],
+        ]
+
+        await query.edit_message_text(
+            "Welcome to English Lemon 🍋!\n\n"
+            "Practice vocabulary, play quiz games, and climb the leaderboard.",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+        )
+        
 async def myid(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(str(update.effective_user.id))
 

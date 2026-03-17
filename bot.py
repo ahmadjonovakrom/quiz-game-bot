@@ -468,6 +468,7 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "round_poll_ids": set(),
         "used_question_ids": set(),
         "join_end_time": join_end_time,
+        "last_timer_value": JOIN_SECONDS,
     }
 
     safe_task(begin_game_after_join(chat.id, context))
@@ -483,27 +484,29 @@ async def begin_game_after_join(chat_id, context):
             return
 
         remaining = get_time_left(game)
-
         if remaining is None:
             return
 
         if remaining <= 0:
             break
 
-        try:
-            await context.bot.edit_message_text(
-                chat_id=chat_id,
-                message_id=game["join_message_id"],
-                text=build_join_text(game, remaining),
-                reply_markup=InlineKeyboardMarkup(
-                    [[InlineKeyboardButton("Join", callback_data=f"join|{chat_id}")]]
-                ),
-                parse_mode="HTML",
-            )
-        except Exception:
-            pass
+        if game.get("last_timer_value") != remaining:
+            game["last_timer_value"] = remaining
 
-        await asyncio.sleep(1)
+            try:
+                await context.bot.edit_message_text(
+                    chat_id=chat_id,
+                    message_id=game["join_message_id"],
+                    text=build_join_text(game, remaining),
+                    reply_markup=InlineKeyboardMarkup(
+                        [[InlineKeyboardButton("Join", callback_data=f"join|{chat_id}")]]
+                    ),
+                    parse_mode="HTML",
+                )
+            except Exception:
+                pass
+
+        await asyncio.sleep(0.4)
 
     game = active_games.get(chat_id)
     if not game:
@@ -583,11 +586,14 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     ensure_player(user.id, user.username, user.full_name)
 
+    remaining = get_time_left(game)
+    if remaining is None:
+        remaining = 0
+
     keyboard = [[InlineKeyboardButton("Join", callback_data=f"join|{chat_id}")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     try:
-        remaining = get_time_left(game)
         await context.bot.edit_message_text(
             chat_id=chat_id,
             message_id=game["join_message_id"],

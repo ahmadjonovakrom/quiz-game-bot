@@ -16,7 +16,9 @@ def safe_task(coro):
             await coro
         except Exception:
             logger.exception("Background task crashed")
-    return asyncio.create_task(wrapper())
+
+    task = asyncio.create_task(wrapper())
+    return task
 
 
 def build_join_text(game, remaining):
@@ -36,10 +38,16 @@ def build_join_text(game, remaining):
 async def safe_delete_message(bot, chat_id, message_id):
     if not message_id:
         return
+
     try:
         await bot.delete_message(chat_id=chat_id, message_id=message_id)
-    except:
-        pass
+    except Exception as e:
+        logger.warning(
+            "Could not delete message %s in chat %s: %s",
+            message_id,
+            chat_id,
+            e,
+        )
 
 
 def clickable_name(user):

@@ -1,3 +1,4 @@
+import logging
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -64,6 +65,11 @@ from handlers.admin import (
     EDIT_C,
     EDIT_D,
     EDIT_CORRECT,
+)
+
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    level=logging.INFO,
 )
 
 

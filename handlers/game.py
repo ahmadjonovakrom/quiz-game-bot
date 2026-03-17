@@ -1,5 +1,7 @@
 import time
 import asyncio
+import logging
+
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
@@ -24,6 +26,8 @@ from utils.helpers import (
     build_join_text,
     clickable_name,
 )
+
+logger = logging.getLogger(__name__)
 
 active_games = {}
 poll_map = {}
@@ -109,10 +113,7 @@ async def begin_game_after_join(chat_id, context):
 
     for remaining in steps:
         game = active_games.get(chat_id)
-        if not game:
-            return
-
-        if game["status"] != "joining":
+        if not game or game["status"] != "joining":
             return
 
         try:
@@ -125,8 +126,8 @@ async def begin_game_after_join(chat_id, context):
                 ),
                 parse_mode="HTML",
             )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Failed to edit join message: %s", e)
 
         await asyncio.sleep(10)
 
@@ -194,8 +195,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ),
             parse_mode="HTML",
         )
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("Failed to update join message after join: %s", e)
 
     await query.answer("Joined!")
 
@@ -203,6 +204,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def send_question(chat_id, context):
     game = active_games.get(chat_id)
     if not game:
+        return
+
+    if game["status"] != "running":
         return
 
     game["round"] += 1
@@ -250,29 +254,44 @@ async def send_question(chat_id, context):
     game["current_poll_id"] = msg.poll.id
     poll_map[msg.poll.id] = {"chat_id": chat_id, "round": game["round"]}
 
+    logger.info("Sent poll %s in chat %s for round %s", msg.poll.id, chat_id, game["round"])
+
     safe_task(wait_and_continue(chat_id, context, msg.poll.id, game["round"]))
 
 
 async def wait_and_continue(chat_id, context, poll_id, round_number):
-    await asyncio.sleep(QUESTION_SECONDS + 2)
+    try:
+        logger.info(
+            "wait_and_continue started: chat_id=%s poll_id=%s round=%s",
+            chat_id, poll_id, round_number
+        )
 
-    game = active_games.get(chat_id)
-    if not game:
+        await asyncio.sleep(QUESTION_SECONDS + 2)
+
+        game = active_games.get(chat_id)
+        if not game:
+            poll_map.pop(poll_id, None)
+            return
+
+        if game["status"] != "running":
+            poll_map.pop(poll_id, None)
+            return
+
+        if game.get("current_poll_id") != poll_id:
+            poll_map.pop(poll_id, None)
+            return
+
+        if game.get("round") != round_number:
+            poll_map.pop(poll_id, None)
+            return
+
         poll_map.pop(poll_id, None)
-        return
 
-    if game["status"] != "running":
-        poll_map.pop(poll_id, None)
-        return
+        await asyncio.sleep(1)
+        await send_question(chat_id, context)
 
-    if game.get("current_poll_id") != poll_id:
-        poll_map.pop(poll_id, None)
-        return
-
-    poll_map.pop(poll_id, None)
-
-    await asyncio.sleep(1)
-    await send_question(chat_id, context)
+    except Exception:
+        logger.exception("Error in wait_and_continue")
 
 
 async def receive_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -302,7 +321,6 @@ async def receive_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
     if answer.option_ids and answer.option_ids[0] == game["correct"]:
         points_to_add = CORRECT_POINTS
         got_speed_bonus = False
-        elapsed = None
 
         started_at = game.get("question_started_at")
         if started_at is not None:
@@ -327,10 +345,10 @@ async def receive_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
         record_correct_answer(user.id)
 
         if got_speed_bonus:
-         await context.bot.send_message(
-        chat_id,
-        f"⚡ {user.full_name} got a speed bonus! +{SPEED_BONUS_POINTS} points"
-    )
+            await context.bot.send_message(
+                chat_id,
+                f"⚡ {user.full_name} got a speed bonus! +{SPEED_BONUS_POINTS} points"
+            )
 
 
 async def end_game(chat_id, context):

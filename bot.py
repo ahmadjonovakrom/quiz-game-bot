@@ -67,7 +67,12 @@ def safe_task(coro):
 
 def build_join_text(game):
     if not game["players"]:
-        return "Registration is open"
+        return (
+            "Registration is open\n\n"
+            f"Joined:\nnone\n\n"
+            f"Total: 0\n"
+            f"Minimum needed: {MIN_PLAYERS}"
+        )
 
     players_text = ", ".join(game["players"].values())
 
@@ -422,7 +427,7 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     msg = await update.message.reply_text(
-        "Registration is open",
+        build_join_text({"players": {}}),
         reply_markup=reply_markup,
         parse_mode="HTML",
     )
@@ -668,36 +673,12 @@ async def next_question_timer(poll_id, round_number, context):
     if game["current_poll_id"] != poll_id:
         return
 
-    await send_round_leaderboard(chat_id, context)
     await asyncio.sleep(2)
     await send_question(chat_id, context)
 
 
-async def send_round_leaderboard(chat_id, context):
-    game = active_games.get(chat_id)
-    if not game:
-        return
-
-    ranking = sorted(
-        game["scores"].items(),
-        key=lambda x: x[1],
-        reverse=True,
-    )
-
-    text = f"🏆 Leaderboard after round {game['round']}\n\n"
-
-    if not ranking:
-        text += "No points yet."
-    else:
-        for i, (uid, pts) in enumerate(ranking[:10], start=1):
-            name = game["players"][uid]
-            text += f"{i}. {name} — {pts} pts\n"
-
-    await context.bot.send_message(chat_id, text, parse_mode="HTML")
-
-
 # =========================
-# FINAL PODIUM
+# FINAL RESULTS
 # =========================
 async def end_game(chat_id, context):
     game = active_games.get(chat_id)
@@ -717,18 +698,17 @@ async def end_game(chat_id, context):
         active_games.pop(chat_id, None)
         return
 
-    text = "🏆 Final Winners\n\n"
+    text = "🏆 Game Results\n\n"
     medals = ["🥇", "🥈", "🥉"]
 
     for i, (uid, pts) in enumerate(ranking[:3]):
         name = game["players"][uid]
-        text += f"{medals[i]} {name} — {pts} pts\n"
+        text += f"{medals[i]} {name} — {pts} 🍋\n"
 
     if len(ranking) > 3:
-        text += "\n"
-        for i, (uid, pts) in enumerate(ranking[3:10], start=4):
+        for i, (uid, pts) in enumerate(ranking[3:], start=4):
             name = game["players"][uid]
-            text += f"{i}. {name} — {pts} pts\n"
+            text += f"{i}. {name} — {pts} 🍋\n"
 
     await context.bot.send_message(chat_id, text.strip(), parse_mode="HTML")
 

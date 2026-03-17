@@ -37,6 +37,16 @@ from handlers.admin import (
     correct_step,
     delete_question_start,
     delete_id_step,
+    delete_confirm_step,
+    edit_question_start,
+    edit_id_step,
+    edit_question_step,
+    edit_a_step,
+    edit_b_step,
+    edit_c_step,
+    edit_d_step,
+    edit_correct_step,
+    cancel,
     QUESTION,
     A,
     B,
@@ -44,6 +54,14 @@ from handlers.admin import (
     D,
     CORRECT,
     DELETE_ID,
+    DELETE_CONFIRM,
+    EDIT_ID,
+    EDIT_QUESTION,
+    EDIT_A,
+    EDIT_B,
+    EDIT_C,
+    EDIT_D,
+    EDIT_CORRECT,
 )
 
 
@@ -60,6 +78,7 @@ def main():
     app.add_handler(CommandHandler("profile", profile))
     app.add_handler(CommandHandler("questions", questions_list))
     app.add_handler(CommandHandler("myid", myid))
+    app.add_handler(CommandHandler("cancel", cancel))
 
     add_question_conv = ConversationHandler(
         entry_points=[CommandHandler("addquestion", add_question_start)],
@@ -71,19 +90,35 @@ def main():
             D: [MessageHandler(filters.TEXT & ~filters.COMMAND, d_step)],
             CORRECT: [MessageHandler(filters.TEXT & ~filters.COMMAND, correct_step)],
         },
-        fallbacks=[],
+        fallbacks=[CommandHandler("cancel", cancel)],
     )
 
     delete_question_conv = ConversationHandler(
         entry_points=[CommandHandler("deletequestion", delete_question_start)],
         states={
             DELETE_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, delete_id_step)],
+            DELETE_CONFIRM: [MessageHandler(filters.TEXT & ~filters.COMMAND, delete_confirm_step)],
         },
-        fallbacks=[],
+        fallbacks=[CommandHandler("cancel", cancel)],
+    )
+
+    edit_question_conv = ConversationHandler(
+        entry_points=[CommandHandler("editquestion", edit_question_start)],
+        states={
+            EDIT_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_id_step)],
+            EDIT_QUESTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_question_step)],
+            EDIT_A: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_a_step)],
+            EDIT_B: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_b_step)],
+            EDIT_C: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_c_step)],
+            EDIT_D: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_d_step)],
+            EDIT_CORRECT: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_correct_step)],
+        },
+        fallbacks=[CommandHandler("cancel", cancel)],
     )
 
     app.add_handler(add_question_conv)
     app.add_handler(delete_question_conv)
+    app.add_handler(edit_question_conv)
 
     app.add_handler(CallbackQueryHandler(button_handler))
     app.add_handler(PollAnswerHandler(receive_poll_answer))

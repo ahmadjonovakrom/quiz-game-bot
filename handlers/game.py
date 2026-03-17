@@ -289,12 +289,14 @@ async def receive_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     if answer.option_ids and answer.option_ids[0] == game["correct"]:
         points_to_add = CORRECT_POINTS
+        got_speed_bonus = False
 
         started_at = game.get("question_started_at")
         if started_at is not None:
             elapsed = time.time() - started_at
             if elapsed <= SPEED_BONUS_SECONDS:
                 points_to_add += SPEED_BONUS_POINTS
+                got_speed_bonus = True
                 game["speed_bonus_awarded"][user.id] = True
             else:
                 game["speed_bonus_awarded"][user.id] = False
@@ -310,6 +312,12 @@ async def receive_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
 
         record_correct_answer(user.id)
+
+        if got_speed_bonus:
+            await context.bot.send_message(
+                chat_id,
+                f"⚡ {user.full_name} got a speed bonus! +{SPEED_BONUS_POINTS} points"
+            )
 
 
 async def end_game(chat_id, context):

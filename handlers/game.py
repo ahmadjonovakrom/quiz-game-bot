@@ -60,25 +60,35 @@ async def stop_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
+    user = update.effective_user
 
     if chat.type == "private":
         await update.message.reply_text("Use /startgame in a group.")
         return
 
-    if chat.id in active_games:
-        await update.message.reply_text("Game already running.")
+    game = active_games.get(chat.id)
+    if game:
+        if game["status"] == "joining":
+            await update.message.reply_text("A game is already waiting for players.")
+        elif game["status"] == "running":
+            await update.message.reply_text("A game is already running.")
+        else:
+            await update.message.reply_text("A game already exists in this group.")
         return
 
     keyboard = [[InlineKeyboardButton("Join", callback_data=f"join|{chat.id}")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    msg = await update.message.reply_text(
-    build_join_text({"players": {}}, JOIN_SECONDS),
-    reply_markup=reply_markup,
-    parse_mode="HTML",
-)
+    msg = await context.bot.send_message(
+        chat_id=chat.id,
+        text=build_join_text({"players": {}}, JOIN_SECONDS),
+        reply_markup=reply_markup,
+        parse_mode="HTML",
+    )
+
     active_games[chat.id] = {
         "status": "joining",
+        "started_by": user.id,
         "players": {},
         "scores": {},
         "round": 0,

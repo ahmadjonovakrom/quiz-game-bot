@@ -1,5 +1,6 @@
-from telegram import Update
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler
+
 from utils.helpers import is_admin
 from database import (
     add_question,
@@ -17,6 +18,86 @@ EDIT_ID, EDIT_QUESTION, EDIT_A, EDIT_B, EDIT_C, EDIT_D, EDIT_CORRECT = range(8, 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
     await update.message.reply_text("Cancelled.")
+    return ConversationHandler.END
+
+
+async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id):
+        await update.message.reply_text("Admin only.")
+        return
+
+    keyboard = [
+        [InlineKeyboardButton("➕ Add Question", callback_data="admin_add")],
+        [InlineKeyboardButton("📚 View Questions", callback_data="admin_list")],
+        [InlineKeyboardButton("✏️ Edit Question", callback_data="admin_edit")],
+        [InlineKeyboardButton("🗑 Delete Question", callback_data="admin_delete")],
+    ]
+    await update.message.reply_text(
+        "Admin Panel",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+    )
+
+
+async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    if not is_admin(query.from_user.id):
+        await query.answer("Admin only.", show_alert=True)
+        return
+
+    data = query.data
+
+    if data == "admin_add":
+        context.user_data.clear()
+        await query.message.reply_text("Send the question text.\n\nUse /cancel to stop.")
+        return QUESTION
+
+    if data == "admin_list":
+        rows = get_all_questions(limit=50)
+
+        if not rows:
+            await query.message.reply_text("No questions saved yet.")
+            return ConversationHandler.END
+
+        chunks = []
+        current = "📚 Saved Questions\n\n"
+
+        for row in rows:
+            block = (
+                f"ID: {row[0]}\n"
+                f"Q: {row[1]}\n"
+                f"A) {row[2]}\n"
+                f"B) {row[3]}\n"
+                f"C) {row[4]}\n"
+                f"D) {row[5]}\n"
+                f"Correct: {row[6]}\n\n"
+            )
+
+            if len(current) + len(block) > 3500:
+                chunks.append(current)
+                current = block
+            else:
+                current += block
+
+        if current.strip():
+            chunks.append(current)
+
+        for chunk in chunks:
+            await query.message.reply_text(chunk)
+
+        return ConversationHandler.END
+
+    if data == "admin_edit":
+        context.user_data.clear()
+        await query.message.reply_text("Send question ID to edit.\n\nUse /cancel to stop.")
+        return EDIT_ID
+
+    if data == "admin_delete":
+        context.user_data.clear()
+        await query.message.reply_text("Send question ID to delete.\n\nUse /cancel to stop.")
+        return DELETE_ID
+
     return ConversationHandler.END
 
 

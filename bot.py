@@ -27,6 +27,8 @@ from handlers.profile import (
 )
 
 from handlers.admin import (
+    admin_panel,
+    admin_button_handler,
     questions_list,
     add_question_start,
     question_step,
@@ -78,10 +80,14 @@ def main():
     app.add_handler(CommandHandler("profile", profile))
     app.add_handler(CommandHandler("questions", questions_list))
     app.add_handler(CommandHandler("myid", myid))
+    app.add_handler(CommandHandler("admin", admin_panel))
     app.add_handler(CommandHandler("cancel", cancel))
 
     add_question_conv = ConversationHandler(
-        entry_points=[CommandHandler("addquestion", add_question_start)],
+        entry_points=[
+            CommandHandler("addquestion", add_question_start),
+            CallbackQueryHandler(admin_button_handler, pattern="^admin_add$"),
+        ],
         states={
             QUESTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, question_step)],
             A: [MessageHandler(filters.TEXT & ~filters.COMMAND, a_step)],
@@ -94,7 +100,10 @@ def main():
     )
 
     delete_question_conv = ConversationHandler(
-        entry_points=[CommandHandler("deletequestion", delete_question_start)],
+        entry_points=[
+            CommandHandler("deletequestion", delete_question_start),
+            CallbackQueryHandler(admin_button_handler, pattern="^admin_delete$"),
+        ],
         states={
             DELETE_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, delete_id_step)],
             DELETE_CONFIRM: [MessageHandler(filters.TEXT & ~filters.COMMAND, delete_confirm_step)],
@@ -103,7 +112,10 @@ def main():
     )
 
     edit_question_conv = ConversationHandler(
-        entry_points=[CommandHandler("editquestion", edit_question_start)],
+        entry_points=[
+            CommandHandler("editquestion", edit_question_start),
+            CallbackQueryHandler(admin_button_handler, pattern="^admin_edit$"),
+        ],
         states={
             EDIT_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_id_step)],
             EDIT_QUESTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_question_step)],
@@ -120,7 +132,8 @@ def main():
     app.add_handler(delete_question_conv)
     app.add_handler(edit_question_conv)
 
-    app.add_handler(CallbackQueryHandler(button_handler))
+    app.add_handler(CallbackQueryHandler(admin_button_handler, pattern="^admin_list$"))
+    app.add_handler(CallbackQueryHandler(button_handler, pattern=r"^join\|"))
     app.add_handler(PollAnswerHandler(receive_poll_answer))
 
     print("Bot running...")

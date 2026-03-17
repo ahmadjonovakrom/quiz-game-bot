@@ -65,16 +65,20 @@ def safe_task(coro):
     return asyncio.create_task(wrapper())
 
 
-def build_join_text(game):
+def build_join_text(game, time_left=None):
     players = list(game["players"].values())
 
+    timer_text = ""
+    if time_left is not None:
+        timer_text = f" ({time_left}s)"
+
     if not players:
-        return "Registration is open"
+        return f"Registration is open{timer_text}"
 
     joined_text = ", ".join(players)
 
     return (
-        "Registration is open\n\n"
+        f"Registration is open{timer_text}\n\n"
         f"Joined:\n{joined_text}\n\n"
         f"Total: {len(players)}\n"
         f"Minimum needed: {MIN_PLAYERS}"
@@ -436,7 +440,7 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     msg = await context.bot.send_message(
         chat_id=chat.id,
-        text=build_join_text({"players": {}}),
+        text=build_join_text({"players": {}}, JOIN_SECONDS),
         reply_markup=reply_markup,
         parse_mode="HTML",
     )
@@ -458,7 +462,28 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def begin_game_after_join(chat_id, context):
-    await asyncio.sleep(JOIN_SECONDS)
+    for remaining in range(JOIN_SECONDS, 0, -1):
+        game = active_games.get(chat_id)
+        if not game:
+            return
+
+        if game["status"] != "joining":
+            return
+
+        try:
+            await context.bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=game["join_message_id"],
+                text=build_join_text(game, remaining),
+                reply_markup=InlineKeyboardMarkup(
+                    [[InlineKeyboardButton("Join", callback_data=f"join|{chat_id}")]]
+                ),
+                parse_mode="HTML",
+            )
+        except Exception:
+            pass
+
+        await asyncio.sleep(1)
 
     game = active_games.get(chat_id)
     if not game:
@@ -468,21 +493,15 @@ async def begin_game_after_join(chat_id, context):
         return
 
     if len(game["players"]) < MIN_PLAYERS:
-        try:
-            await context.bot.edit_message_text(
-                chat_id=chat_id,
-                message_id=game["join_message_id"],
-                text=(
-                    build_join_text(game)
-                    + "\n\nNot enough players to start the game."
-                ),
-                parse_mode="HTML",
-            )
-        except Exception:
-            await context.bot.send_message(
-                chat_id=chat_id,
-                text="Not enough players to start the game.",
-            )
+        await safe_delete_message(context.bot, chat_id, game.get("join_message_id"))
+
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=(
+                "Not enough players to start the game...\n\n"
+                f"Minimum number of players - {MIN_PLAYERS}"
+            ),
+        )
 
         active_games.pop(chat_id, None)
         return
@@ -493,11 +512,11 @@ async def begin_game_after_join(chat_id, context):
         await context.bot.edit_message_text(
             chat_id=chat_id,
             message_id=game["join_message_id"],
-            text=build_join_text(game) + "\n\nGame starting...",
+            text=build_join_text(game, 0) + "\n\nGame starting...",
             parse_mode="HTML",
         )
     except Exception:
-        await context.bot.send_message(chat_id, "Game starting!")
+        await context.bot.send_message(chat_id, "Game starting...")
 
     await asyncio.sleep(2)
 
@@ -548,6 +567,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     try:
+        time_left = None
+        if game["status"] == "joining":
+            time_left = None
         await context.bot.edit_message_text(
             chat_id=chat_id,
             message_id=game["join_message_id"],

@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import html
+import time
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
@@ -63,6 +64,14 @@ def safe_task(coro):
         except Exception:
             logger.exception("Background task crashed")
     return asyncio.create_task(wrapper())
+
+
+def get_time_left(game):
+    join_end_time = game.get("join_end_time")
+    if not join_end_time:
+        return None
+    remaining = int(join_end_time - time.time())
+    return max(0, remaining)
 
 
 def build_join_text(game, time_left=None):
@@ -438,6 +447,8 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [[InlineKeyboardButton("Join", callback_data=f"join|{chat.id}")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
+    join_end_time = time.time() + JOIN_SECONDS
+
     msg = await context.bot.send_message(
         chat_id=chat.id,
         text=build_join_text({"players": {}}, JOIN_SECONDS),
@@ -456,19 +467,28 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "join_message_id": msg.message_id,
         "round_poll_ids": set(),
         "used_question_ids": set(),
+        "join_end_time": join_end_time,
     }
 
     safe_task(begin_game_after_join(chat.id, context))
 
 
 async def begin_game_after_join(chat_id, context):
-    for remaining in range(JOIN_SECONDS, 0, -1):
+    while True:
         game = active_games.get(chat_id)
         if not game:
             return
 
         if game["status"] != "joining":
             return
+
+        remaining = get_time_left(game)
+
+        if remaining is None:
+            return
+
+        if remaining <= 0:
+            break
 
         try:
             await context.bot.edit_message_text(
@@ -567,13 +587,11 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     try:
-        time_left = None
-        if game["status"] == "joining":
-            time_left = None
+        remaining = get_time_left(game)
         await context.bot.edit_message_text(
             chat_id=chat_id,
             message_id=game["join_message_id"],
-            text=build_join_text(game),
+            text=build_join_text(game, remaining),
             reply_markup=reply_markup,
             parse_mode="HTML",
         )

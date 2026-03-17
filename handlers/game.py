@@ -48,7 +48,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Practice vocabulary, play quiz games, and climb the leaderboard.",
         reply_markup=reply_markup,
     )
- async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 

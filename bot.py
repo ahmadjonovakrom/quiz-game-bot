@@ -19,6 +19,7 @@ from handlers.game import (
     stop_game,
     button_handler,
     receive_poll_answer,
+    menu_handler,
 )
 
 from handlers.profile import (
@@ -138,6 +139,7 @@ def main():
     app.add_handler(delete_question_conv)
     app.add_handler(edit_question_conv)
 
+    app.add_handler(CallbackQueryHandler(menu_handler, pattern=r"^menu_"))
     app.add_handler(CallbackQueryHandler(admin_button_handler, pattern=r"^(admin_|qedit\||qdelete\|)"))
     app.add_handler(CallbackQueryHandler(button_handler, pattern=r"^join\|"))
     app.add_handler(PollAnswerHandler(receive_poll_answer))

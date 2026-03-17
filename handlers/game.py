@@ -36,12 +36,46 @@ ROUNDS_PER_GAME = 5
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    keyboard = [
+        [InlineKeyboardButton("🏆 Leaderboard", callback_data="menu_leaderboard")],
+        [InlineKeyboardButton("👤 My Profile", callback_data="menu_profile")],
+        [InlineKeyboardButton("❓ Help", callback_data="menu_help")],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
     await update.message.reply_text(
         "Welcome to English Lemon 🍋!\n\n"
-        "Use /startgame in a group to begin a quiz with friends.\n"
-        "Earn points, learn vocabulary, and climb the leaderboard!"
+        "Practice vocabulary, play quiz games, and climb the leaderboard.",
+        reply_markup=reply_markup,
     )
+ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
 
+    data = query.data
+
+    if data == "menu_leaderboard":
+        await query.message.reply_text(
+            "Use /leaderboard to see the group ranking.\n"
+            "Use /global to see the global ranking."
+        )
+
+    elif data == "menu_profile":
+        await query.message.reply_text(
+            "Use /profile to see your stats."
+        )
+
+    elif data == "menu_help":
+        await query.message.reply_text(
+            "English Lemon 🍋 Commands:\n\n"
+            "/start - open the main menu\n"
+            "/startgame - start a new game in a group\n"
+            "/stopgame - stop the current game\n"
+            "/leaderboard - group leaderboard\n"
+            "/global - global leaderboard\n"
+            "/profile - your profile\n"
+            "/questions - view saved questions"
+        )
 
 async def myid(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(str(update.effective_user.id))

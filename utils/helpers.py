@@ -38,16 +38,10 @@ def build_join_text(game, remaining):
 async def safe_delete_message(bot, chat_id, message_id):
     if not message_id:
         return
-
     try:
         await bot.delete_message(chat_id=chat_id, message_id=message_id)
-    except Exception as e:
-        logger.warning(
-            "Could not delete message %s in chat %s: %s",
-            message_id,
-            chat_id,
-            e,
-        )
+    except:
+        pass
 
 
 def clickable_name(user):

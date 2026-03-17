@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import html
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
@@ -64,23 +65,13 @@ def safe_task(coro):
     return asyncio.create_task(wrapper())
 
 
-def get_display_name(user):
-    if user.first_name:
-        return user.first_name
-    if user.full_name:
-        return user.full_name
-    if user.username:
-        return user.username
-    return "Player"
-
-
 def build_join_text(game):
     players = list(game["players"].values())
 
     if not players:
-        joined_text = "Nobody yet"
-    else:
-        joined_text = ", ".join(players)
+        return "Registration is open"
+
+    joined_text = ", ".join(players)
 
     return (
         "Registration is open\n\n"
@@ -443,11 +434,11 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [[InlineKeyboardButton("Join", callback_data=f"join|{chat.id}")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    empty_game = {"players": {}}
-
-    msg = await update.message.reply_text(
-        build_join_text(empty_game),
+    msg = await context.bot.send_message(
+        chat_id=chat.id,
+        text=build_join_text({"players": {}}),
         reply_markup=reply_markup,
+        parse_mode="HTML",
     )
 
     active_games[chat.id] = {
@@ -482,12 +473,10 @@ async def begin_game_after_join(chat_id, context):
                 chat_id=chat_id,
                 message_id=game["join_message_id"],
                 text=(
-                    "Registration closed\n\n"
-                    f"Joined:\n{', '.join(game['players'].values()) if game['players'] else 'Nobody yet'}\n\n"
-                    f"Total: {len(game['players'])}\n"
-                    f"Minimum needed: {MIN_PLAYERS}\n\n"
-                    "Not enough players to start the game."
+                    build_join_text(game)
+                    + "\n\nNot enough players to start the game."
                 ),
+                parse_mode="HTML",
             )
         except Exception:
             await context.bot.send_message(
@@ -505,6 +494,7 @@ async def begin_game_after_join(chat_id, context):
             chat_id=chat_id,
             message_id=game["join_message_id"],
             text=build_join_text(game) + "\n\nGame starting...",
+            parse_mode="HTML",
         )
     except Exception:
         await context.bot.send_message(chat_id, "Game starting!")
@@ -522,11 +512,10 @@ async def begin_game_after_join(chat_id, context):
 # =========================
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer()
-
     data = query.data.split("|")
 
     if data[0] != "join":
+        await query.answer()
         return
 
     chat_id = int(data[1])
@@ -546,9 +535,11 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer("Already joined.")
         return
 
-    display_name = get_display_name(user)
+    name_source = user.username or user.first_name or user.full_name or "Player"
+    safe_name = html.escape(name_source)
+    clickable_name = f'<a href="tg://user?id={user.id}">{safe_name}</a>'
 
-    game["players"][user.id] = display_name
+    game["players"][user.id] = clickable_name
     game["scores"][user.id] = 0
 
     ensure_player(user.id, user.username, user.full_name)
@@ -562,9 +553,12 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             message_id=game["join_message_id"],
             text=build_join_text(game),
             reply_markup=reply_markup,
+            parse_mode="HTML",
         )
     except Exception:
         pass
+
+    await query.answer("Joined!")
 
 
 # =========================
@@ -726,7 +720,7 @@ async def end_game(chat_id, context):
         else:
             text += f"{i}. {name} — {pts} 🍋\n"
 
-    await context.bot.send_message(chat_id, text.strip())
+    await context.bot.send_message(chat_id, text.strip(), parse_mode="HTML")
 
     for pid in game.get("round_poll_ids", set()):
         poll_map.pop(pid, None)

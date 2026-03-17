@@ -17,13 +17,18 @@ EDIT_ID, EDIT_QUESTION, EDIT_A, EDIT_B, EDIT_C, EDIT_D, EDIT_CORRECT = range(8, 
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
-    await update.message.reply_text("Cancelled.")
+    if update.message:
+        await update.message.reply_text("Cancelled.")
+    elif update.callback_query:
+        await update.callback_query.message.reply_text("Cancelled.")
     return ConversationHandler.END
 
 
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_admin(update.effective_user.id):
-        await update.message.reply_text("Admin only.")
+    user = update.effective_user
+    if not user or not is_admin(user.id):
+        if update.message:
+            await update.message.reply_text("Admin only.")
         return
 
     keyboard = [
@@ -32,21 +37,26 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("✏️ Edit Question", callback_data="admin_edit")],
         [InlineKeyboardButton("🗑 Delete Question", callback_data="admin_delete")],
     ]
-    await update.message.reply_text(
-        "Admin Panel",
-        reply_markup=InlineKeyboardMarkup(keyboard),
-    )
+
+    if update.message:
+        await update.message.reply_text(
+            "Admin Panel",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+        )
 
 
 async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
+    if not query:
+        return ConversationHandler.END
+
     await query.answer()
 
     if not is_admin(query.from_user.id):
         await query.answer("Admin only.", show_alert=True)
-        return
+        return ConversationHandler.END
 
-    data = query.data
+    data = query.data or ""
 
     if data == "admin_add":
         context.user_data.clear()
@@ -54,7 +64,7 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         return QUESTION
 
     if data == "admin_list":
-        await send_questions_with_buttons(query.message, context)
+        await send_questions_with_buttons(query.message)
         return ConversationHandler.END
 
     if data == "admin_edit":
@@ -68,9 +78,13 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         return DELETE_ID
 
     if data.startswith("qedit|"):
-        qid = int(data.split("|")[1])
-        row = get_question_by_id(qid)
+        try:
+            qid = int(data.split("|")[1])
+        except (IndexError, ValueError):
+            await query.message.reply_text("Invalid question ID.")
+            return ConversationHandler.END
 
+        row = get_question_by_id(qid)
         if not row:
             await query.message.reply_text("Question not found.")
             return ConversationHandler.END
@@ -91,9 +105,13 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         return EDIT_QUESTION
 
     if data.startswith("qdelete|"):
-        qid = int(data.split("|")[1])
-        row = get_question_by_id(qid)
+        try:
+            qid = int(data.split("|")[1])
+        except (IndexError, ValueError):
+            await query.message.reply_text("Invalid question ID.")
+            return ConversationHandler.END
 
+        row = get_question_by_id(qid)
         if not row:
             await query.message.reply_text("Question not found.")
             return ConversationHandler.END
@@ -102,7 +120,7 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         context.user_data["delete_id"] = qid
 
         preview = (
-            f"⚠️ Delete this question?\n\n"
+            "⚠️ Delete this question?\n\n"
             f"ID: {row[0]}\n"
             f"Q: {row[1]}\n"
             f"A) {row[2]}\n"
@@ -119,7 +137,7 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     return ConversationHandler.END
 
 
-async def send_questions_with_buttons(message, context):
+async def send_questions_with_buttons(message):
     rows = get_all_questions(limit=50)
 
     if not rows:
@@ -142,12 +160,17 @@ async def send_questions_with_buttons(message, context):
             InlineKeyboardButton("🗑 Delete", callback_data=f"qdelete|{row[0]}"),
         ]]
 
-        await message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
+        await message.reply_text(
+            text,
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
 
 
 async def add_question_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_admin(update.effective_user.id):
-        await update.message.reply_text("Admin only.")
+    user = update.effective_user
+    if not user or not is_admin(user.id):
+        if update.message:
+            await update.message.reply_text("Admin only.")
         return ConversationHandler.END
 
     context.user_data.clear()
@@ -156,6 +179,10 @@ async def add_question_start(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 
 async def question_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message or not update.message.text:
+        await update.message.reply_text("Send text only.")
+        return QUESTION
+
     text = update.message.text.strip()
     if not text:
         await update.message.reply_text("Question cannot be empty. Send the question text again.")
@@ -167,6 +194,10 @@ async def question_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def a_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message or not update.message.text:
+        await update.message.reply_text("Send text only.")
+        return A
+
     text = update.message.text.strip()
     if not text:
         await update.message.reply_text("Option A cannot be empty.")
@@ -178,6 +209,10 @@ async def a_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def b_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message or not update.message.text:
+        await update.message.reply_text("Send text only.")
+        return B
+
     text = update.message.text.strip()
     if not text:
         await update.message.reply_text("Option B cannot be empty.")
@@ -189,6 +224,10 @@ async def b_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def c_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message or not update.message.text:
+        await update.message.reply_text("Send text only.")
+        return C
+
     text = update.message.text.strip()
     if not text:
         await update.message.reply_text("Option C cannot be empty.")
@@ -200,6 +239,10 @@ async def c_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def d_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message or not update.message.text:
+        await update.message.reply_text("Send text only.")
+        return D
+
     text = update.message.text.strip()
     if not text:
         await update.message.reply_text("Option D cannot be empty.")
@@ -211,17 +254,26 @@ async def d_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def correct_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message or not update.message.text:
+        await update.message.reply_text("Send text only.")
+        return CORRECT
+
     correct = update.message.text.strip().upper()
 
     if correct not in {"A", "B", "C", "D"}:
         await update.message.reply_text("Please send only A, B, C, or D.")
         return CORRECT
 
-    q = context.user_data["q"]
-    a = context.user_data["a"]
-    b = context.user_data["b"]
-    c = context.user_data["c"]
-    d = context.user_data["d"]
+    q = context.user_data.get("q")
+    a = context.user_data.get("a")
+    b = context.user_data.get("b")
+    c = context.user_data.get("c")
+    d = context.user_data.get("d")
+
+    if not all([q, a, b, c, d]):
+        context.user_data.clear()
+        await update.message.reply_text("Something went wrong. Please start again.")
+        return ConversationHandler.END
 
     add_question(q, a, b, c, d, correct)
 
@@ -241,12 +293,21 @@ async def correct_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def questions_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await send_questions_with_buttons(update.message, context)
+    user = update.effective_user
+    if not user or not is_admin(user.id):
+        if update.message:
+            await update.message.reply_text("Admin only.")
+        return
+
+    if update.message:
+        await send_questions_with_buttons(update.message)
 
 
 async def delete_question_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_admin(update.effective_user.id):
-        await update.message.reply_text("Admin only.")
+    user = update.effective_user
+    if not user or not is_admin(user.id):
+        if update.message:
+            await update.message.reply_text("Admin only.")
         return ConversationHandler.END
 
     context.user_data.clear()
@@ -255,6 +316,10 @@ async def delete_question_start(update: Update, context: ContextTypes.DEFAULT_TY
 
 
 async def delete_id_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message or not update.message.text:
+        await update.message.reply_text("Send text only.")
+        return DELETE_ID
+
     text = update.message.text.strip()
 
     if not text.isdigit():
@@ -271,7 +336,7 @@ async def delete_id_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["delete_id"] = qid
 
     preview = (
-        f"⚠️ Delete this question?\n\n"
+        "⚠️ Delete this question?\n\n"
         f"ID: {row[0]}\n"
         f"Q: {row[1]}\n"
         f"A) {row[2]}\n"
@@ -287,6 +352,10 @@ async def delete_id_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def delete_confirm_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message or not update.message.text:
+        await update.message.reply_text("Send text only.")
+        return DELETE_CONFIRM
+
     text = update.message.text.strip().upper()
 
     if text == "NO":
@@ -299,8 +368,12 @@ async def delete_confirm_step(update: Update, context: ContextTypes.DEFAULT_TYPE
         return DELETE_CONFIRM
 
     qid = context.user_data.get("delete_id")
-    deleted = delete_question(qid)
+    if not qid:
+        context.user_data.clear()
+        await update.message.reply_text("No question selected.")
+        return ConversationHandler.END
 
+    deleted = delete_question(qid)
     context.user_data.clear()
 
     if deleted:
@@ -312,8 +385,10 @@ async def delete_confirm_step(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 
 async def edit_question_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_admin(update.effective_user.id):
-        await update.message.reply_text("Admin only.")
+    user = update.effective_user
+    if not user or not is_admin(user.id):
+        if update.message:
+            await update.message.reply_text("Admin only.")
         return ConversationHandler.END
 
     context.user_data.clear()
@@ -322,6 +397,10 @@ async def edit_question_start(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 
 async def edit_id_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message or not update.message.text:
+        await update.message.reply_text("Send text only.")
+        return EDIT_ID
+
     text = update.message.text.strip()
 
     if not text.isdigit():
@@ -351,6 +430,10 @@ async def edit_id_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def edit_question_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message or not update.message.text:
+        await update.message.reply_text("Send text only.")
+        return EDIT_QUESTION
+
     text = update.message.text.strip()
     if not text:
         await update.message.reply_text("Question cannot be empty.")
@@ -362,6 +445,10 @@ async def edit_question_step(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 
 async def edit_a_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message or not update.message.text:
+        await update.message.reply_text("Send text only.")
+        return EDIT_A
+
     text = update.message.text.strip()
     if not text:
         await update.message.reply_text("Option A cannot be empty.")
@@ -373,6 +460,10 @@ async def edit_a_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def edit_b_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message or not update.message.text:
+        await update.message.reply_text("Send text only.")
+        return EDIT_B
+
     text = update.message.text.strip()
     if not text:
         await update.message.reply_text("Option B cannot be empty.")
@@ -384,6 +475,10 @@ async def edit_b_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def edit_c_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message or not update.message.text:
+        await update.message.reply_text("Send text only.")
+        return EDIT_C
+
     text = update.message.text.strip()
     if not text:
         await update.message.reply_text("Option C cannot be empty.")
@@ -395,6 +490,10 @@ async def edit_c_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def edit_d_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message or not update.message.text:
+        await update.message.reply_text("Send text only.")
+        return EDIT_D
+
     text = update.message.text.strip()
     if not text:
         await update.message.reply_text("Option D cannot be empty.")
@@ -406,21 +505,29 @@ async def edit_d_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def edit_correct_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message or not update.message.text:
+        await update.message.reply_text("Send text only.")
+        return EDIT_CORRECT
+
     correct = update.message.text.strip().upper()
 
     if correct not in {"A", "B", "C", "D"}:
         await update.message.reply_text("Please send only A, B, C, or D.")
         return EDIT_CORRECT
 
-    qid = context.user_data["edit_id"]
-    q = context.user_data["q"]
-    a = context.user_data["a"]
-    b = context.user_data["b"]
-    c = context.user_data["c"]
-    d = context.user_data["d"]
+    qid = context.user_data.get("edit_id")
+    q = context.user_data.get("q")
+    a = context.user_data.get("a")
+    b = context.user_data.get("b")
+    c = context.user_data.get("c")
+    d = context.user_data.get("d")
+
+    if not all([qid, q, a, b, c, d]):
+        context.user_data.clear()
+        await update.message.reply_text("Something went wrong. Please start again.")
+        return ConversationHandler.END
 
     updated = update_question(qid, q, a, b, c, d, correct)
-
     context.user_data.clear()
 
     if not updated:

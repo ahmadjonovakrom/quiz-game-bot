@@ -1,6 +1,7 @@
 import asyncio
 import html
 import logging
+
 from config import ADMIN_ID, MIN_PLAYERS
 
 logger = logging.getLogger(__name__)
@@ -17,20 +18,25 @@ def safe_task(coro):
         except Exception:
             logger.exception("Background task crashed")
 
-    task = asyncio.create_task(wrapper())
-    return task
+    return asyncio.create_task(wrapper())
 
 
-def build_join_text(game, remaining):
-    if not game["players"]:
-        return f"Registration is open ({remaining}s)"
+def build_join_text(game, remaining: int) -> str:
+    players = game.get("players", {})
 
-    players_text = ", ".join(game["players"].values())
+    if not players:
+        return (
+            f"Registration is open ({remaining}s)\n\n"
+            f"Total: 0\n"
+            f"Minimum needed: {MIN_PLAYERS}"
+        )
+
+    players_text = ", ".join(players.values())
 
     return (
         f"Registration is open ({remaining}s)\n\n"
         f"Joined:\n{players_text}\n\n"
-        f"Total: {len(game['players'])}\n"
+        f"Total: {len(players)}\n"
         f"Minimum needed: {MIN_PLAYERS}"
     )
 
@@ -38,12 +44,13 @@ def build_join_text(game, remaining):
 async def safe_delete_message(bot, chat_id, message_id):
     if not message_id:
         return
+
     try:
         await bot.delete_message(chat_id=chat_id, message_id=message_id)
-    except:
+    except Exception:
         pass
 
 
-def clickable_name(user):
+def clickable_name(user) -> str:
     safe_name = html.escape(user.full_name or user.first_name or "Player")
     return f'<a href="tg://user?id={user.id}">{safe_name}</a>'

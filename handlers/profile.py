@@ -3,39 +3,46 @@ from telegram.ext import ContextTypes
 
 from database import (
     ensure_player,
-    get_group_leaderboard,
-    get_global_leaderboard,
-    get_player_profile,
+    get_top_players,
+    get_player,
+    get_player_rank,
 )
 
 
 async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
+    ensure_player(user)
 
-    ensure_player(user.id, user.username, user.full_name)
-    profile_data, rank = get_player_profile(user.id)
+    player = get_player(user.id)
+    rank = get_player_rank(user.id)
 
-    if not profile_data:
+    if not player:
         await update.message.reply_text("No profile data yet.")
         return
 
-    full_name, username, global_points, games_played, correct_answers = profile_data
-    display_name = f"@{username}" if username else full_name
+    display_name = f"@{player['username']}" if player["username"] else player["full_name"]
+    fastest = player["fastest_answer_time"]
+
+    fastest_text = f"{fastest:.2f}s" if fastest is not None else "—"
 
     text = (
         "👤 Player Profile\n\n"
         f"Name: {display_name}\n"
-        f"Games played: {games_played}\n"
-        f"Correct answers: {correct_answers}\n"
-        f"Total points: {global_points}\n"
-        f"Global rank: #{rank}"
+        f"Games played: {player['games_played']}\n"
+        f"Games won: {player['games_won']}\n"
+        f"Correct answers: {player['correct_answers']}\n"
+        f"Wrong answers: {player['wrong_answers']}\n"
+        f"Best streak: {player['best_streak']}\n"
+        f"Total points: {player['total_points']}\n"
+        f"Fastest answer: {fastest_text}\n"
+        f"Global rank: #{rank if rank else '-'}"
     )
 
     await update.message.reply_text(text)
 
 
 async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    rows = get_group_leaderboard(update.effective_chat.id)
+    rows = get_top_players(limit=10)
 
     if not rows:
         await update.message.reply_text("No scores yet.")
@@ -43,15 +50,15 @@ async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     text = "🏆 Leaderboard\n\n"
 
-    for i, r in enumerate(rows, start=1):
-        name = f"@{r[1]}" if r[1] else r[0]
-        text += f"{i}. {name} — {r[2]} 🍋\n"
+    for i, row in enumerate(rows, start=1):
+        name = f"@{row['username']}" if row["username"] else row["full_name"]
+        text += f"{i}. {name} — {row['total_points']} 🍋\n"
 
     await update.message.reply_text(text)
 
 
 async def global_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    rows = get_global_leaderboard()
+    rows = get_top_players(limit=10)
 
     if not rows:
         await update.message.reply_text("No global scores yet.")
@@ -61,8 +68,8 @@ async def global_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE)
     text = "🌍 Global Leaderboard\n\n"
 
     for i, row in enumerate(rows, start=1):
-        name = f"@{row[1]}" if row[1] else row[0]
+        name = f"@{row['username']}" if row["username"] else row["full_name"]
         prefix = medals[i - 1] if i <= 3 else f"{i}."
-        text += f"{prefix} {name} — {row[2]} 🍋\n"
+        text += f"{prefix} {name} — {row['total_points']} 🍋\n"
 
     await update.message.reply_text(text)

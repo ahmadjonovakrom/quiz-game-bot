@@ -1,4 +1,5 @@
 import logging
+
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -74,28 +75,47 @@ logging.basicConfig(
     level=logging.INFO,
 )
 
+logger = logging.getLogger(__name__)
+
 
 def main():
     create_tables()
 
     app = Application.builder().token(BOT_TOKEN).build()
 
+    # -------------------------
+    # Basic commands
+    # -------------------------
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("myid", myid))
+
+    # -------------------------
+    # Game commands
+    # -------------------------
     app.add_handler(CommandHandler("startgame", start_game))
     app.add_handler(CommandHandler("stopgame", stop_game))
     app.add_handler(CommandHandler("dailyquiz", daily_quiz))
+
+    # -------------------------
+    # Profile / leaderboard
+    # -------------------------
     app.add_handler(CommandHandler("leaderboard", leaderboard))
     app.add_handler(CommandHandler("global", global_leaderboard))
     app.add_handler(CommandHandler("profile", profile))
-    app.add_handler(CommandHandler("questions", questions_list))
-    app.add_handler(CommandHandler("myid", myid))
-    app.add_handler(CommandHandler("admin", admin_panel))
-    app.add_handler(CommandHandler("cancel", cancel))
 
+    # -------------------------
+    # Admin simple commands
+    # -------------------------
+    app.add_handler(CommandHandler("admin", admin_panel))
+    app.add_handler(CommandHandler("questions", questions_list))
+
+    # -------------------------
+    # Admin conversations
+    # -------------------------
     add_question_conv = ConversationHandler(
         entry_points=[
             CommandHandler("addquestion", add_question_start),
-            CallbackQueryHandler(admin_button_handler, pattern="^admin_add$"),
+            CallbackQueryHandler(admin_button_handler, pattern=r"^admin_add$"),
         ],
         states={
             QUESTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, question_step)],
@@ -106,24 +126,32 @@ def main():
             CORRECT: [MessageHandler(filters.TEXT & ~filters.COMMAND, correct_step)],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
+        per_chat=True,
+        per_user=True,
+        per_message=False,
     )
 
     delete_question_conv = ConversationHandler(
         entry_points=[
             CommandHandler("deletequestion", delete_question_start),
-            CallbackQueryHandler(admin_button_handler, pattern="^admin_delete$"),
+            CallbackQueryHandler(admin_button_handler, pattern=r"^admin_delete$"),
+            CallbackQueryHandler(admin_button_handler, pattern=r"^qdelete\|\d+$"),
         ],
         states={
             DELETE_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, delete_id_step)],
             DELETE_CONFIRM: [MessageHandler(filters.TEXT & ~filters.COMMAND, delete_confirm_step)],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
+        per_chat=True,
+        per_user=True,
+        per_message=False,
     )
 
     edit_question_conv = ConversationHandler(
         entry_points=[
             CommandHandler("editquestion", edit_question_start),
-            CallbackQueryHandler(admin_button_handler, pattern="^admin_edit$"),
+            CallbackQueryHandler(admin_button_handler, pattern=r"^admin_edit$"),
+            CallbackQueryHandler(admin_button_handler, pattern=r"^qedit\|\d+$"),
         ],
         states={
             EDIT_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_id_step)],
@@ -135,18 +163,30 @@ def main():
             EDIT_CORRECT: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_correct_step)],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
+        per_chat=True,
+        per_user=True,
+        per_message=False,
     )
 
     app.add_handler(add_question_conv)
     app.add_handler(delete_question_conv)
     app.add_handler(edit_question_conv)
 
+    # -------------------------
+    # Other callback handlers
+    # -------------------------
     app.add_handler(CallbackQueryHandler(menu_handler, pattern=r"^menu_"))
-    app.add_handler(CallbackQueryHandler(admin_button_handler, pattern=r"^(admin_|qedit\||qdelete\|)"))
     app.add_handler(CallbackQueryHandler(button_handler, pattern=r"^join\|"))
+
+    # Optional safety fallback for admin callbacks that are not caught inside conversations
+    app.add_handler(CallbackQueryHandler(admin_button_handler, pattern=r"^(admin_list|admin_add|admin_edit|admin_delete|qedit\|\d+|qdelete\|\d+)$"))
+
+    # -------------------------
+    # Poll answers
+    # -------------------------
     app.add_handler(PollAnswerHandler(receive_poll_answer))
 
-    print("Bot running...")
+    logger.info("Bot running...")
     app.run_polling(drop_pending_updates=True)
 
 

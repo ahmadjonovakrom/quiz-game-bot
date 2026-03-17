@@ -16,10 +16,16 @@ from config import (
 )
 from database import (
     get_random_question,
+    list_questions,
     ensure_player,
     add_points,
     record_correct_answer,
-    record_game_played,
+    record_wrong_answer,
+    increment_games_played,
+    increment_games_won,
+    create_game,
+    finish_game,
+    record_game_result,
 )
 from utils.helpers import (
     safe_task,
@@ -35,6 +41,28 @@ poll_map = {}
 daily_quiz_players = {}
 
 ROUNDS_PER_GAME = 5
+
+
+def get_unused_question(used_ids, category=None, difficulty=None):
+    questions = list_questions(limit=500)
+
+    filtered = []
+    for q in questions:
+        if q["id"] in used_ids:
+            continue
+        if not q["is_active"]:
+            continue
+        if category and q["category"] != category:
+            continue
+        if difficulty and q["difficulty"] != difficulty:
+            continue
+        filtered.append(q)
+
+    if not filtered:
+        return None
+
+    import random
+    return random.choice(filtered)
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -58,7 +86,6 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
 
     data = query.data
-
     back_keyboard = [[InlineKeyboardButton("⬅️ Back", callback_data="menu_back")]]
 
     if data == "menu_play":
@@ -118,31 +145,35 @@ async def myid(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def daily_quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     chat = update.effective_chat
-
     today = str(date.today())
 
     if user.id in daily_quiz_players and daily_quiz_players[user.id] == today:
         await update.message.reply_text("You already played today’s daily quiz.")
         return
 
-    question = get_random_question(exclude_ids=[])
+    ensure_player(user)
+
+    question = get_random_question()
     if not question:
         await update.message.reply_text("No questions available.")
         return
 
-    q_id, q_text, a, b, c, d, correct = question
-    options = [a, b, c, d]
+    q_id = question["id"]
+    q_text = question["question_text"]
+    a = question["option_a"]
+    b = question["option_b"]
+    c = question["option_c"]
+    d = question["option_d"]
+    correct_index = question["correct_option"] - 1
 
-    try:
-        correct_index = ["A", "B", "C", "D"].index(correct.upper())
-    except ValueError:
+    if correct_index not in (0, 1, 2, 3):
         await update.message.reply_text("This daily question has an invalid correct answer.")
         return
 
     msg = await context.bot.send_poll(
         chat_id=chat.id,
         question=f"📅 Daily Quiz\n\n{q_text}",
-        options=options,
+        options=[a, b, c, d],
         type="quiz",
         correct_option_id=correct_index,
         is_anonymous=False,
@@ -155,6 +186,7 @@ async def daily_quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "daily_user_id": user.id,
         "daily_date": today,
         "correct_index": correct_index,
+        "question_id": q_id,
     }
 
     daily_quiz_players[user.id] = today
@@ -174,6 +206,19 @@ async def stop_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
         poll_map.pop(poll_id, None)
 
     await safe_delete_message(context.bot, chat.id, game.get("join_message_id"))
+
+    db_game_id = game.get("db_game_id")
+    if db_game_id:
+        try:
+            finish_game(
+                game_id=db_game_id,
+                winner_user_id=None,
+                total_players=len(game["players"]),
+                total_rounds=game.get("round", 0),
+                status="stopped",
+            )
+        except Exception:
+            logger.exception("Failed to mark stopped game in database")
 
     active_games.pop(chat.id, None)
     await update.message.reply_text("Game stopped.")
@@ -220,15 +265,19 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "used_question_ids": set(),
         "question_started_at": None,
         "speed_bonus_awarded": {},
+        "correct_counts": {},
+        "wrong_counts": {},
+        "answer_times": {},
+        "db_game_id": None,
     }
 
     safe_task(begin_game_after_join(chat.id, context))
 
 
 async def begin_game_after_join(chat_id, context):
-    steps = list(range(JOIN_SECONDS, 0, -10))
+    remaining = JOIN_SECONDS
 
-    for remaining in steps:
+    while remaining > 0:
         game = active_games.get(chat_id)
         if not game or game["status"] != "joining":
             return
@@ -246,7 +295,9 @@ async def begin_game_after_join(chat_id, context):
         except Exception as e:
             logger.warning("Failed to edit join message: %s", e)
 
-        await asyncio.sleep(10)
+        sleep_for = min(10, remaining)
+        await asyncio.sleep(sleep_for)
+        remaining -= sleep_for
 
     game = active_games.get(chat_id)
     if not game:
@@ -264,6 +315,16 @@ async def begin_game_after_join(chat_id, context):
         return
 
     game["status"] = "running"
+
+    try:
+        game["db_game_id"] = create_game(
+            chat_id=chat_id,
+            total_players=len(game["players"]),
+            total_rounds=ROUNDS_PER_GAME,
+            status="running",
+        )
+    except Exception:
+        logger.exception("Failed to create game record")
 
     await safe_delete_message(context.bot, chat_id, game.get("join_message_id"))
     await context.bot.send_message(chat_id, "Game started! Get ready for the first question.")
@@ -299,8 +360,11 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     game["players"][user.id] = name
     game["scores"][user.id] = 0
+    game["correct_counts"][user.id] = 0
+    game["wrong_counts"][user.id] = 0
+    game["answer_times"][user.id] = []
 
-    ensure_player(user.id, user.username, user.full_name)
+    ensure_player(user)
 
     try:
         await context.bot.edit_message_text(
@@ -332,27 +396,29 @@ async def send_question(chat_id, context):
         await end_game(chat_id, context)
         return
 
-    question = get_random_question(exclude_ids=list(game["used_question_ids"]))
+    question = get_unused_question(game["used_question_ids"])
     if not question:
         await context.bot.send_message(chat_id, "No more questions available. Ending game.")
         await end_game(chat_id, context)
         return
 
-    q_id, q_text, a, b, c, d, correct = question
-    game["used_question_ids"].add(q_id)
+    q_id = question["id"]
+    q_text = question["question_text"]
+    a = question["option_a"]
+    b = question["option_b"]
+    c = question["option_c"]
+    d = question["option_d"]
+    correct_index = question["correct_option"] - 1
 
-    options = [a, b, c, d]
-
-    try:
-        correct_index = ["A", "B", "C", "D"].index(correct.upper())
-    except ValueError:
+    if correct_index not in (0, 1, 2, 3):
         await context.bot.send_message(
             chat_id,
-            f"Question ID {q_id} has an invalid correct option."
+            f"Question ID {q_id} has an invalid correct option.",
         )
         await end_game(chat_id, context)
         return
 
+    game["used_question_ids"].add(q_id)
     game["correct"] = correct_index
     game["answered"] = set()
     game["speed_bonus_awarded"] = {}
@@ -360,7 +426,7 @@ async def send_question(chat_id, context):
     msg = await context.bot.send_poll(
         chat_id=chat_id,
         question=f"[{game['round']}/{ROUNDS_PER_GAME}] {q_text}",
-        options=options,
+        options=[a, b, c, d],
         type="quiz",
         correct_option_id=correct_index,
         is_anonymous=False,
@@ -427,18 +493,13 @@ async def receive_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
     # Daily quiz
     if info.get("round") == "daily":
         user = answer.user
+        ensure_player(user)
 
         if user.id != info.get("daily_user_id"):
             return
 
         if answer.option_ids and answer.option_ids[0] == info["correct_index"]:
-            add_points(
-                user.id,
-                user.username,
-                user.full_name,
-                info["chat_id"],
-                CORRECT_POINTS,
-            )
+            add_points(user.id, CORRECT_POINTS)
             record_correct_answer(user.id)
 
             msg = await context.bot.send_message(
@@ -447,6 +508,8 @@ async def receive_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
             )
             safe_task(delete_later(context, info["chat_id"], msg.message_id, 4))
         else:
+            record_wrong_answer(user.id)
+
             msg = await context.bot.send_message(
                 info["chat_id"],
                 f"📅 Daily Quiz\n❌ {user.full_name} got it wrong."
@@ -464,6 +527,7 @@ async def receive_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
 
     user = answer.user
+    ensure_player(user)
 
     if user.id not in game["players"]:
         return
@@ -473,13 +537,18 @@ async def receive_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     game["answered"].add(user.id)
 
-    if answer.option_ids and answer.option_ids[0] == game["correct"]:
+    is_correct = bool(answer.option_ids) and answer.option_ids[0] == game["correct"]
+
+    if is_correct:
         points_to_add = CORRECT_POINTS
         got_speed_bonus = False
+        elapsed = None
 
         started_at = game.get("question_started_at")
         if started_at is not None:
             elapsed = time.monotonic() - started_at
+            game["answer_times"][user.id].append(elapsed)
+
             if elapsed <= SPEED_BONUS_SECONDS:
                 points_to_add += SPEED_BONUS_POINTS
                 got_speed_bonus = True
@@ -488,16 +557,10 @@ async def receive_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
                 game["speed_bonus_awarded"][user.id] = False
 
         game["scores"][user.id] += points_to_add
+        game["correct_counts"][user.id] += 1
 
-        add_points(
-            user.id,
-            user.username,
-            user.full_name,
-            chat_id,
-            points_to_add,
-        )
-
-        record_correct_answer(user.id)
+        add_points(user.id, points_to_add)
+        record_correct_answer(user.id, answer_time=elapsed)
 
         reward_text = (
             f"🎯 {user.full_name}\n"
@@ -509,6 +572,9 @@ async def receive_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
 
         msg = await context.bot.send_message(chat_id, reward_text)
         safe_task(delete_later(context, chat_id, msg.message_id, 4))
+    else:
+        game["wrong_counts"][user.id] += 1
+        record_wrong_answer(user.id)
 
 
 async def end_game(chat_id, context):
@@ -520,13 +586,58 @@ async def end_game(chat_id, context):
     if current_poll_id:
         poll_map.pop(current_poll_id, None)
 
-    record_game_played(list(game["players"].keys()))
-
     ranking = sorted(
         game["scores"].items(),
         key=lambda x: x[1],
         reverse=True,
     )
+
+    winner_user_id = ranking[0][0] if ranking else None
+
+    for uid in game["players"].keys():
+        try:
+            increment_games_played(uid)
+        except Exception:
+            logger.exception("Failed to increment games_played for %s", uid)
+
+    if winner_user_id is not None:
+        try:
+            increment_games_won(winner_user_id)
+        except Exception:
+            logger.exception("Failed to increment games_won for %s", winner_user_id)
+
+    db_game_id = game.get("db_game_id")
+    if db_game_id:
+        try:
+            position_map = {}
+            for i, (uid, _) in enumerate(ranking, start=1):
+                position_map[uid] = i
+
+            for uid in game["players"].keys():
+                answer_times = game["answer_times"].get(uid, [])
+                avg_answer_time = (
+                    sum(answer_times) / len(answer_times) if answer_times else None
+                )
+
+                record_game_result(
+                    game_id=db_game_id,
+                    user_id=uid,
+                    score=game["scores"].get(uid, 0),
+                    correct_count=game["correct_counts"].get(uid, 0),
+                    wrong_count=game["wrong_counts"].get(uid, 0),
+                    avg_answer_time=avg_answer_time,
+                    position=position_map.get(uid),
+                )
+
+            finish_game(
+                game_id=db_game_id,
+                winner_user_id=winner_user_id,
+                total_players=len(game["players"]),
+                total_rounds=min(game["round"], ROUNDS_PER_GAME),
+                status="finished",
+            )
+        except Exception:
+            logger.exception("Failed to save game results")
 
     text = "🏆 Game Results\n\n"
 

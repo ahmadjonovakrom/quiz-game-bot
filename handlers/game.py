@@ -36,7 +36,11 @@ ROUNDS_PER_GAME = 5
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Quiz Game Bot is running!")
+    await update.message.reply_text(
+        "Welcome to English Lemon 🍋!\n\n"
+        "Use /startgame in a group to begin a quiz with friends.\n"
+        "Earn points, learn vocabulary, and climb the leaderboard!"
+    )
 
 
 async def myid(update: Update, context: ContextTypes.DEFAULT_TYPE):

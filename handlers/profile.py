@@ -95,7 +95,6 @@ def build_leaderboard_text(title: str, rows, offset: int, my_rank, my_points) ->
 async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     chat = update.effective_chat
-    message = update.effective_message
 
     ensure_player(user)
 
@@ -103,33 +102,46 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global_rank = get_player_rank(user.id)
 
     if not player:
-        await message.reply_text("No profile data yet.")
-        return
+        text = "No profile data yet."
+    else:
+        display_name = f"@{player['username']}" if player["username"] else player["full_name"]
+        fastest = player["fastest_answer_time"]
+        fastest_text = f"{fastest:.2f}s" if fastest is not None else "—"
 
-    display_name = f"@{player['username']}" if player["username"] else player["full_name"]
-    fastest = player["fastest_answer_time"]
-    fastest_text = f"{fastest:.2f}s" if fastest is not None else "—"
+        lines = [
+            "👤 Player Profile",
+            "",
+            f"Name: {display_name}",
+            f"Games played: {player['games_played']}",
+            f"Games won: {player['games_won']}",
+            f"Correct answers: {player['correct_answers']}",
+            f"Wrong answers: {player['wrong_answers']}",
+            f"Best streak: {player['best_streak']}",
+            f"Total points: {player['total_points']}",
+            f"Fastest answer: {fastest_text}",
+            f"Global rank: #{global_rank if global_rank else '-'}",
+        ]
 
-    text_lines = [
-        "👤 Player Profile",
-        "",
-        f"Name: {display_name}",
-        f"Games played: {player['games_played']}",
-        f"Games won: {player['games_won']}",
-        f"Correct answers: {player['correct_answers']}",
-        f"Wrong answers: {player['wrong_answers']}",
-        f"Best streak: {player['best_streak']}",
-        f"Total points: {player['total_points']}",
-        f"Fastest answer: {fastest_text}",
-        f"Global rank: #{global_rank if global_rank else '-'}",
-    ]
+        if chat.type in ("group", "supergroup"):
+            group_rank, group_points = get_player_group_rank_info(chat.id, user.id)
+            lines.append(f"Group rank: #{group_rank if group_rank else '-'}")
+            lines.append(f"Group points: {group_points}")
 
-    if chat.type in ("group", "supergroup"):
-        group_rank, group_points = get_player_group_rank_info(chat.id, user.id)
-        text_lines.append(f"Group rank: #{group_rank if group_rank else '-'}")
-        text_lines.append(f"Group points: {group_points}")
+        text = "\n".join(lines)
 
-    await message.reply_text("\n".join(text_lines))
+    keyboard = [[InlineKeyboardButton("⬅️ Back", callback_data="menu_main")]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    if update.callback_query:
+        await update.callback_query.edit_message_text(
+            text,
+            reply_markup=reply_markup,
+        )
+    else:
+        await update.effective_message.reply_text(
+            text,
+            reply_markup=reply_markup,
+        )
 
 
 async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):

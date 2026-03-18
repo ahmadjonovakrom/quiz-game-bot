@@ -113,7 +113,13 @@ def main():
     # -------------------------
     # Profile / leaderboard
     # -------------------------
-    app.add_handler(CommandHandler("leaderboard", leaderboard))
+    app.add_handler(
+    CommandHandler(
+        "leaderboard",
+        leaderboard,
+        filters=filters.ChatType.GROUPS,
+    )
+)
     app.add_handler(CommandHandler("global", global_leaderboard))
     app.add_handler(CommandHandler("profile", profile))
 

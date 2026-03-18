@@ -53,9 +53,9 @@ def questions_keyboard() -> InlineKeyboardMarkup:
 
 
 def back_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("⬅️ Back", callback_data="admin_back")]
-    ])
+    return InlineKeyboardMarkup(
+        [[InlineKeyboardButton("⬅️ Back", callback_data="admin_back")]]
+    )
 
 
 def normalize_text(value: str, default: str = "") -> str:
@@ -132,7 +132,6 @@ async def import_questions_entry(update: Update, context: ContextTypes.DEFAULT_T
             parse_mode="Markdown",
         )
     elif update.callback_query:
-        await update.callback_query.answer()
         await update.callback_query.edit_message_text(
             text,
             reply_markup=back_keyboard(),
@@ -341,12 +340,14 @@ async def delete_id_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return ConversationHandler.END
 
     context.user_data["delete_qid"] = qid
-    keyboard = InlineKeyboardMarkup([
+    keyboard = InlineKeyboardMarkup(
         [
-            InlineKeyboardButton("✅ Yes, delete", callback_data="confirm_delete_yes"),
-            InlineKeyboardButton("❌ No", callback_data="confirm_delete_no"),
+            [
+                InlineKeyboardButton("✅ Yes, delete", callback_data="confirm_delete_yes"),
+                InlineKeyboardButton("❌ No", callback_data="confirm_delete_no"),
+            ]
         ]
-    ])
+    )
 
     await update.message.reply_text(
         f"Are you sure you want to delete:\n\nID {q[0]}: {q[1]}",
@@ -459,10 +460,12 @@ async def edit_correct_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def import_questions_file_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
     document = update.message.document
 
+    if not document:
+        await update.message.reply_text("Please send a CSV file.")
+        return IMPORT_FILE
+
     if not document.file_name.lower().endswith(".csv"):
-        await update.message.reply_text(
-            "Please send a valid CSV file ending in .csv"
-        )
+        await update.message.reply_text("Please send a valid CSV file ending in .csv")
         return IMPORT_FILE
 
     file = await document.get_file()
@@ -565,12 +568,14 @@ async def broadcast_message_step(update: Update, context: ContextTypes.DEFAULT_T
     context.user_data["broadcast_source_chat_id"] = message.chat_id
     context.user_data["broadcast_source_message_id"] = message.message_id
 
-    keyboard = InlineKeyboardMarkup([
+    keyboard = InlineKeyboardMarkup(
         [
-            InlineKeyboardButton("✅ Send", callback_data="broadcast_yes"),
-            InlineKeyboardButton("❌ Cancel", callback_data="broadcast_no"),
+            [
+                InlineKeyboardButton("✅ Send", callback_data="broadcast_yes"),
+                InlineKeyboardButton("❌ Cancel", callback_data="broadcast_no"),
+            ]
         ]
-    ])
+    )
 
     await update.message.reply_text(
         "📢 Broadcast preview saved.\n\nSend confirmation?",

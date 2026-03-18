@@ -94,7 +94,7 @@ def main():
             CallbackQueryHandler(
                 admin_button_handler,
                 pattern=r"^(admin_questions|admin_add_question|admin_delete_question|admin_edit_question|admin_list_questions|admin_botstats|admin_broadcast|admin_import_questions|admin_back|admin_close)$",
-),
+            ),
         ],
         states={
             QUESTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, question_step)],
@@ -105,7 +105,9 @@ def main():
             CORRECT: [MessageHandler(filters.TEXT & ~filters.COMMAND, correct_step)],
 
             DELETE_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, delete_id_step)],
-            DELETE_CONFIRM: [CallbackQueryHandler(delete_confirm_step, pattern=r"^confirm_delete_(yes|no)$")],
+            DELETE_CONFIRM: [
+                CallbackQueryHandler(delete_confirm_step, pattern=r"^confirm_delete_(yes|no)$")
+            ],
 
             EDIT_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_id_step)],
             EDIT_QUESTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_question_step)],
@@ -117,8 +119,14 @@ def main():
 
             BROADCAST_MESSAGE: [
                 MessageHandler(
-                    (filters.TEXT | filters.PHOTO | filters.VIDEO | filters.Document.ALL | filters.AUDIO | filters.VOICE)
-                    & ~filters.COMMAND,
+                    (
+                        filters.TEXT
+                        | filters.PHOTO
+                        | filters.VIDEO
+                        | filters.Document.ALL
+                        | filters.AUDIO
+                        | filters.VOICE
+                    ) & ~filters.COMMAND,
                     broadcast_message_step,
                 )
             ],
@@ -127,7 +135,11 @@ def main():
             ],
 
             IMPORT_FILE: [
-                MessageHandler(filters.Document.ALL & ~filters.COMMAND, import_questions_file_step)
+                MessageHandler(filters.Document.ALL & ~filters.COMMAND, import_questions_file_step),
+                CallbackQueryHandler(
+                    admin_button_handler,
+                    pattern=r"^(admin_back|admin_close|admin_import_questions)$",
+                ),
             ],
         },
         fallbacks=[CommandHandler("cancel", cancel)],

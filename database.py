@@ -6,7 +6,6 @@ from typing import Optional, List
 from config import DB_PATH as CONFIG_DB_PATH
 
 DB_PATH = Path(CONFIG_DB_PATH)
-DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 
 def get_conn():
@@ -107,6 +106,7 @@ def create_tables():
                 updated_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
         """)
+
         conn.execute("""
             CREATE TABLE IF NOT EXISTS daily_quiz_attempts (
                 user_id INTEGER NOT NULL,
@@ -165,7 +165,7 @@ def ensure_chat(chat) -> None:
     with closing(get_conn()) as conn, conn:
         row = conn.execute(
             "SELECT chat_id FROM chats WHERE chat_id = ?",
-            (chat_id,)
+            (chat_id,),
         ).fetchone()
 
         if row:
@@ -231,7 +231,7 @@ def ensure_player(user):
     with closing(get_conn()) as conn, conn:
         row = conn.execute(
             "SELECT user_id FROM players WHERE user_id = ?",
-            (user_id,)
+            (user_id,),
         ).fetchone()
 
         if row:
@@ -252,7 +252,7 @@ def get_player(user_id: int) -> Optional[sqlite3.Row]:
     with closing(get_conn()) as conn:
         return conn.execute(
             "SELECT * FROM players WHERE user_id = ?",
-            (user_id,)
+            (user_id,),
         ).fetchone()
 
 
@@ -303,7 +303,7 @@ def record_correct_answer(user_id: int, answer_time: Optional[float] = None):
         if answer_time is not None:
             row = conn.execute(
                 "SELECT fastest_answer_time FROM players WHERE user_id = ?",
-                (user_id,)
+                (user_id,),
             ).fetchone()
 
             if row and (row["fastest_answer_time"] is None or answer_time < row["fastest_answer_time"]):
@@ -752,7 +752,7 @@ def finish_game(
     winner_user_id: Optional[int],
     total_players: int,
     total_rounds: int,
-    status: str = "finished"
+    status: str = "finished",
 ):
     with closing(get_conn()) as conn, conn:
         conn.execute("""

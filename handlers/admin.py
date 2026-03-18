@@ -227,11 +227,12 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             category = q[7]
             difficulty = q[8]
             is_active = q[9]
+            times_used = q[10]
 
             status = "✅" if is_active else "🚫"
             lines.append(
                 f"{status} ID {qid}: {question_text}\n"
-                f"Correct: {correct_letter} | {category} | {difficulty}"
+                f"Correct: {correct_letter} | {category} | {difficulty} | used: {times_used}"
             )
 
         text = "\n\n".join(lines)
@@ -556,9 +557,9 @@ async def import_questions_file_step(update: Update, context: ContextTypes.DEFAU
             skipped += 1
             errors.append(f"Row {row_number}: {str(e)}")
 
-        context.user_data.clear()
+    context.user_data.clear()
 
-        result_text = (
+    result_text = (
         f"📥 Import finished\n\n"
         f"✅ Imported: {imported}\n"
         f"⚠️ Skipped: {skipped}"

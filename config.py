@@ -18,6 +18,9 @@ ALLOWED_QUESTION_COUNTS = [5, 10, 15, 20]
 DEFAULT_CATEGORY = "mixed"
 ALLOWED_CATEGORIES = ["mixed", "vocabulary", "grammar", "idioms", "synonyms"]
 
+DEFAULT_DIFFICULTY = "easy"
+ALLOWED_DIFFICULTIES = ["easy", "medium", "hard"]
+
 SPEED_BONUS_SECONDS = 5
 CORRECT_POINTS = 25
 SPEED_BONUS_POINTS = 10

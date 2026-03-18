@@ -17,10 +17,11 @@ from config import (
     ALLOWED_QUESTION_COUNTS,
     DEFAULT_CATEGORY,
     ALLOWED_CATEGORIES,
+    DEFAULT_DIFFICULTY,
+    ALLOWED_DIFFICULTIES,
 )
 from database import (
     get_random_question,
-    list_questions,
     ensure_player,
     ensure_chat,
     add_points,
@@ -38,7 +39,7 @@ from database import (
     has_played_daily_quiz,
     record_daily_quiz_attempt,
 )
-from handlers.profile import profile, leaderboard, global_leaderboard, send_leaderboard_menu
+from handlers.profile import profile, send_leaderboard_menu
 from utils.helpers import (
     safe_task,
     safe_delete_message,
@@ -53,6 +54,15 @@ logger = logging.getLogger(__name__)
 active_games = {}
 poll_map = {}
 daily_quiz_players = {}
+
+
+def format_difficulty_name(value: str) -> str:
+    mapping = {
+        "easy": "🟢 Easy",
+        "medium": "🟡 Medium",
+        "hard": "🔴 Hard",
+    }
+    return mapping.get(value, value.title())
 
 
 def get_main_menu_keyboard():
@@ -102,32 +112,35 @@ def get_category_keyboard():
     return InlineKeyboardMarkup(rows)
 
 
+def get_difficulty_keyboard():
+    rows = []
+
+    for difficulty in ALLOWED_DIFFICULTIES:
+        rows.append([
+            InlineKeyboardButton(
+                format_difficulty_name(difficulty),
+                callback_data=f"setup_difficulty_{difficulty}"
+            )
+        ])
+
+    rows.append([InlineKeyboardButton("⬅️ Back", callback_data="menu_main")])
+    return InlineKeyboardMarkup(rows)
+
+
 def get_join_keyboard(chat_id: int):
     return InlineKeyboardMarkup(
         [[InlineKeyboardButton("Join", callback_data=f"join|{chat_id}")]]
     )
 
 
-def get_unused_question(used_ids, category=None, difficulty=None):
-    questions = list_questions(limit=500)
+def get_unused_question(game):
+    exclude_ids = list(game["used_question_ids"])
 
-    filtered = []
-    for q in questions:
-        if q["id"] in used_ids:
-            continue
-        if not q["is_active"]:
-            continue
-        if category and category != "mixed" and q["category"] != category:
-            continue
-        if difficulty and q["difficulty"] != difficulty:
-            continue
-        filtered.append(q)
-
-    if not filtered:
-        return None
-
-    import random
-    return random.choice(filtered)
+    return get_random_question(
+        exclude_ids=exclude_ids,
+        category=game.get("category"),
+        difficulty=game.get("difficulty"),
+    )
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -196,6 +209,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=get_main_menu_keyboard(),
         )
         return
+
 
 async def myid(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(str(update.effective_user.id))
@@ -314,6 +328,7 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "db_game_id": None,
         "questions_per_game": DEFAULT_QUESTIONS_PER_GAME,
         "category": DEFAULT_CATEGORY,
+        "difficulty": DEFAULT_DIFFICULTY,
     }
 
     if query:
@@ -416,6 +431,24 @@ async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFA
 
         game["category"] = category
 
+        await query.edit_message_text(
+            f"🎮 Game Setup\n\n"
+            f"✅ Questions: {game['questions_per_game']}\n"
+            f"✅ Category: {format_category_name(category)}\n\n"
+            f"Now choose difficulty:",
+            reply_markup=get_difficulty_keyboard(),
+        )
+        return
+
+    if data.startswith("setup_difficulty_"):
+        difficulty = data.replace("setup_difficulty_", "", 1)
+
+        if difficulty not in ALLOWED_DIFFICULTIES:
+            await query.answer("Invalid difficulty.", show_alert=True)
+            return
+
+        game["difficulty"] = difficulty
+
         keyboard = get_join_keyboard(chat_id)
 
         msg = await context.bot.send_message(
@@ -431,7 +464,8 @@ async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFA
         await query.edit_message_text(
             "✅ Game created.\n\n"
             f"📚 Questions: {game['questions_per_game']}\n"
-            f"🗂 Category: {format_category_name(category)}\n\n"
+            f"🗂 Category: {format_category_name(game['category'])}\n"
+            f"🎯 Difficulty: {format_difficulty_name(game['difficulty'])}\n\n"
             "Players can join now."
         )
 
@@ -562,15 +596,12 @@ async def send_question(chat_id, context):
         await end_game(chat_id, context)
         return
 
-    question = get_unused_question(
-        game["used_question_ids"],
-        category=game.get("category", DEFAULT_CATEGORY),
-    )
+    question = get_unused_question(game)
 
     if not question:
         await context.bot.send_message(
             chat_id,
-            "No more questions available for this category. Ending game."
+            "No more unused questions available for this category/difficulty. Ending game."
         )
         await end_game(chat_id, context)
         return

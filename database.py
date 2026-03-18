@@ -115,6 +115,24 @@ def create_tables():
             )
         """)
 
+        # Safe migration for old databases
+        existing_columns = [row["name"] for row in conn.execute("PRAGMA table_info(questions)").fetchall()]
+
+        if "category" not in existing_columns:
+            conn.execute("ALTER TABLE questions ADD COLUMN category TEXT DEFAULT 'mixed'")
+
+        if "difficulty" not in existing_columns:
+            conn.execute("ALTER TABLE questions ADD COLUMN difficulty TEXT DEFAULT 'easy'")
+
+        if "created_by" not in existing_columns:
+            conn.execute("ALTER TABLE questions ADD COLUMN created_by INTEGER")
+
+        if "is_active" not in existing_columns:
+            conn.execute("ALTER TABLE questions ADD COLUMN is_active INTEGER DEFAULT 1")
+
+        if "times_used" not in existing_columns:
+            conn.execute("ALTER TABLE questions ADD COLUMN times_used INTEGER DEFAULT 0")
+
 
 def get_all_user_ids():
     with closing(get_conn()) as conn:
@@ -566,6 +584,9 @@ def add_question(
 ):
     correct_option = normalize_correct_option(correct_option)
 
+    category = (category or "mixed").strip().lower()
+    difficulty = (difficulty or "easy").strip().lower()
+
     with closing(get_conn()) as conn, conn:
         conn.execute("""
             INSERT INTO questions (
@@ -580,13 +601,17 @@ def add_question(
             option_c.strip(),
             option_d.strip(),
             correct_option,
-            category.strip().lower(),
-            difficulty.strip().lower(),
+            category,
+            difficulty,
             created_by,
         ))
 
 
-def get_random_question(category: Optional[str] = None, difficulty: Optional[str] = None):
+def get_random_question(
+    exclude_ids: Optional[List[int]] = None,
+    category: Optional[str] = None,
+    difficulty: Optional[str] = None,
+):
     query = """
         SELECT *
         FROM questions
@@ -594,15 +619,21 @@ def get_random_question(category: Optional[str] = None, difficulty: Optional[str
     """
     params = []
 
-    if category:
+    if category and category != "mixed":
         query += " AND category = ?"
         params.append(category.strip().lower())
 
-    if difficulty:
+    if difficulty and difficulty != "mixed":
         query += " AND difficulty = ?"
         params.append(difficulty.strip().lower())
 
-    query += " ORDER BY RANDOM() LIMIT 1"
+    if exclude_ids:
+        placeholders = ",".join("?" for _ in exclude_ids)
+        query += f" AND id NOT IN ({placeholders})"
+        params.extend(exclude_ids)
+
+    # Fewer used questions get priority, then random inside that set
+    query += " ORDER BY times_used ASC, RANDOM() LIMIT 1"
 
     with closing(get_conn()) as conn, conn:
         row = conn.execute(query, params).fetchone()
@@ -617,18 +648,39 @@ def get_random_question(category: Optional[str] = None, difficulty: Optional[str
         return row
 
 
-def list_questions(limit: int = 20) -> List[sqlite3.Row]:
+def list_questions(
+    limit: int = 20,
+    category: Optional[str] = None,
+    difficulty: Optional[str] = None,
+    active_only: bool = False,
+) -> List[sqlite3.Row]:
+    query = """
+        SELECT *
+        FROM questions
+        WHERE 1=1
+    """
+    params = []
+
+    if active_only:
+        query += " AND is_active = 1"
+
+    if category and category != "mixed":
+        query += " AND category = ?"
+        params.append(category.strip().lower())
+
+    if difficulty and difficulty != "mixed":
+        query += " AND difficulty = ?"
+        params.append(difficulty.strip().lower())
+
+    query += " ORDER BY id DESC LIMIT ?"
+    params.append(limit)
+
     with closing(get_conn()) as conn:
-        return conn.execute("""
-            SELECT *
-            FROM questions
-            ORDER BY id DESC
-            LIMIT ?
-        """, (limit,)).fetchall()
+        return conn.execute(query, params).fetchall()
 
 
 def get_all_questions(limit: int = 50) -> List[tuple]:
-    rows = list_questions(limit)
+    rows = list_questions(limit=limit)
     result = []
 
     for row in rows:

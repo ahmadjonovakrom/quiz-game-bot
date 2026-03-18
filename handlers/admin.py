@@ -1,3 +1,6 @@
+import csv
+import io
+
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler
 
@@ -19,6 +22,7 @@ QUESTION, A, B, C, D, CORRECT = range(6)
 DELETE_ID, DELETE_CONFIRM = range(6, 8)
 EDIT_ID, EDIT_QUESTION, EDIT_A, EDIT_B, EDIT_C, EDIT_D, EDIT_CORRECT = range(8, 15)
 BROADCAST_MESSAGE, BROADCAST_CONFIRM = range(15, 17)
+IMPORT_FILE = 17
 
 
 def admin_only_text() -> str:
@@ -30,6 +34,7 @@ def admin_main_keyboard() -> InlineKeyboardMarkup:
         [InlineKeyboardButton("📚 Question Management", callback_data="admin_questions")],
         [InlineKeyboardButton("📊 Bot Stats", callback_data="admin_botstats")],
         [InlineKeyboardButton("📢 Broadcast", callback_data="admin_broadcast")],
+        [InlineKeyboardButton("📥 Import Questions", callback_data="admin_import_questions")],
         [InlineKeyboardButton("❌ Close", callback_data="admin_close")],
     ]
     return InlineKeyboardMarkup(keyboard)
@@ -41,6 +46,7 @@ def questions_keyboard() -> InlineKeyboardMarkup:
         [InlineKeyboardButton("✏️ Edit Question", callback_data="admin_edit_question")],
         [InlineKeyboardButton("🗑 Delete Question", callback_data="admin_delete_question")],
         [InlineKeyboardButton("📋 List Questions", callback_data="admin_list_questions")],
+        [InlineKeyboardButton("📥 Import CSV", callback_data="admin_import_questions")],
         [InlineKeyboardButton("⬅️ Back", callback_data="admin_back")],
     ]
     return InlineKeyboardMarkup(keyboard)
@@ -50,6 +56,11 @@ def back_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("⬅️ Back", callback_data="admin_back")]
     ])
+
+
+def normalize_text(value: str, default: str = "") -> str:
+    value = (value or "").strip()
+    return value if value else default
 
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -89,6 +100,46 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=admin_main_keyboard(),
             parse_mode="Markdown",
         )
+
+
+async def import_questions_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    if not is_admin(user.id):
+        if update.message:
+            await update.message.reply_text(admin_only_text())
+        elif update.callback_query:
+            await update.callback_query.answer(admin_only_text(), show_alert=True)
+        return ConversationHandler.END
+
+    text = (
+        "📥 *Import Questions from CSV*\n\n"
+        "Send a CSV file with this header:\n\n"
+        "`question_text,option_a,option_b,option_c,option_d,correct_option,category,difficulty`\n\n"
+        "Example:\n"
+        "`What does rapid mean?,slow,fast,weak,late,B,vocabulary,easy`\n\n"
+        "Allowed correct_option values:\n"
+        "• A / B / C / D\n"
+        "• 1 / 2 / 3 / 4\n\n"
+        "If category is empty, it becomes `mixed`.\n"
+        "If difficulty is empty, it becomes `easy`.\n\n"
+        "Use /cancel to stop."
+    )
+
+    if update.message:
+        await update.message.reply_text(
+            text,
+            reply_markup=back_keyboard(),
+            parse_mode="Markdown",
+        )
+    elif update.callback_query:
+        await update.callback_query.answer()
+        await update.callback_query.edit_message_text(
+            text,
+            reply_markup=back_keyboard(),
+            parse_mode="Markdown",
+        )
+
+    return IMPORT_FILE
 
 
 async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -145,6 +196,9 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             parse_mode="Markdown",
         )
         return EDIT_ID
+
+    if data == "admin_import_questions":
+        return await import_questions_entry(update, context)
 
     if data == "admin_list_questions":
         questions = get_all_questions(limit=30)
@@ -399,6 +453,109 @@ async def edit_correct_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     context.user_data.clear()
     await update.message.reply_text("✅ Question updated successfully.")
+    return ConversationHandler.END
+
+
+async def import_questions_file_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    document = update.message.document
+
+    if not document.file_name.lower().endswith(".csv"):
+        await update.message.reply_text(
+            "Please send a valid CSV file ending in .csv"
+        )
+        return IMPORT_FILE
+
+    file = await document.get_file()
+    content = await file.download_as_bytearray()
+
+    try:
+        text = content.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        try:
+            text = content.decode("utf-8")
+        except UnicodeDecodeError:
+            await update.message.reply_text(
+                "Could not read this CSV file. Please save it as UTF-8 and try again."
+            )
+            return IMPORT_FILE
+
+    reader = csv.DictReader(io.StringIO(text))
+
+    required_columns = {
+        "question_text",
+        "option_a",
+        "option_b",
+        "option_c",
+        "option_d",
+        "correct_option",
+        "category",
+        "difficulty",
+    }
+
+    if not reader.fieldnames:
+        await update.message.reply_text("CSV file is empty or invalid.")
+        return IMPORT_FILE
+
+    missing = required_columns - set(reader.fieldnames)
+    if missing:
+        await update.message.reply_text(
+            "Missing required columns:\n" + "\n".join(sorted(missing))
+        )
+        return IMPORT_FILE
+
+    imported = 0
+    skipped = 0
+    errors = []
+
+    for row_number, row in enumerate(reader, start=2):
+        try:
+            question_text = normalize_text(row.get("question_text"))
+            option_a = normalize_text(row.get("option_a"))
+            option_b = normalize_text(row.get("option_b"))
+            option_c = normalize_text(row.get("option_c"))
+            option_d = normalize_text(row.get("option_d"))
+            correct_option = normalize_text(row.get("correct_option")).upper()
+            category = normalize_text(row.get("category"), "mixed").lower()
+            difficulty = normalize_text(row.get("difficulty"), "easy").lower()
+
+            if not all([question_text, option_a, option_b, option_c, option_d, correct_option]):
+                skipped += 1
+                errors.append(f"Row {row_number}: missing required value")
+                continue
+
+            add_question(
+                question_text=question_text,
+                option_a=option_a,
+                option_b=option_b,
+                option_c=option_c,
+                option_d=option_d,
+                correct_option=correct_option,
+                category=category,
+                difficulty=difficulty,
+                created_by=update.effective_user.id,
+            )
+            imported += 1
+
+        except Exception as e:
+            skipped += 1
+            errors.append(f"Row {row_number}: {str(e)}")
+
+    context.user_data.clear()
+
+    result_text = (
+        "📥 *Import finished*\n\n"
+        f"✅ Imported: *{imported}*\n"
+        f"⚠️ Skipped: *{skipped}*"
+    )
+
+    if errors:
+        preview = "\n".join(errors[:10])
+        result_text += f"\n\n*First errors:*\n`{preview}`"
+
+        if len(errors) > 10:
+            result_text += f"\n\n...and {len(errors) - 10} more."
+
+    await update.message.reply_text(result_text, parse_mode="Markdown")
     return ConversationHandler.END
 
 

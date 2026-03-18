@@ -52,6 +52,8 @@ from handlers.admin import (
     edit_correct_step,
     broadcast_message_step,
     broadcast_confirm_step,
+    import_questions_entry,
+    import_questions_file_step,
     cancel,
     QUESTION,
     A,
@@ -70,6 +72,7 @@ from handlers.admin import (
     EDIT_CORRECT,
     BROADCAST_MESSAGE,
     BROADCAST_CONFIRM,
+    IMPORT_FILE,
 )
 
 logging.basicConfig(
@@ -87,9 +90,10 @@ def main():
     admin_conv = ConversationHandler(
         entry_points=[
             CommandHandler("admin", admin_panel),
+            CommandHandler("importquestions", import_questions_entry),
             CallbackQueryHandler(
                 admin_button_handler,
-                pattern=r"^(admin_questions|admin_add_question|admin_delete_question|admin_edit_question|admin_list_questions|admin_botstats|admin_broadcast|admin_back|admin_close)$",
+                pattern=r"^(admin_questions|admin_add_question|admin_delete_question|admin_edit_question|admin_list_questions|admin_botstats|admin_broadcast|admin_import_questions|admin_back|admin_close)$",
             ),
         ],
         states={
@@ -120,6 +124,10 @@ def main():
             ],
             BROADCAST_CONFIRM: [
                 CallbackQueryHandler(broadcast_confirm_step, pattern=r"^broadcast_(yes|no)$")
+            ],
+
+            IMPORT_FILE: [
+                MessageHandler(filters.Document.ALL & ~filters.COMMAND, import_questions_file_step)
             ],
         },
         fallbacks=[CommandHandler("cancel", cancel)],

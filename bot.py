@@ -15,7 +15,6 @@ from database import create_tables
 
 from handlers.game import (
     start,
-    myid,
     start_game,
     stop_game,
     button_handler,
@@ -37,18 +36,14 @@ from handlers.profile import (
 from handlers.admin import (
     admin_panel,
     admin_button_handler,
-    questions_list,
-    add_question_start,
     question_step,
     a_step,
     b_step,
     c_step,
     d_step,
     correct_step,
-    delete_question_start,
     delete_id_step,
     delete_confirm_step,
-    edit_question_start,
     edit_id_step,
     edit_question_step,
     edit_a_step,
@@ -91,13 +86,26 @@ def main():
     # Basic commands
     # -------------------------
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("myid", myid))
 
     # -------------------------
     # Game commands
+    # /startgame and /stopgame only in groups
     # -------------------------
-    app.add_handler(CommandHandler("startgame", start_game))
-    app.add_handler(CommandHandler("stopgame", stop_game))
+    app.add_handler(
+        CommandHandler(
+            "startgame",
+            start_game,
+            filters=filters.ChatType.GROUPS,
+        )
+    )
+    app.add_handler(
+        CommandHandler(
+            "stopgame",
+            stop_game,
+            filters=filters.ChatType.GROUPS,
+        )
+    )
+
     app.add_handler(CommandHandler("dailyquiz", daily_quiz))
     app.add_handler(CommandHandler("botstats", botstats))
     app.add_handler(CommandHandler("broadcast", broadcast))
@@ -110,17 +118,17 @@ def main():
     app.add_handler(CommandHandler("profile", profile))
 
     # -------------------------
-    # Admin simple commands
+    # Admin main command only
+    # Question management is now entered from /admin buttons
     # -------------------------
     app.add_handler(CommandHandler("admin", admin_panel))
-    app.add_handler(CommandHandler("questions", questions_list))
 
     # -------------------------
     # Admin conversations
+    # Only opened through admin panel callbacks
     # -------------------------
     add_question_conv = ConversationHandler(
         entry_points=[
-            CommandHandler("addquestion", add_question_start),
             CallbackQueryHandler(admin_button_handler, pattern=r"^admin_add$"),
         ],
         states={
@@ -139,7 +147,6 @@ def main():
 
     delete_question_conv = ConversationHandler(
         entry_points=[
-            CommandHandler("deletequestion", delete_question_start),
             CallbackQueryHandler(admin_button_handler, pattern=r"^admin_delete$"),
             CallbackQueryHandler(admin_button_handler, pattern=r"^qdelete\|\d+$"),
         ],
@@ -155,7 +162,6 @@ def main():
 
     edit_question_conv = ConversationHandler(
         entry_points=[
-            CommandHandler("editquestion", edit_question_start),
             CallbackQueryHandler(admin_button_handler, pattern=r"^admin_edit$"),
             CallbackQueryHandler(admin_button_handler, pattern=r"^qedit\|\d+$"),
         ],

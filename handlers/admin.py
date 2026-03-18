@@ -18,11 +18,11 @@ from database import (
     get_total_groups,
 )
 
-QUESTION, A, B, C, D, CORRECT = range(6)
-DELETE_ID, DELETE_CONFIRM = range(6, 8)
-EDIT_ID, EDIT_QUESTION, EDIT_A, EDIT_B, EDIT_C, EDIT_D, EDIT_CORRECT = range(8, 15)
-BROADCAST_MESSAGE, BROADCAST_CONFIRM = range(15, 17)
-IMPORT_FILE = 17
+ADMIN_MENU, QUESTION, A, B, C, D, CORRECT = range(7)
+DELETE_ID, DELETE_CONFIRM = range(7, 9)
+EDIT_ID, EDIT_QUESTION, EDIT_A, EDIT_B, EDIT_C, EDIT_D, EDIT_CORRECT = range(9, 16)
+BROADCAST_MESSAGE, BROADCAST_CONFIRM = range(16, 18)
+IMPORT_FILE = 18
 
 
 def admin_only_text() -> str:
@@ -65,6 +65,7 @@ def normalize_text(value: str, default: str = "") -> str:
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
+
     if update.message:
         await update.message.reply_text("Cancelled.")
     elif update.callback_query:
@@ -74,6 +75,7 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=admin_main_keyboard(),
             parse_mode="Markdown",
         )
+
     return ConversationHandler.END
 
 
@@ -84,9 +86,10 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(admin_only_text())
         elif update.callback_query:
             await update.callback_query.answer(admin_only_text(), show_alert=True)
-        return
+        return ConversationHandler.END
 
     text = "🛠 *Admin Panel*\n\nChoose an action:"
+
     if update.message:
         await update.message.reply_text(
             text,
@@ -100,6 +103,8 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=admin_main_keyboard(),
             parse_mode="Markdown",
         )
+
+    return ADMIN_MENU
 
 
 async def import_questions_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -132,6 +137,7 @@ async def import_questions_entry(update: Update, context: ContextTypes.DEFAULT_T
             parse_mode="Markdown",
         )
     elif update.callback_query:
+        await update.callback_query.answer()
         await update.callback_query.edit_message_text(
             text,
             reply_markup=back_keyboard(),
@@ -153,16 +159,18 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     data = query.data
 
     if data == "admin_close":
+        context.user_data.clear()
         await query.edit_message_text("Closed.")
         return ConversationHandler.END
 
     if data == "admin_back":
+        context.user_data.clear()
         await query.edit_message_text(
             "🛠 *Admin Panel*\n\nChoose an action:",
             reply_markup=admin_main_keyboard(),
             parse_mode="Markdown",
         )
-        return ConversationHandler.END
+        return ADMIN_MENU
 
     if data == "admin_questions":
         await query.edit_message_text(
@@ -170,9 +178,10 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             reply_markup=questions_keyboard(),
             parse_mode="Markdown",
         )
-        return ConversationHandler.END
+        return ADMIN_MENU
 
     if data == "admin_add_question":
+        context.user_data.clear()
         await query.edit_message_text(
             "➕ *Add Question*\n\nSend the question text.\n\nUse /cancel to stop.",
             reply_markup=back_keyboard(),
@@ -181,6 +190,7 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         return QUESTION
 
     if data == "admin_delete_question":
+        context.user_data.clear()
         await query.edit_message_text(
             "🗑 *Delete Question*\n\nSend the question ID to delete.\n\nUse /cancel to stop.",
             reply_markup=back_keyboard(),
@@ -189,6 +199,7 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         return DELETE_ID
 
     if data == "admin_edit_question":
+        context.user_data.clear()
         await query.edit_message_text(
             "✏️ *Edit Question*\n\nSend the question ID to edit.\n\nUse /cancel to stop.",
             reply_markup=back_keyboard(),
@@ -201,12 +212,13 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
 
     if data == "admin_list_questions":
         questions = get_all_questions(limit=30)
+
         if not questions:
             await query.edit_message_text(
                 "📋 Questions List\n\nNo questions found.",
                 reply_markup=back_keyboard(),
             )
-            return ConversationHandler.END
+            return ADMIN_MENU
 
         lines = ["📋 Questions List", ""]
 
@@ -225,7 +237,6 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             )
 
         text = "\n\n".join(lines)
-
         if len(text) > 4000:
             text = text[:3900] + "\n\n..."
 
@@ -233,7 +244,7 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             text,
             reply_markup=back_keyboard(),
         )
-        return ConversationHandler.END
+        return ADMIN_MENU
 
     if data == "admin_botstats":
         total_users = get_total_users_count()
@@ -248,12 +259,13 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             f"🎮 Total games: *{total_games}*\n"
             f"❓ Total questions: *{total_questions}*"
         )
+
         await query.edit_message_text(
             text,
             reply_markup=back_keyboard(),
             parse_mode="Markdown",
         )
-        return ConversationHandler.END
+        return ADMIN_MENU
 
     if data == "admin_broadcast":
         context.user_data.pop("broadcast_source_chat_id", None)
@@ -274,7 +286,7 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         )
         return BROADCAST_MESSAGE
 
-    return ConversationHandler.END
+    return ADMIN_MENU
 
 
 async def question_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -464,7 +476,7 @@ async def import_questions_file_step(update: Update, context: ContextTypes.DEFAU
         await update.message.reply_text("Please send a CSV file.")
         return IMPORT_FILE
 
-    if not document.file_name.lower().endswith(".csv"):
+    if not document.file_name or not document.file_name.lower().endswith(".csv"):
         await update.message.reply_text("Please send a valid CSV file ending in .csv")
         return IMPORT_FILE
 
@@ -499,7 +511,8 @@ async def import_questions_file_step(update: Update, context: ContextTypes.DEFAU
         await update.message.reply_text("CSV file is empty or invalid.")
         return IMPORT_FILE
 
-    missing = required_columns - set(reader.fieldnames)
+    fieldnames = {name.strip() for name in reader.fieldnames if name}
+    missing = required_columns - fieldnames
     if missing:
         await update.message.reply_text(
             "Missing required columns:\n" + "\n".join(sorted(missing))
@@ -512,14 +525,16 @@ async def import_questions_file_step(update: Update, context: ContextTypes.DEFAU
 
     for row_number, row in enumerate(reader, start=2):
         try:
-            question_text = normalize_text(row.get("question_text"))
-            option_a = normalize_text(row.get("option_a"))
-            option_b = normalize_text(row.get("option_b"))
-            option_c = normalize_text(row.get("option_c"))
-            option_d = normalize_text(row.get("option_d"))
-            correct_option = normalize_text(row.get("correct_option")).upper()
-            category = normalize_text(row.get("category"), "mixed").lower()
-            difficulty = normalize_text(row.get("difficulty"), "easy").lower()
+            normalized_row = {(k or "").strip(): v for k, v in row.items()}
+
+            question_text = normalize_text(normalized_row.get("question_text"))
+            option_a = normalize_text(normalized_row.get("option_a"))
+            option_b = normalize_text(normalized_row.get("option_b"))
+            option_c = normalize_text(normalized_row.get("option_c"))
+            option_d = normalize_text(normalized_row.get("option_d"))
+            correct_option = normalize_text(normalized_row.get("correct_option")).upper()
+            category = normalize_text(normalized_row.get("category"), "mixed").lower()
+            difficulty = normalize_text(normalized_row.get("difficulty"), "easy").lower()
 
             if not all([question_text, option_a, option_b, option_c, option_d, correct_option]):
                 skipped += 1
@@ -552,7 +567,7 @@ async def import_questions_file_step(update: Update, context: ContextTypes.DEFAU
     )
 
     if errors:
-        preview = "\n".join(errors[:10])
+        preview = "\n".join(errors[:10]).replace("`", "'")
         result_text += f"\n\n*First errors:*\n`{preview}`"
 
         if len(errors) > 10:

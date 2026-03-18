@@ -57,12 +57,3 @@ from .games import (
     has_played_daily_quiz,
     record_daily_quiz_attempt,
 )
-
-from .stats import (
-    get_question_count,
-    get_total_questions_count,
-    get_total_games,
-    get_total_groups,
-    get_total_players,
-    get_total_users_count,
-)

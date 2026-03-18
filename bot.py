@@ -28,6 +28,7 @@ from handlers.profile import (
     profile,
     leaderboard,
     global_leaderboard,
+    profile_callback_handler,
 )
 
 from handlers.admin import (
@@ -175,6 +176,7 @@ def main():
     # -------------------------
     # Other callback handlers
     # -------------------------
+    app.add_handler(CallbackQueryHandler(profile_callback_handler, pattern=r"^(menu_leaderboard|lb_)"))
     app.add_handler(CallbackQueryHandler(menu_handler, pattern=r"^menu_"))
     app.add_handler(CallbackQueryHandler(button_handler, pattern=r"^join\|"))
 

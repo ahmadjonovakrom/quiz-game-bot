@@ -79,6 +79,21 @@ def create_tables():
             )
         """)
 
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS group_scores (
+                chat_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                username TEXT,
+                full_name TEXT,
+                total_points INTEGER DEFAULT 0,
+                correct_answers INTEGER DEFAULT 0,
+                games_played INTEGER DEFAULT 0,
+                games_won INTEGER DEFAULT 0,
+                last_played_at TEXT,
+                PRIMARY KEY (chat_id, user_id)
+            )
+        """)
+
 
 # -------------------------
 # Helpers
@@ -153,6 +168,26 @@ def add_points(user_id: int, points: int):
         """, (points, user_id))
 
 
+def add_group_points(chat_id: int, user, points: int):
+    user_id = user.id
+    username = user.username or ""
+    full_name = user.full_name or username or f"User {user_id}"
+
+    with closing(get_conn()) as conn, conn:
+        conn.execute("""
+            INSERT INTO group_scores (
+                chat_id, user_id, username, full_name, total_points, last_played_at
+            )
+            VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(chat_id, user_id)
+            DO UPDATE SET
+                username = excluded.username,
+                full_name = excluded.full_name,
+                total_points = group_scores.total_points + excluded.total_points,
+                last_played_at = CURRENT_TIMESTAMP
+        """, (chat_id, user_id, username, full_name, points))
+
+
 def record_correct_answer(user_id: int, answer_time: Optional[float] = None):
     with closing(get_conn()) as conn, conn:
         conn.execute("""
@@ -181,6 +216,26 @@ def record_correct_answer(user_id: int, answer_time: Optional[float] = None):
                 """, (answer_time, user_id))
 
 
+def record_group_correct_answer(chat_id: int, user):
+    user_id = user.id
+    username = user.username or ""
+    full_name = user.full_name or username or f"User {user_id}"
+
+    with closing(get_conn()) as conn, conn:
+        conn.execute("""
+            INSERT INTO group_scores (
+                chat_id, user_id, username, full_name, correct_answers, last_played_at
+            )
+            VALUES (?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
+            ON CONFLICT(chat_id, user_id)
+            DO UPDATE SET
+                username = excluded.username,
+                full_name = excluded.full_name,
+                correct_answers = group_scores.correct_answers + 1,
+                last_played_at = CURRENT_TIMESTAMP
+        """, (chat_id, user_id, username, full_name))
+
+
 def record_wrong_answer(user_id: int):
     with closing(get_conn()) as conn, conn:
         conn.execute("""
@@ -202,6 +257,26 @@ def increment_games_played(user_id: int):
         """, (user_id,))
 
 
+def increment_group_games_played(chat_id: int, user):
+    user_id = user.id
+    username = user.username or ""
+    full_name = user.full_name or username or f"User {user_id}"
+
+    with closing(get_conn()) as conn, conn:
+        conn.execute("""
+            INSERT INTO group_scores (
+                chat_id, user_id, username, full_name, games_played, last_played_at
+            )
+            VALUES (?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
+            ON CONFLICT(chat_id, user_id)
+            DO UPDATE SET
+                username = excluded.username,
+                full_name = excluded.full_name,
+                games_played = group_scores.games_played + 1,
+                last_played_at = CURRENT_TIMESTAMP
+        """, (chat_id, user_id, username, full_name))
+
+
 def increment_games_won(user_id: int):
     with closing(get_conn()) as conn, conn:
         conn.execute("""
@@ -212,12 +287,32 @@ def increment_games_won(user_id: int):
         """, (user_id,))
 
 
+def increment_group_games_won(chat_id: int, user):
+    user_id = user.id
+    username = user.username or ""
+    full_name = user.full_name or username or f"User {user_id}"
+
+    with closing(get_conn()) as conn, conn:
+        conn.execute("""
+            INSERT INTO group_scores (
+                chat_id, user_id, username, full_name, games_won, last_played_at
+            )
+            VALUES (?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
+            ON CONFLICT(chat_id, user_id)
+            DO UPDATE SET
+                username = excluded.username,
+                full_name = excluded.full_name,
+                games_won = group_scores.games_won + 1,
+                last_played_at = CURRENT_TIMESTAMP
+        """, (chat_id, user_id, username, full_name))
+
+
 def get_top_players(limit: int = 10) -> List[sqlite3.Row]:
     with closing(get_conn()) as conn:
         return conn.execute("""
             SELECT *
             FROM players
-            ORDER BY total_points DESC, correct_answers DESC, games_won DESC
+            ORDER BY total_points DESC, correct_answers DESC, games_won DESC, user_id ASC
             LIMIT ?
         """, (limit,)).fetchall()
 
@@ -227,7 +322,7 @@ def get_player_rank(user_id: int) -> Optional[int]:
         rows = conn.execute("""
             SELECT user_id
             FROM players
-            ORDER BY total_points DESC, correct_answers DESC, games_won DESC
+            ORDER BY total_points DESC, correct_answers DESC, games_won DESC, user_id ASC
         """).fetchall()
 
         for i, row in enumerate(rows, start=1):
@@ -277,9 +372,87 @@ def get_global_leaderboard(limit: int = 10):
 
 
 def get_group_leaderboard(chat_id: int, limit: int = 10):
-    # Temporary fallback
-    # Real group leaderboard needs chat-based score storage
-    return get_global_leaderboard(limit=limit)
+    rows = get_group_leaderboard_page(chat_id=chat_id, limit=limit, offset=0)
+    result = []
+
+    for row in rows:
+        result.append((
+            row["full_name"],
+            row["username"],
+            row["total_points"],
+        ))
+
+    return result
+
+
+def get_global_leaderboard_page(limit: int = 15, offset: int = 0) -> List[sqlite3.Row]:
+    with closing(get_conn()) as conn:
+        return conn.execute("""
+            SELECT *
+            FROM players
+            ORDER BY total_points DESC, correct_answers DESC, games_won DESC, user_id ASC
+            LIMIT ? OFFSET ?
+        """, (limit, offset)).fetchall()
+
+
+def get_group_leaderboard_page(chat_id: int, limit: int = 15, offset: int = 0) -> List[sqlite3.Row]:
+    with closing(get_conn()) as conn:
+        return conn.execute("""
+            SELECT *
+            FROM group_scores
+            WHERE chat_id = ?
+            ORDER BY total_points DESC, correct_answers DESC, games_won DESC, user_id ASC
+            LIMIT ? OFFSET ?
+        """, (chat_id, limit, offset)).fetchall()
+
+
+def get_player_global_rank_info(user_id: int):
+    with closing(get_conn()) as conn:
+        me = conn.execute("""
+            SELECT total_points, correct_answers, games_won
+            FROM players
+            WHERE user_id = ?
+        """, (user_id,)).fetchone()
+
+        if not me:
+            return None, 0
+
+        rows = conn.execute("""
+            SELECT user_id
+            FROM players
+            ORDER BY total_points DESC, correct_answers DESC, games_won DESC, user_id ASC
+        """).fetchall()
+
+        for i, row in enumerate(rows, start=1):
+            if row["user_id"] == user_id:
+                return i, me["total_points"]
+
+        return None, me["total_points"]
+
+
+def get_player_group_rank_info(chat_id: int, user_id: int):
+    with closing(get_conn()) as conn:
+        me = conn.execute("""
+            SELECT total_points, correct_answers, games_won
+            FROM group_scores
+            WHERE chat_id = ? AND user_id = ?
+        """, (chat_id, user_id)).fetchone()
+
+        if not me:
+            return None, 0
+
+        rows = conn.execute("""
+            SELECT user_id
+            FROM group_scores
+            WHERE chat_id = ?
+            ORDER BY total_points DESC, correct_answers DESC, games_won DESC, user_id ASC
+        """, (chat_id,)).fetchall()
+
+        for i, row in enumerate(rows, start=1):
+            if row["user_id"] == user_id:
+                return i, me["total_points"]
+
+        return None, me["total_points"]
 
 
 # -------------------------

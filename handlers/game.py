@@ -19,10 +19,14 @@ from database import (
     list_questions,
     ensure_player,
     add_points,
+    add_group_points,
     record_correct_answer,
+    record_group_correct_answer,
     record_wrong_answer,
     increment_games_played,
+    increment_group_games_played,
     increment_games_won,
+    increment_group_games_won,
     create_game,
     finish_game,
     record_game_result,
@@ -95,14 +99,6 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=InlineKeyboardMarkup(back_keyboard),
         )
 
-    elif data == "menu_leaderboard":
-        await query.edit_message_text(
-            "Leaderboard options:\n\n"
-            "/leaderboard - group ranking\n"
-            "/global - global ranking",
-            reply_markup=InlineKeyboardMarkup(back_keyboard),
-        )
-
     elif data == "menu_profile":
         await query.edit_message_text(
             "Use /profile to see your stats.",
@@ -116,7 +112,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "/startgame - start a new game in a group\n"
             "/stopgame - stop the current game\n"
             "/dailyquiz - play one daily quiz\n"
-            "/leaderboard - group leaderboard\n"
+            "/leaderboard - leaderboard\n"
             "/global - global leaderboard\n"
             "/profile - your profile\n"
             "/questions - view saved questions",
@@ -256,6 +252,7 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "status": "joining",
         "started_by": user.id,
         "players": {},
+        "player_objects": {},
         "scores": {},
         "round": 0,
         "answered": set(),
@@ -359,6 +356,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     name = clickable_name(user)
 
     game["players"][user.id] = name
+    game["player_objects"][user.id] = user
     game["scores"][user.id] = 0
     game["correct_counts"][user.id] = 0
     game["wrong_counts"][user.id] = 0
@@ -562,6 +560,10 @@ async def receive_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
         add_points(user.id, points_to_add)
         record_correct_answer(user.id, answer_time=elapsed)
 
+        if chat_id < 0:
+            add_group_points(chat_id, user, points_to_add)
+            record_group_correct_answer(chat_id, user)
+
         reward_text = (
             f"🎯 {user.full_name}\n"
             f"🍋 +{CORRECT_POINTS} points"
@@ -600,11 +602,27 @@ async def end_game(chat_id, context):
         except Exception:
             logger.exception("Failed to increment games_played for %s", uid)
 
+        try:
+            if chat_id < 0:
+                player_user = game["player_objects"].get(uid)
+                if player_user:
+                    increment_group_games_played(chat_id, player_user)
+        except Exception:
+            logger.exception("Failed to increment group games_played for %s", uid)
+
     if winner_user_id is not None:
         try:
             increment_games_won(winner_user_id)
         except Exception:
             logger.exception("Failed to increment games_won for %s", winner_user_id)
+
+        try:
+            if chat_id < 0:
+                winner_user = game["player_objects"].get(winner_user_id)
+                if winner_user:
+                    increment_group_games_won(chat_id, winner_user)
+        except Exception:
+            logger.exception("Failed to increment group games_won for %s", winner_user_id)
 
     db_game_id = game.get("db_game_id")
     if db_game_id:

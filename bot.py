@@ -94,7 +94,7 @@ def main():
             CallbackQueryHandler(
                 admin_button_handler,
                 pattern=r"^(admin_questions|admin_add_question|admin_delete_question|admin_edit_question|admin_list_questions|admin_botstats|admin_broadcast|admin_import_questions|admin_back|admin_close)$",
-            ),
+),
         ],
         states={
             QUESTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, question_step)],

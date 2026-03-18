@@ -133,7 +133,13 @@ def get_unused_question(used_ids, category=None, difficulty=None):
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
+    user = update.effective_user
+    message = update.effective_message
+
+    if user:
+        ensure_player(user)
+
+    await message.reply_text(
         "Welcome to English Lemon 🍋!\n\n"
         "Practice vocabulary, play quiz games, and climb the leaderboard.",
         reply_markup=get_main_menu_keyboard(),

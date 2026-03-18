@@ -54,11 +54,21 @@ def build_pagination_keyboard(kind: str, offset: int, has_next: bool) -> InlineK
     nav = []
     if offset > 0:
         prev_offset = max(0, offset - LEADERBOARD_PAGE_SIZE)
-        nav.append(InlineKeyboardButton("⬅️ Previous", callback_data=f"lb_{kind}_{prev_offset}"))
+        nav.append(
+            InlineKeyboardButton(
+                "⬅️ Previous",
+                callback_data=f"lb_{kind}_{prev_offset}"
+            )
+        )
 
     if has_next:
         next_offset = offset + LEADERBOARD_PAGE_SIZE
-        nav.append(InlineKeyboardButton("➡️ Next", callback_data=f"lb_{kind}_{next_offset}"))
+        nav.append(
+            InlineKeyboardButton(
+                "➡️ Next",
+                callback_data=f"lb_{kind}_{next_offset}"
+            )
+        )
 
     if nav:
         rows.append(nav)
@@ -160,7 +170,11 @@ async def send_global_leaderboard_message(message, user_id: int, offset: int):
 
 
 async def send_group_leaderboard_message(message, chat_id: int, user_id: int, offset: int):
-    rows = get_group_leaderboard_page(chat_id=chat_id, limit=LEADERBOARD_PAGE_SIZE + 1, offset=offset)
+    rows = get_group_leaderboard_page(
+        chat_id=chat_id,
+        limit=LEADERBOARD_PAGE_SIZE + 1,
+        offset=offset
+    )
     has_next = len(rows) > LEADERBOARD_PAGE_SIZE
     rows = rows[:LEADERBOARD_PAGE_SIZE]
 
@@ -202,7 +216,11 @@ async def show_global_leaderboard(query, user_id: int, offset: int):
 
 
 async def show_group_leaderboard(query, user_id: int, chat_id: int, offset: int):
-    rows = get_group_leaderboard_page(chat_id=chat_id, limit=LEADERBOARD_PAGE_SIZE + 1, offset=offset)
+    rows = get_group_leaderboard_page(
+        chat_id=chat_id,
+        limit=LEADERBOARD_PAGE_SIZE + 1,
+        offset=offset
+    )
     has_next = len(rows) > LEADERBOARD_PAGE_SIZE
     rows = rows[:LEADERBOARD_PAGE_SIZE]
 

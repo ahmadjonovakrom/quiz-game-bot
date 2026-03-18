@@ -47,6 +47,16 @@ daily_quiz_players = {}
 ROUNDS_PER_GAME = 5
 
 
+def get_main_menu_keyboard():
+    keyboard = [
+        [InlineKeyboardButton("🎮 Play Quiz", callback_data="menu_play")],
+        [InlineKeyboardButton("🏆 Leaderboard", callback_data="menu_leaderboard")],
+        [InlineKeyboardButton("👤 My Profile", callback_data="menu_profile")],
+        [InlineKeyboardButton("❓ Help", callback_data="menu_help")],
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
 def get_unused_question(used_ids, category=None, difficulty=None):
     questions = list_questions(limit=500)
 
@@ -70,18 +80,10 @@ def get_unused_question(used_ids, category=None, difficulty=None):
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [
-        [InlineKeyboardButton("🎮 Play Quiz", callback_data="menu_play")],
-        [InlineKeyboardButton("🏆 Leaderboard", callback_data="menu_leaderboard")],
-        [InlineKeyboardButton("👤 My Profile", callback_data="menu_profile")],
-        [InlineKeyboardButton("❓ Help", callback_data="menu_help")],
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
     await update.message.reply_text(
         "Welcome to English Lemon 🍋!\n\n"
         "Practice vocabulary, play quiz games, and climb the leaderboard.",
-        reply_markup=reply_markup,
+        reply_markup=get_main_menu_keyboard(),
     )
 
 
@@ -98,12 +100,14 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "/startgame",
             reply_markup=InlineKeyboardMarkup(back_keyboard),
         )
+        return
 
     elif data == "menu_profile":
         await query.edit_message_text(
             "Use /profile to see your stats.",
             reply_markup=InlineKeyboardMarkup(back_keyboard),
         )
+        return
 
     elif data == "menu_help":
         await query.edit_message_text(
@@ -118,20 +122,15 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "/questions - view saved questions",
             reply_markup=InlineKeyboardMarkup(back_keyboard),
         )
+        return
 
-    elif data == "menu_back":
-        keyboard = [
-            [InlineKeyboardButton("🎮 Play Quiz", callback_data="menu_play")],
-            [InlineKeyboardButton("🏆 Leaderboard", callback_data="menu_leaderboard")],
-            [InlineKeyboardButton("👤 My Profile", callback_data="menu_profile")],
-            [InlineKeyboardButton("❓ Help", callback_data="menu_help")],
-        ]
-
+    elif data == "menu_back" or data == "menu_main":
         await query.edit_message_text(
             "Welcome to English Lemon 🍋!\n\n"
             "Practice vocabulary, play quiz games, and climb the leaderboard.",
-            reply_markup=InlineKeyboardMarkup(keyboard),
+            reply_markup=get_main_menu_keyboard(),
         )
+        return
 
 
 async def myid(update: Update, context: ContextTypes.DEFAULT_TYPE):

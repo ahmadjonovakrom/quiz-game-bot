@@ -174,14 +174,30 @@ def main():
     app.add_handler(edit_question_conv)
 
     # -------------------------
-    # Other callback handlers
+    # Callback handlers
     # -------------------------
-    app.add_handler(CallbackQueryHandler(profile_callback_handler, pattern=r"^(menu_leaderboard|lb_)"))
-    app.add_handler(CallbackQueryHandler(menu_handler, pattern=r"^menu_"))
+    app.add_handler(
+        CallbackQueryHandler(
+            profile_callback_handler,
+            pattern=r"^(menu_leaderboard|lb_.*)$",
+        )
+    )
+
+    app.add_handler(
+        CallbackQueryHandler(
+            menu_handler,
+            pattern=r"^menu_.*$",
+        )
+    )
+
     app.add_handler(CallbackQueryHandler(button_handler, pattern=r"^join\|"))
 
-    # Optional safety fallback for admin callbacks that are not caught inside conversations
-    app.add_handler(CallbackQueryHandler(admin_button_handler, pattern=r"^(admin_list|admin_add|admin_edit|admin_delete|qedit\|\d+|qdelete\|\d+)$"))
+    app.add_handler(
+        CallbackQueryHandler(
+            admin_button_handler,
+            pattern=r"^(admin_list|admin_add|admin_edit|admin_delete|qedit\|\d+|qdelete\|\d+)$",
+        )
+    )
 
     # -------------------------
     # Poll answers

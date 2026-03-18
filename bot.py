@@ -23,6 +23,8 @@ from handlers.game import (
     menu_handler,
     daily_quiz,
     game_setup_callback_handler,
+    botstats,
+    broadcast,
 )
 
 from handlers.profile import (
@@ -97,6 +99,8 @@ def main():
     app.add_handler(CommandHandler("startgame", start_game))
     app.add_handler(CommandHandler("stopgame", stop_game))
     app.add_handler(CommandHandler("dailyquiz", daily_quiz))
+    app.add_handler(CommandHandler("botstats", botstats))
+    app.add_handler(CommandHandler("broadcast", broadcast))
 
     # -------------------------
     # Profile / leaderboard

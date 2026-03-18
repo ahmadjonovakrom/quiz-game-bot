@@ -706,3 +706,35 @@ def get_total_players() -> int:
     with closing(get_conn()) as conn:
         row = conn.execute("SELECT COUNT(*) AS c FROM players").fetchone()
         return row["c"] if row else 0
+
+
+def get_total_groups() -> int:
+    with closing(get_conn()) as conn:
+        row = conn.execute("""
+            SELECT COUNT(DISTINCT chat_id) AS c
+            FROM group_scores
+        """).fetchone()
+        return row["c"] if row else 0
+
+
+def get_broadcast_chat_ids() -> List[int]:
+    with closing(get_conn()) as conn:
+        ids = set()
+
+        player_rows = conn.execute("""
+            SELECT user_id
+            FROM players
+        """).fetchall()
+
+        for row in player_rows:
+            ids.add(row["user_id"])
+
+        group_rows = conn.execute("""
+            SELECT DISTINCT chat_id
+            FROM group_scores
+        """).fetchall()
+
+        for row in group_rows:
+            ids.add(row["chat_id"])
+
+        return list(ids)

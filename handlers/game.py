@@ -34,6 +34,11 @@ from database import (
     create_game,
     finish_game,
     record_game_result,
+    get_total_games,
+    get_total_players,
+    get_total_groups,
+    get_question_count,
+    get_broadcast_chat_ids,
 )
 from handlers.profile import profile
 from utils.helpers import (
@@ -185,6 +190,66 @@ async def myid(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(str(update.effective_user.id))
 
 
+async def botstats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    if not user or not is_admin(user.id):
+        await update.effective_message.reply_text("Admin only.")
+        return
+
+    total_users = get_total_players()
+    total_groups = get_total_groups()
+    total_games = get_total_games()
+    total_questions = get_question_count()
+
+    text = (
+        "📊 Bot Statistics\n\n"
+        f"👤 Total users: {total_users}\n"
+        f"👥 Total groups: {total_groups}\n"
+        f"🎮 Total games: {total_games}\n"
+        f"❓ Total questions: {total_questions}"
+    )
+
+    await update.effective_message.reply_text(text)
+
+
+async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    if not user or not is_admin(user.id):
+        await update.effective_message.reply_text("Admin only.")
+        return
+
+    if not context.args:
+        await update.effective_message.reply_text(
+            "Usage:\n/broadcast Your message here"
+        )
+        return
+
+    text = " ".join(context.args).strip()
+    if not text:
+        await update.effective_message.reply_text("Broadcast message cannot be empty.")
+        return
+
+    chat_ids = get_broadcast_chat_ids()
+
+    if not chat_ids:
+        await update.effective_message.reply_text("No users or groups found.")
+        return
+
+    sent = 0
+    failed = 0
+
+    for chat_id in chat_ids:
+        try:
+            await context.bot.send_message(chat_id=chat_id, text=text)
+            sent += 1
+        except Exception:
+            failed += 1
+
+    await update.effective_message.reply_text(
+        f"📢 Broadcast finished.\n\n✅ Sent: {sent}\n❌ Failed: {failed}"
+    )
+
+
 async def daily_quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     chat = update.effective_chat
@@ -250,9 +315,7 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if chat.type == "private":
         if query:
-            await query.edit_message_text(
-                "Use /startgame in a group."
-            )
+            await query.edit_message_text("Use /startgame in a group.")
         else:
             await message.reply_text("Use /startgame in a group.")
         return
@@ -451,7 +514,7 @@ async def begin_game_after_join(chat_id, context):
 
         await context.bot.send_message(
             chat_id,
-            f"Not enough players to start the game.\n\nMinimum players needed: {MIN_PLAYERS}",
+            f"❌ Not enough players.\nGame cancelled.\n\nMinimum players needed: {MIN_PLAYERS}",
         )
 
         active_games.pop(chat_id, None)
@@ -650,9 +713,10 @@ async def receive_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
             add_points(user.id, CORRECT_POINTS)
             record_correct_answer(user.id)
 
+            display_name = f"@{user.username}" if user.username else user.full_name
             msg = await context.bot.send_message(
                 info["chat_id"],
-                f"📅 Daily Quiz\n✅ {user.full_name} got it right!\n🍋 +{CORRECT_POINTS} points"
+                f"✅ {display_name} +{CORRECT_POINTS} 🍋"
             )
             safe_task(delete_later(context, info["chat_id"], msg.message_id, 4))
         else:
@@ -713,9 +777,10 @@ async def receive_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
             add_group_points(chat_id, user, points_to_add)
             record_group_correct_answer(chat_id, user)
 
-        reward_text = f"🎯 {user.full_name}\n🍋 +{CORRECT_POINTS} points"
+        display_name = f"@{user.username}" if user.username else user.full_name
+        reward_text = f"✅ {display_name} +{CORRECT_POINTS} 🍋"
         if got_speed_bonus:
-            reward_text += f"\n⚡ +{SPEED_BONUS_POINTS} speed bonus!"
+            reward_text += f"\n⚡ Speed bonus +{SPEED_BONUS_POINTS} 🍋‍🟩"
 
         msg = await context.bot.send_message(chat_id, reward_text)
         safe_task(delete_later(context, chat_id, msg.message_id, 4))

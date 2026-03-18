@@ -84,14 +84,8 @@ def main():
 
     app = Application.builder().token(BOT_TOKEN).build()
 
-    # -------------------------
-    # Basic commands
-    # -------------------------
     app.add_handler(CommandHandler("start", start))
 
-    # -------------------------
-    # Game commands
-    # -------------------------
     app.add_handler(
         CommandHandler(
             "startgame",
@@ -111,9 +105,6 @@ def main():
     app.add_handler(CommandHandler("botstats", botstats))
     app.add_handler(CommandHandler("broadcast", broadcast))
 
-    # -------------------------
-    # Profile / leaderboard
-    # -------------------------
     app.add_handler(
         CommandHandler(
             "leaderboard",
@@ -124,9 +115,6 @@ def main():
     app.add_handler(CommandHandler("global", global_leaderboard))
     app.add_handler(CommandHandler("profile", profile))
 
-    # -------------------------
-    # Admin
-    # -------------------------
     app.add_handler(CommandHandler("admin", admin_panel))
 
     add_question_conv = ConversationHandler(
@@ -141,10 +129,14 @@ def main():
             D: [MessageHandler(filters.TEXT & ~filters.COMMAND, d_step)],
             CORRECT: [MessageHandler(filters.TEXT & ~filters.COMMAND, correct_step)],
         },
-        fallbacks=[CommandHandler("cancel", cancel)],
+        fallbacks=[
+            CommandHandler("cancel", cancel),
+            CallbackQueryHandler(admin_button_handler, pattern=r"^admin_back_main$"),
+        ],
         per_chat=True,
         per_user=True,
         per_message=False,
+        allow_reentry=True,
     )
 
     delete_question_conv = ConversationHandler(
@@ -156,10 +148,14 @@ def main():
             DELETE_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, delete_id_step)],
             DELETE_CONFIRM: [MessageHandler(filters.TEXT & ~filters.COMMAND, delete_confirm_step)],
         },
-        fallbacks=[CommandHandler("cancel", cancel)],
+        fallbacks=[
+            CommandHandler("cancel", cancel),
+            CallbackQueryHandler(admin_button_handler, pattern=r"^admin_back_main$"),
+        ],
         per_chat=True,
         per_user=True,
         per_message=False,
+        allow_reentry=True,
     )
 
     edit_question_conv = ConversationHandler(
@@ -176,10 +172,14 @@ def main():
             EDIT_D: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_d_step)],
             EDIT_CORRECT: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_correct_step)],
         },
-        fallbacks=[CommandHandler("cancel", cancel)],
+        fallbacks=[
+            CommandHandler("cancel", cancel),
+            CallbackQueryHandler(admin_button_handler, pattern=r"^admin_back_main$"),
+        ],
         per_chat=True,
         per_user=True,
         per_message=False,
+        allow_reentry=True,
     )
 
     broadcast_conv = ConversationHandler(
@@ -188,13 +188,20 @@ def main():
         ],
         states={
             BROADCAST_MESSAGE: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_message_step)
+                MessageHandler(
+                    (filters.TEXT | filters.PHOTO | filters.FORWARDED) & ~filters.COMMAND,
+                    broadcast_message_step,
+                )
             ],
         },
-        fallbacks=[CommandHandler("cancel", cancel)],
+        fallbacks=[
+            CommandHandler("cancel", cancel),
+            CallbackQueryHandler(admin_button_handler, pattern=r"^admin_back_main$"),
+        ],
         per_chat=True,
         per_user=True,
         per_message=False,
+        allow_reentry=True,
     )
 
     app.add_handler(add_question_conv)
@@ -202,9 +209,6 @@ def main():
     app.add_handler(edit_question_conv)
     app.add_handler(broadcast_conv)
 
-    # -------------------------
-    # Callback handlers
-    # -------------------------
     app.add_handler(
         CallbackQueryHandler(
             profile_callback_handler,
@@ -235,9 +239,6 @@ def main():
         )
     )
 
-    # -------------------------
-    # Poll answers
-    # -------------------------
     app.add_handler(PollAnswerHandler(receive_poll_answer))
 
     logger.info("Bot running...")

@@ -1,5 +1,6 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler
+from telegram.constants import ParseMode
 
 from utils.helpers import is_admin
 from database import (
@@ -53,10 +54,13 @@ def admin_back_keyboard() -> InlineKeyboardMarkup:
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
+
     if update.message:
         await update.message.reply_text("Cancelled.")
     elif update.callback_query:
+        await update.callback_query.answer()
         await update.callback_query.message.reply_text("Cancelled.")
+
     return ConversationHandler.END
 
 
@@ -65,7 +69,11 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not user or not is_admin(user.id):
         if update.message:
             await update.message.reply_text(admin_only_text())
-        return
+        elif update.callback_query:
+            await update.callback_query.answer("Admin only.", show_alert=True)
+        return ConversationHandler.END
+
+    context.user_data.pop("broadcast_mode", None)
 
     text = (
         "🛠 Admin Panel\n\n"
@@ -79,10 +87,13 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=admin_main_keyboard(),
         )
     elif update.callback_query:
+        await update.callback_query.answer()
         await update.callback_query.edit_message_text(
             text,
             reply_markup=admin_main_keyboard(),
         )
+
+    return ConversationHandler.END
 
 
 async def send_questions_menu(query):
@@ -117,8 +128,6 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     if not query:
         return ConversationHandler.END
 
-    await query.answer()
-
     if not is_admin(query.from_user.id):
         await query.answer("Admin only.", show_alert=True)
         return ConversationHandler.END
@@ -126,8 +135,9 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     data = query.data or ""
 
     if data == "admin_back_main":
-        await admin_panel(update, context)
-        return ConversationHandler.END
+        return await admin_panel(update, context)
+
+    await query.answer()
 
     if data == "admin_questions":
         await send_questions_menu(query)
@@ -158,9 +168,14 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
 
     if data == "admin_broadcast":
         context.user_data.clear()
+        context.user_data["broadcast_mode"] = "waiting"
+
         await query.edit_message_text(
             "📢 Broadcast\n\n"
-            "Send the message you want to broadcast.\n\n"
+            "Send one of these:\n"
+            "• a text message\n"
+            "• a photo with caption\n"
+            "• or forward/reply with a message to copy\n\n"
             "Use /cancel to stop.",
             reply_markup=admin_back_keyboard(),
         )
@@ -255,18 +270,6 @@ async def send_questions_with_buttons(message):
             text,
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
-
-
-async def add_question_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    if not user or not is_admin(user.id):
-        if update.message:
-            await update.message.reply_text(admin_only_text())
-        return ConversationHandler.END
-
-    context.user_data.clear()
-    await update.message.reply_text("➕ Send the question text.\n\nUse /cancel to stop.")
-    return QUESTION
 
 
 async def question_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -383,29 +386,6 @@ async def correct_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 
-async def questions_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    if not user or not is_admin(user.id):
-        if update.message:
-            await update.message.reply_text(admin_only_text())
-        return
-
-    if update.message:
-        await send_questions_with_buttons(update.message)
-
-
-async def delete_question_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    if not user or not is_admin(user.id):
-        if update.message:
-            await update.message.reply_text(admin_only_text())
-        return ConversationHandler.END
-
-    context.user_data.clear()
-    await update.message.reply_text("🗑 Send question ID to delete.\n\nUse /cancel to stop.")
-    return DELETE_ID
-
-
 async def delete_id_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text:
         await update.effective_message.reply_text("Send text only.")
@@ -473,18 +453,6 @@ async def delete_confirm_step(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text("Question not found.")
 
     return ConversationHandler.END
-
-
-async def edit_question_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    if not user or not is_admin(user.id):
-        if update.message:
-            await update.message.reply_text(admin_only_text())
-        return ConversationHandler.END
-
-    context.user_data.clear()
-    await update.message.reply_text("✏️ Send question ID to edit.\n\nUse /cancel to stop.")
-    return EDIT_ID
 
 
 async def edit_id_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -645,22 +613,37 @@ async def broadcast_message_step(update: Update, context: ContextTypes.DEFAULT_T
             await update.message.reply_text(admin_only_text())
         return ConversationHandler.END
 
-    if not update.message or not update.message.text:
-        await update.effective_message.reply_text("Send text only.")
-        return BROADCAST_MESSAGE
-
-    text = update.message.text.strip()
-    if not text:
-        await update.message.reply_text("Broadcast message cannot be empty.")
+    if not update.message:
         return BROADCAST_MESSAGE
 
     chat_ids = get_broadcast_chat_ids()
     sent = 0
     failed = 0
+    source = update.message
 
     for chat_id in chat_ids:
         try:
-            await context.bot.send_message(chat_id=chat_id, text=text)
+            if source.photo:
+                largest = source.photo[-1]
+                await context.bot.send_photo(
+                    chat_id=chat_id,
+                    photo=largest.file_id,
+                    caption=source.caption or "",
+                    parse_mode=ParseMode.HTML,
+                )
+            elif source.text:
+                await context.bot.send_message(
+                    chat_id=chat_id,
+                    text=source.text,
+                    parse_mode=ParseMode.HTML,
+                )
+            else:
+                await context.bot.copy_message(
+                    chat_id=chat_id,
+                    from_chat_id=source.chat_id,
+                    message_id=source.message_id,
+                )
+
             sent += 1
         except Exception:
             failed += 1

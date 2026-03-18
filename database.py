@@ -6,6 +6,7 @@ from typing import Optional, List
 from config import DB_PATH as CONFIG_DB_PATH
 
 DB_PATH = Path(CONFIG_DB_PATH)
+DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 
 def get_conn():
@@ -113,6 +114,7 @@ def create_tables():
                 PRIMARY KEY (user_id, quiz_date)
             )
         """)
+
 
 def get_all_user_ids():
     with closing(get_conn()) as conn:

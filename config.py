@@ -4,7 +4,7 @@ import logging
 logging.basicConfig(level=logging.INFO)
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-DB_PATH = os.getenv("DB_PATH", "quiz.db")
+DB_PATH = os.getenv("DB_PATH", "/data/quiz.db")
 
 ADMIN_ID = 8368997991
 

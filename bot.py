@@ -51,6 +51,7 @@ from handlers.admin import (
     edit_c_step,
     edit_d_step,
     edit_correct_step,
+    broadcast_message_step,
     cancel,
     QUESTION,
     A,
@@ -67,6 +68,7 @@ from handlers.admin import (
     EDIT_C,
     EDIT_D,
     EDIT_CORRECT,
+    BROADCAST_MESSAGE,
 )
 
 logging.basicConfig(
@@ -89,7 +91,6 @@ def main():
 
     # -------------------------
     # Game commands
-    # /startgame and /stopgame only in groups
     # -------------------------
     app.add_handler(
         CommandHandler(
@@ -114,25 +115,20 @@ def main():
     # Profile / leaderboard
     # -------------------------
     app.add_handler(
-    CommandHandler(
-        "leaderboard",
-        leaderboard,
-        filters=filters.ChatType.GROUPS,
+        CommandHandler(
+            "leaderboard",
+            leaderboard,
+            filters=filters.ChatType.GROUPS,
+        )
     )
-)
     app.add_handler(CommandHandler("global", global_leaderboard))
     app.add_handler(CommandHandler("profile", profile))
 
     # -------------------------
-    # Admin main command only
-    # Question management is now entered from /admin buttons
+    # Admin
     # -------------------------
     app.add_handler(CommandHandler("admin", admin_panel))
 
-    # -------------------------
-    # Admin conversations
-    # Only opened through admin panel callbacks
-    # -------------------------
     add_question_conv = ConversationHandler(
         entry_points=[
             CallbackQueryHandler(admin_button_handler, pattern=r"^admin_add$"),
@@ -186,9 +182,25 @@ def main():
         per_message=False,
     )
 
+    broadcast_conv = ConversationHandler(
+        entry_points=[
+            CallbackQueryHandler(admin_button_handler, pattern=r"^admin_broadcast$"),
+        ],
+        states={
+            BROADCAST_MESSAGE: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_message_step)
+            ],
+        },
+        fallbacks=[CommandHandler("cancel", cancel)],
+        per_chat=True,
+        per_user=True,
+        per_message=False,
+    )
+
     app.add_handler(add_question_conv)
     app.add_handler(delete_question_conv)
     app.add_handler(edit_question_conv)
+    app.add_handler(broadcast_conv)
 
     # -------------------------
     # Callback handlers
@@ -219,7 +231,7 @@ def main():
     app.add_handler(
         CallbackQueryHandler(
             admin_button_handler,
-            pattern=r"^(admin_questions|admin_back_main|admin_list|admin_add|admin_edit|admin_delete|admin_botstats|admin_broadcast|qedit\|\d+|qdelete\|\d+)$",
+            pattern=r"^(admin_questions|admin_back_main|admin_list|admin_botstats)$",
         )
     )
 

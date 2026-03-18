@@ -8,11 +8,17 @@ from database import (
     get_question_by_id,
     update_question,
     delete_question,
+    get_total_players,
+    get_total_groups,
+    get_total_games,
+    get_question_count,
+    get_broadcast_chat_ids,
 )
 
 QUESTION, A, B, C, D, CORRECT = range(6)
 DELETE_ID, DELETE_CONFIRM = range(6, 8)
 EDIT_ID, EDIT_QUESTION, EDIT_A, EDIT_B, EDIT_C, EDIT_D, EDIT_CORRECT = range(8, 15)
+BROADCAST_MESSAGE = 15
 
 
 def admin_only_text() -> str:
@@ -37,6 +43,12 @@ def admin_questions_keyboard() -> InlineKeyboardMarkup:
         [InlineKeyboardButton("⬅️ Back", callback_data="admin_back_main")],
     ]
     return InlineKeyboardMarkup(keyboard)
+
+
+def admin_back_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("⬅️ Back", callback_data="admin_back_main")]
+    ])
 
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -77,6 +89,26 @@ async def send_questions_menu(query):
     await query.edit_message_text(
         "📚 Question Management\n\nChoose an action:",
         reply_markup=admin_questions_keyboard(),
+    )
+
+
+async def send_bot_stats(query):
+    total_players = get_total_players()
+    total_groups = get_total_groups()
+    total_games = get_total_games()
+    total_questions = get_question_count()
+
+    text = (
+        "📊 Bot Stats\n\n"
+        f"👤 Total players: {total_players}\n"
+        f"👥 Total groups: {total_groups}\n"
+        f"🎮 Total games: {total_games}\n"
+        f"❓ Total questions: {total_questions}"
+    )
+
+    await query.edit_message_text(
+        text,
+        reply_markup=admin_back_keyboard(),
     )
 
 
@@ -121,12 +153,18 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         return DELETE_ID
 
     if data == "admin_botstats":
-        await query.answer("Use /botstats", show_alert=True)
+        await send_bot_stats(query)
         return ConversationHandler.END
 
     if data == "admin_broadcast":
-        await query.answer("Use /broadcast Your message", show_alert=True)
-        return ConversationHandler.END
+        context.user_data.clear()
+        await query.edit_message_text(
+            "📢 Broadcast\n\n"
+            "Send the message you want to broadcast.\n\n"
+            "Use /cancel to stop.",
+            reply_markup=admin_back_keyboard(),
+        )
+        return BROADCAST_MESSAGE
 
     if data.startswith("qedit|"):
         try:
@@ -597,4 +635,41 @@ async def edit_correct_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Correct: {correct}"
     )
     await update.message.reply_text(preview)
+    return ConversationHandler.END
+
+
+async def broadcast_message_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    if not user or not is_admin(user.id):
+        if update.message:
+            await update.message.reply_text(admin_only_text())
+        return ConversationHandler.END
+
+    if not update.message or not update.message.text:
+        await update.effective_message.reply_text("Send text only.")
+        return BROADCAST_MESSAGE
+
+    text = update.message.text.strip()
+    if not text:
+        await update.message.reply_text("Broadcast message cannot be empty.")
+        return BROADCAST_MESSAGE
+
+    chat_ids = get_broadcast_chat_ids()
+    sent = 0
+    failed = 0
+
+    for chat_id in chat_ids:
+        try:
+            await context.bot.send_message(chat_id=chat_id, text=text)
+            sent += 1
+        except Exception:
+            failed += 1
+
+    await update.message.reply_text(
+        "📢 Broadcast finished.\n\n"
+        f"✅ Sent: {sent}\n"
+        f"❌ Failed: {failed}"
+    )
+
+    context.user_data.clear()
     return ConversationHandler.END

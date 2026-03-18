@@ -35,6 +35,8 @@ from database import (
     create_game,
     finish_game,
     record_game_result,
+    has_played_daily_quiz,
+    record_daily_quiz_attempt,
 )
 from handlers.profile import profile, leaderboard, global_leaderboard, send_leaderboard_menu
 from utils.helpers import (
@@ -207,7 +209,7 @@ async def daily_quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if chat:
         ensure_chat(chat)
 
-    if user.id in daily_quiz_players and daily_quiz_players[user.id] == today:
+    if has_played_daily_quiz(user.id, today):
         await update.message.reply_text("You already played today’s daily quiz.")
         return
 
@@ -249,7 +251,7 @@ async def daily_quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "question_id": q_id,
     }
 
-    daily_quiz_players[user.id] = today
+    record_daily_quiz_attempt(user.id, today)
 
 
 async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):

@@ -106,7 +106,13 @@ def create_tables():
                 updated_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
         """)
-
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS daily_quiz_attempts (
+                user_id INTEGER NOT NULL,
+                quiz_date TEXT NOT NULL,
+                PRIMARY KEY (user_id, quiz_date)
+            )
+        """)
 
 def get_all_user_ids():
     with closing(get_conn()) as conn:
@@ -803,3 +809,28 @@ def get_total_groups() -> int:
 
 def get_broadcast_chat_ids() -> List[int]:
     return get_all_chat_ids(include_users=True, include_groups=True)
+
+
+def has_played_daily_quiz(user_id: int, quiz_date: str) -> bool:
+    with closing(get_conn()) as conn:
+        row = conn.execute(
+            """
+            SELECT 1
+            FROM daily_quiz_attempts
+            WHERE user_id = ? AND quiz_date = ?
+            """,
+            (user_id, quiz_date),
+        ).fetchone()
+
+        return row is not None
+
+
+def record_daily_quiz_attempt(user_id: int, quiz_date: str):
+    with closing(get_conn()) as conn, conn:
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO daily_quiz_attempts (user_id, quiz_date)
+            VALUES (?, ?)
+            """,
+            (user_id, quiz_date),
+        )

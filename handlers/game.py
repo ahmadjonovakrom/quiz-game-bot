@@ -22,6 +22,7 @@ from database import (
     get_random_question,
     list_questions,
     ensure_player,
+    ensure_chat,
     add_points,
     add_group_points,
     record_correct_answer,
@@ -34,11 +35,6 @@ from database import (
     create_game,
     finish_game,
     record_game_result,
-    get_total_games,
-    get_total_players,
-    get_total_groups,
-    get_question_count,
-    get_broadcast_chat_ids,
 )
 from handlers.profile import profile
 from utils.helpers import (
@@ -134,10 +130,14 @@ def get_unused_question(used_ids, category=None, difficulty=None):
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
+    chat = update.effective_chat
     message = update.effective_message
 
     if user:
         ensure_player(user)
+
+    if chat:
+        ensure_chat(chat)
 
     await message.reply_text(
         "Welcome to English Lemon 🍋!\n\n"
@@ -196,70 +196,13 @@ async def myid(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(str(update.effective_user.id))
 
 
-async def botstats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    if not user or not is_admin(user.id):
-        await update.effective_message.reply_text("Admin only.")
-        return
-
-    total_users = get_total_players()
-    total_groups = get_total_groups()
-    total_games = get_total_games()
-    total_questions = get_question_count()
-
-    text = (
-        "📊 Bot Statistics\n\n"
-        f"👤 Total users: {total_users}\n"
-        f"👥 Total groups: {total_groups}\n"
-        f"🎮 Total games: {total_games}\n"
-        f"❓ Total questions: {total_questions}"
-    )
-
-    await update.effective_message.reply_text(text)
-
-
-async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    if not user or not is_admin(user.id):
-        await update.effective_message.reply_text("Admin only.")
-        return
-
-    if not context.args:
-        await update.effective_message.reply_text(
-            "Usage:\n/broadcast Your message here"
-        )
-        return
-
-    text = " ".join(context.args).strip()
-    if not text:
-        await update.effective_message.reply_text("Broadcast message cannot be empty.")
-        return
-
-    chat_ids = get_broadcast_chat_ids()
-
-    if not chat_ids:
-        await update.effective_message.reply_text("No users or groups found.")
-        return
-
-    sent = 0
-    failed = 0
-
-    for chat_id in chat_ids:
-        try:
-            await context.bot.send_message(chat_id=chat_id, text=text)
-            sent += 1
-        except Exception:
-            failed += 1
-
-    await update.effective_message.reply_text(
-        f"📢 Broadcast finished.\n\n✅ Sent: {sent}\n❌ Failed: {failed}"
-    )
-
-
 async def daily_quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     chat = update.effective_chat
     today = str(date.today())
+
+    if chat:
+        ensure_chat(chat)
 
     if user.id in daily_quiz_players and daily_quiz_players[user.id] == today:
         await update.message.reply_text("You already played today’s daily quiz.")
@@ -311,6 +254,9 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     message = update.effective_message
     query = update.callback_query
+
+    if chat:
+        ensure_chat(chat)
 
     if not user or not is_admin(user.id):
         if query:
@@ -552,6 +498,10 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     chat_id = int(data[1])
+
+    if query.message and query.message.chat:
+        ensure_chat(query.message.chat)
+
     game = active_games.get(chat_id)
 
     if not game:

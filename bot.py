@@ -50,8 +50,6 @@ from handlers.admin import (
     edit_c_step,
     edit_d_step,
     edit_correct_step,
-    broadcast_message_step,
-    broadcast_confirm_step,
     cancel,
     QUESTION,
     A,
@@ -68,6 +66,12 @@ from handlers.admin import (
     EDIT_C,
     EDIT_D,
     EDIT_CORRECT,
+)
+
+from handlers.broadcast import (
+    broadcast_entry,
+    broadcast_message_step,
+    broadcast_confirm_step,
     BROADCAST_MESSAGE,
     BROADCAST_CONFIRM,
 )
@@ -183,7 +187,7 @@ def main():
 
     broadcast_conv = ConversationHandler(
         entry_points=[
-            CallbackQueryHandler(admin_button_handler, pattern=r"^admin_broadcast$"),
+            CallbackQueryHandler(broadcast_entry, pattern=r"^admin_broadcast$"),
         ],
         states={
             BROADCAST_MESSAGE: [

@@ -94,6 +94,18 @@ def create_tables():
             )
         """)
 
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS chats (
+                chat_id INTEGER PRIMARY KEY,
+                chat_type TEXT NOT NULL,
+                title TEXT,
+                username TEXT,
+                is_active INTEGER DEFAULT 1,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
 
 # -------------------------
 # Helpers
@@ -119,6 +131,77 @@ def normalize_correct_option(value) -> int:
 def correct_option_to_letter(value: int) -> str:
     mapping = {1: "A", 2: "B", 3: "C", 4: "D"}
     return mapping.get(value, "?")
+
+
+# -------------------------
+# Chat functions
+# -------------------------
+
+def ensure_chat(chat) -> None:
+    chat_id = chat.id
+    chat_type = chat.type
+    title = getattr(chat, "title", None) or ""
+    username = getattr(chat, "username", None) or ""
+
+    with closing(get_conn()) as conn, conn:
+        row = conn.execute(
+            "SELECT chat_id FROM chats WHERE chat_id = ?",
+            (chat_id,)
+        ).fetchone()
+
+        if row:
+            conn.execute("""
+                UPDATE chats
+                SET chat_type = ?,
+                    title = ?,
+                    username = ?,
+                    is_active = 1,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE chat_id = ?
+            """, (chat_type, title, username, chat_id))
+        else:
+            conn.execute("""
+                INSERT INTO chats (
+                    chat_id, chat_type, title, username, is_active, updated_at
+                ) VALUES (?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
+            """, (chat_id, chat_type, title, username))
+
+
+def deactivate_chat(chat_id: int) -> None:
+    with closing(get_conn()) as conn, conn:
+        conn.execute("""
+            UPDATE chats
+            SET is_active = 0,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE chat_id = ?
+        """, (chat_id,))
+
+
+def get_all_chat_ids(include_users: bool = True, include_groups: bool = True) -> List[int]:
+    ids = set()
+
+    with closing(get_conn()) as conn:
+        if include_users:
+            player_rows = conn.execute("""
+                SELECT user_id
+                FROM players
+            """).fetchall()
+
+            for row in player_rows:
+                ids.add(row["user_id"])
+
+        if include_groups:
+            chat_rows = conn.execute("""
+                SELECT chat_id
+                FROM chats
+                WHERE is_active = 1
+                  AND chat_type IN ('group', 'supergroup')
+            """).fetchall()
+
+            for row in chat_rows:
+                ids.add(row["chat_id"])
+
+    return list(ids)
 
 
 # -------------------------
@@ -711,30 +794,13 @@ def get_total_players() -> int:
 def get_total_groups() -> int:
     with closing(get_conn()) as conn:
         row = conn.execute("""
-            SELECT COUNT(DISTINCT chat_id) AS c
-            FROM group_scores
+            SELECT COUNT(*) AS c
+            FROM chats
+            WHERE is_active = 1
+              AND chat_type IN ('group', 'supergroup')
         """).fetchone()
         return row["c"] if row else 0
 
 
 def get_broadcast_chat_ids() -> List[int]:
-    with closing(get_conn()) as conn:
-        ids = set()
-
-        player_rows = conn.execute("""
-            SELECT user_id
-            FROM players
-        """).fetchall()
-
-        for row in player_rows:
-            ids.add(row["user_id"])
-
-        group_rows = conn.execute("""
-            SELECT DISTINCT chat_id
-            FROM group_scores
-        """).fetchall()
-
-        for row in group_rows:
-            ids.add(row["chat_id"])
-
-        return list(ids)
+    return get_all_chat_ids(include_users=True, include_groups=True)

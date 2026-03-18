@@ -8,9 +8,11 @@ from database import (
     get_question_by_id,
     update_question,
     delete_question,
-    get_all_user_ids,
+    get_broadcast_chat_ids,
     get_total_users_count,
     get_total_questions_count,
+    get_total_games,
+    get_total_groups,
 )
 
 QUESTION, A, B, C, D, CORRECT = range(6)
@@ -65,7 +67,11 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     text = "🛠 *Admin Panel*\n\nChoose an action:"
     if update.message:
-        await update.message.reply_text(text, reply_markup=admin_main_keyboard(), parse_mode="Markdown")
+        await update.message.reply_text(
+            text,
+            reply_markup=admin_main_keyboard(),
+            parse_mode="Markdown",
+        )
     elif update.callback_query:
         await update.callback_query.answer()
         await update.callback_query.edit_message_text(
@@ -119,27 +125,41 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         return EDIT_ID
 
     if data == "admin_list_questions":
-        questions = get_all_questions()
+        questions = get_all_questions(limit=30)
         if not questions:
             await query.message.reply_text("No questions found.")
             return ConversationHandler.END
 
         lines = ["📋 *Questions List:*", ""]
-        for q in questions[:30]:
-            lines.append(f"ID {q['id']}: {q['question_text']}")
-        if len(questions) > 30:
-            lines.append("")
-            lines.append(f"...and {len(questions) - 30} more")
+
+        for q in questions:
+            qid = q[0]
+            question_text = q[1]
+            correct_letter = q[6]
+            category = q[7]
+            difficulty = q[8]
+            is_active = q[9]
+
+            status = "✅" if is_active else "🚫"
+            lines.append(
+                f"{status} ID {qid}: {question_text}\n"
+                f"   Correct: {correct_letter} | {category} | {difficulty}"
+            )
+
         await query.message.reply_text("\n".join(lines), parse_mode="Markdown")
         return ConversationHandler.END
 
     if data == "admin_botstats":
         total_users = get_total_users_count()
         total_questions = get_total_questions_count()
+        total_games = get_total_games()
+        total_groups = get_total_groups()
 
         text = (
             "📊 *Bot Stats*\n\n"
             f"👥 Total users: *{total_users}*\n"
+            f"👨‍👩‍👧‍👦 Total groups: *{total_groups}*\n"
+            f"🎮 Total games: *{total_games}*\n"
             f"❓ Total questions: *{total_questions}*"
         )
         await query.message.reply_text(text, parse_mode="Markdown")
@@ -153,7 +173,9 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             "Supported:\n"
             "• text\n"
             "• photo with caption\n"
-            "• forwarded/copied style message\n\n"
+            "• video\n"
+            "• document\n"
+            "• audio / voice\n\n"
             "Then I’ll ask for confirmation."
         )
         return BROADCAST_MESSAGE
@@ -230,8 +252,9 @@ async def delete_id_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
             InlineKeyboardButton("❌ No", callback_data="confirm_delete_no"),
         ]
     ])
+
     await update.message.reply_text(
-        f"Are you sure you want to delete:\n\nID {q['id']}: {q['question_text']}",
+        f"Are you sure you want to delete:\n\nID {q[0]}: {q[1]}",
         reply_markup=keyboard,
     )
     return DELETE_CONFIRM
@@ -269,16 +292,16 @@ async def edit_id_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     context.user_data["edit_qid"] = qid
     context.user_data["edit_question"] = {
-        "question_text": q["question_text"],
-        "option_a": q["option_a"],
-        "option_b": q["option_b"],
-        "option_c": q["option_c"],
-        "option_d": q["option_d"],
-        "correct_option": q["correct_option"],
+        "question_text": q[1],
+        "option_a": q[2],
+        "option_b": q[3],
+        "option_c": q[4],
+        "option_d": q[5],
+        "correct_option": q[6],
     }
 
     await update.message.reply_text(
-        f"Current question:\n{q['question_text']}\n\nSend new question text:"
+        f"Current question:\n{q[1]}\n\nSend new question text:"
     )
     return EDIT_QUESTION
 
@@ -344,7 +367,6 @@ async def broadcast_message_step(update: Update, context: ContextTypes.DEFAULT_T
     context.user_data["broadcast_source_chat_id"] = message.chat_id
     context.user_data["broadcast_source_message_id"] = message.message_id
 
-    preview = "📢 Broadcast preview saved.\n\nSend confirmation?"
     keyboard = InlineKeyboardMarkup([
         [
             InlineKeyboardButton("✅ Send", callback_data="broadcast_yes"),
@@ -352,7 +374,10 @@ async def broadcast_message_step(update: Update, context: ContextTypes.DEFAULT_T
         ]
     ])
 
-    await update.message.reply_text(preview, reply_markup=keyboard)
+    await update.message.reply_text(
+        "📢 Broadcast preview saved.\n\nSend confirmation?",
+        reply_markup=keyboard,
+    )
     return BROADCAST_CONFIRM
 
 
@@ -373,16 +398,16 @@ async def broadcast_confirm_step(update: Update, context: ContextTypes.DEFAULT_T
         await query.edit_message_text("Broadcast data missing. Please try again.")
         return ConversationHandler.END
 
-    user_ids = get_all_user_ids()
+    chat_ids = get_broadcast_chat_ids()
     success = 0
     failed = 0
 
-    await query.edit_message_text("📡 Broadcasting...")
+    await query.edit_message_text(f"📡 Broadcasting to {len(chat_ids)} chats...")
 
-    for user_id in user_ids:
+    for chat_id in chat_ids:
         try:
             await context.bot.copy_message(
-                chat_id=user_id,
+                chat_id=chat_id,
                 from_chat_id=source_chat_id,
                 message_id=source_message_id,
             )

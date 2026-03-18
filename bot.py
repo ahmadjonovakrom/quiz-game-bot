@@ -139,9 +139,9 @@ def main():
     app.add_handler(admin_conv)
 
     app.add_handler(CallbackQueryHandler(menu_handler, pattern=r"^menu_"))
-    app.add_handler(CallbackQueryHandler(profile_callback_handler, pattern=r"^profile_"))
+    app.add_handler(CallbackQueryHandler(profile_callback_handler, pattern=r"^lb_"))
     app.add_handler(CallbackQueryHandler(game_setup_callback_handler, pattern=r"^setup_"))
-    app.add_handler(CallbackQueryHandler(button_handler))
+    app.add_handler(CallbackQueryHandler(button_handler, pattern=r"^join\|"))
 
     app.add_handler(PollAnswerHandler(receive_poll_answer))
 

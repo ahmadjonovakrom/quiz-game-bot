@@ -3,8 +3,9 @@ from contextlib import closing
 from pathlib import Path
 from typing import Optional, List
 
-BASE_DIR = Path(__file__).resolve().parent
-DB_PATH = BASE_DIR / "quizbot.db"
+from config import DB_PATH as CONFIG_DB_PATH
+
+DB_PATH = Path(CONFIG_DB_PATH)
 
 
 def get_conn():
@@ -124,9 +125,6 @@ def get_total_questions_count():
         row = conn.execute("SELECT COUNT(*) AS count FROM questions").fetchone()
         return row["count"] if row else 0
 
-# -------------------------
-# Helpers
-# -------------------------
 
 def normalize_correct_option(value) -> int:
     if isinstance(value, int):
@@ -149,10 +147,6 @@ def correct_option_to_letter(value: int) -> str:
     mapping = {1: "A", 2: "B", 3: "C", 4: "D"}
     return mapping.get(value, "?")
 
-
-# -------------------------
-# Chat functions
-# -------------------------
 
 def ensure_chat(chat) -> None:
     chat_id = chat.id
@@ -220,10 +214,6 @@ def get_all_chat_ids(include_users: bool = True, include_groups: bool = True) ->
 
     return list(ids)
 
-
-# -------------------------
-# Player functions
-# -------------------------
 
 def ensure_player(user):
     user_id = user.id
@@ -555,10 +545,6 @@ def get_player_group_rank_info(chat_id: int, user_id: int):
         return None, me["total_points"]
 
 
-# -------------------------
-# Question functions
-# -------------------------
-
 def add_question(
     question_text: str,
     option_a: str,
@@ -743,10 +729,6 @@ def get_question_count() -> int:
         row = conn.execute("SELECT COUNT(*) AS c FROM questions").fetchone()
         return row["c"] if row else 0
 
-
-# -------------------------
-# Game history functions
-# -------------------------
 
 def create_game(chat_id: int, total_players: int = 0, total_rounds: int = 0, status: str = "running") -> int:
     with closing(get_conn()) as conn, conn:

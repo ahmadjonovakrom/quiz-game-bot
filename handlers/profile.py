@@ -304,10 +304,6 @@ async def profile_callback_handler(update: Update, context: ContextTypes.DEFAULT
     chat_id = query.message.chat.id
     chat_type = query.message.chat.type
 
-    if data == "menu_leaderboard":
-        await send_leaderboard_menu(query)
-        return
-
     if data == "lb_myrank":
         await show_my_rank(query, user_id, chat_type, chat_id)
         return

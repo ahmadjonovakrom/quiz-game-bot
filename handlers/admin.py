@@ -150,13 +150,12 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         questions = get_all_questions(limit=30)
         if not questions:
             await query.edit_message_text(
-                "📋 *Questions List*\n\nNo questions found.",
+                "📋 Questions List\n\nNo questions found.",
                 reply_markup=back_keyboard(),
-                parse_mode="Markdown",
             )
             return ConversationHandler.END
 
-        lines = ["📋 *Questions List:*", ""]
+        lines = ["📋 Questions List", ""]
 
         for q in questions:
             qid = q[0]
@@ -180,7 +179,6 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         await query.edit_message_text(
             text,
             reply_markup=back_keyboard(),
-            parse_mode="Markdown",
         )
         return ConversationHandler.END
 

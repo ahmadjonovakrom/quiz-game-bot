@@ -238,25 +238,40 @@ async def daily_quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
     user = update.effective_user
+    message = update.effective_message
+    query = update.callback_query
 
     if not user or not is_admin(user.id):
-        await update.message.reply_text("Admin only.")
+        if query:
+            await query.answer("Admin only.", show_alert=True)
+        else:
+            await message.reply_text("Admin only.")
         return
 
     if chat.type == "private":
-        await update.message.reply_text("Use /startgame in a group.")
+        if query:
+            await query.edit_message_text(
+                "Use /startgame in a group."
+            )
+        else:
+            await message.reply_text("Use /startgame in a group.")
         return
 
     game = active_games.get(chat.id)
     if game:
         if game["status"] == "setup":
-            await update.message.reply_text("Game setup is already in progress.")
+            text = "Game setup is already in progress."
         elif game["status"] == "joining":
-            await update.message.reply_text("A game is already waiting for players.")
+            text = "A game is already waiting for players."
         elif game["status"] == "running":
-            await update.message.reply_text("A game is already running.")
+            text = "A game is already running."
         else:
-            await update.message.reply_text("A game already exists in this group.")
+            text = "A game already exists in this group."
+
+        if query:
+            await query.answer(text, show_alert=True)
+        else:
+            await message.reply_text(text)
         return
 
     active_games[chat.id] = {
@@ -281,10 +296,16 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "category": DEFAULT_CATEGORY,
     }
 
-    await update.message.reply_text(
-        "🎮 Game Setup\n\nChoose number of questions:",
-        reply_markup=get_question_count_keyboard(),
-    )
+    if query:
+        await query.edit_message_text(
+            "🎮 Game Setup\n\nChoose number of questions:",
+            reply_markup=get_question_count_keyboard(),
+        )
+    else:
+        await message.reply_text(
+            "🎮 Game Setup\n\nChoose number of questions:",
+            reply_markup=get_question_count_keyboard(),
+        )
 
 
 async def stop_game(update: Update, context: ContextTypes.DEFAULT_TYPE):

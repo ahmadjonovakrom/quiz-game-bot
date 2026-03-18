@@ -219,7 +219,7 @@ def main():
     app.add_handler(
         CallbackQueryHandler(
             admin_button_handler,
-            pattern=r"^(admin_questions|admin_back_main|admin_list|admin_add|admin_edit|admin_delete|admin_botstats|admin_broadcast|qedit\|\d+|qdelete\|\d+)$"",
+            pattern=r"^(admin_questions|admin_back_main|admin_list|admin_add|admin_edit|admin_delete|admin_botstats|admin_broadcast|qedit\|\d+|qdelete\|\d+)$",
         )
     )
 

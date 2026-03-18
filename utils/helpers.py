@@ -21,12 +21,31 @@ def safe_task(coro):
     return asyncio.create_task(wrapper())
 
 
+def format_category_name(category: str) -> str:
+    mapping = {
+        "mixed": "Mixed",
+        "vocabulary": "Vocabulary",
+        "grammar": "Grammar",
+        "idioms": "Idioms",
+        "synonyms": "Synonyms",
+    }
+    return mapping.get(category, category.capitalize())
+
+
 def build_join_text(game, remaining: int) -> str:
     players = game.get("players", {})
+    total_questions = game.get("questions_per_game", 5)
+    category = format_category_name(game.get("category", "mixed"))
+
+    header = (
+        f"Registration is open ({remaining}s)\n\n"
+        f"📚 Questions: {total_questions}\n"
+        f"🗂 Category: {category}\n\n"
+    )
 
     if not players:
         return (
-            f"Registration is open ({remaining}s)\n\n"
+            header +
             f"Total: 0\n"
             f"Minimum needed: {MIN_PLAYERS}"
         )
@@ -34,7 +53,7 @@ def build_join_text(game, remaining: int) -> str:
     players_text = ", ".join(players.values())
 
     return (
-        f"Registration is open ({remaining}s)\n\n"
+        header +
         f"Joined:\n{players_text}\n\n"
         f"Total: {len(players)}\n"
         f"Minimum needed: {MIN_PLAYERS}"

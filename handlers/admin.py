@@ -117,16 +117,16 @@ async def import_questions_entry(update: Update, context: ContextTypes.DEFAULT_T
         return ConversationHandler.END
 
     text = (
-        "📥 *Import Questions from CSV*\n\n"
+        "📥 Import Questions from CSV\n\n"
         "Send a CSV file with this header:\n\n"
-        "`question_text,option_a,option_b,option_c,option_d,correct_option,category,difficulty`\n\n"
+        "question_text,option_a,option_b,option_c,option_d,correct_option,category,difficulty\n\n"
         "Example:\n"
-        "`What does rapid mean?,slow,fast,weak,late,B,vocabulary,easy`\n\n"
+        "What does rapid mean?,slow,fast,weak,late,B,vocabulary,easy\n\n"
         "Allowed correct_option values:\n"
-        "• A / B / C / D\n"
-        "• 1 / 2 / 3 / 4\n\n"
-        "If category is empty, it becomes `mixed`.\n"
-        "If difficulty is empty, it becomes `easy`.\n\n"
+        "- A / B / C / D\n"
+        "- 1 / 2 / 3 / 4\n\n"
+        "If category is empty, it becomes mixed.\n"
+        "If difficulty is empty, it becomes easy.\n\n"
         "Use /cancel to stop."
     )
 
@@ -134,14 +134,12 @@ async def import_questions_entry(update: Update, context: ContextTypes.DEFAULT_T
         await update.message.reply_text(
             text,
             reply_markup=back_keyboard(),
-            parse_mode="Markdown",
         )
     elif update.callback_query:
         await update.callback_query.answer()
         await update.callback_query.edit_message_text(
             text,
             reply_markup=back_keyboard(),
-            parse_mode="Markdown",
         )
 
     return IMPORT_FILE
@@ -558,22 +556,22 @@ async def import_questions_file_step(update: Update, context: ContextTypes.DEFAU
             skipped += 1
             errors.append(f"Row {row_number}: {str(e)}")
 
-    context.user_data.clear()
+        context.user_data.clear()
 
-    result_text = (
-        "📥 *Import finished*\n\n"
-        f"✅ Imported: *{imported}*\n"
-        f"⚠️ Skipped: *{skipped}*"
+        result_text = (
+        f"📥 Import finished\n\n"
+        f"✅ Imported: {imported}\n"
+        f"⚠️ Skipped: {skipped}"
     )
 
     if errors:
-        preview = "\n".join(errors[:10]).replace("`", "'")
-        result_text += f"\n\n*First errors:*\n`{preview}`"
+        preview = "\n".join(errors[:10])
+        result_text += f"\n\nFirst errors:\n{preview}"
 
         if len(errors) > 10:
             result_text += f"\n\n...and {len(errors) - 10} more."
 
-    await update.message.reply_text(result_text, parse_mode="Markdown")
+    await update.message.reply_text(result_text)
     return ConversationHandler.END
 
 

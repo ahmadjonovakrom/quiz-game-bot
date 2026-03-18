@@ -107,6 +107,23 @@ def create_tables():
         """)
 
 
+def get_all_user_ids():
+    with closing(get_conn()) as conn:
+        rows = conn.execute("SELECT user_id FROM players").fetchall()
+        return [row["user_id"] for row in rows]
+
+
+def get_total_users_count():
+    with closing(get_conn()) as conn:
+        row = conn.execute("SELECT COUNT(*) AS count FROM players").fetchone()
+        return row["count"] if row else 0
+
+
+def get_total_questions_count():
+    with closing(get_conn()) as conn:
+        row = conn.execute("SELECT COUNT(*) AS count FROM questions").fetchone()
+        return row["count"] if row else 0
+
 # -------------------------
 # Helpers
 # -------------------------

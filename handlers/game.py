@@ -36,7 +36,7 @@ from database import (
     finish_game,
     record_game_result,
 )
-from handlers.profile import profile
+from handlers.profile import profile, leaderboard, global_leaderboard
 from utils.helpers import (
     safe_task,
     safe_delete_message,
@@ -164,6 +164,13 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         return
 
+    elif data == "menu_leaderboard":
+        if query.message.chat.type in ("group", "supergroup"):
+            await leaderboard(update, context)
+        else:
+            await global_leaderboard(update, context)
+        return
+
     elif data == "menu_profile":
         await profile(update, context)
         return
@@ -190,7 +197,6 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=get_main_menu_keyboard(),
         )
         return
-
 
 async def myid(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(str(update.effective_user.id))

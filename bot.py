@@ -22,6 +22,7 @@ from handlers.game import (
     receive_poll_answer,
     menu_handler,
     daily_quiz,
+    game_setup_callback_handler,
 )
 
 from handlers.profile import (
@@ -180,6 +181,13 @@ def main():
         CallbackQueryHandler(
             profile_callback_handler,
             pattern=r"^(menu_leaderboard|lb_.*)$",
+        )
+    )
+
+    app.add_handler(
+        CallbackQueryHandler(
+            game_setup_callback_handler,
+            pattern=r"^setup_.*$",
         )
     )
 

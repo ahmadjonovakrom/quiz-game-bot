@@ -51,6 +51,7 @@ from handlers.admin import (
     edit_d_step,
     edit_correct_step,
     broadcast_message_step,
+    broadcast_confirm_step,
     cancel,
     QUESTION,
     A,
@@ -68,6 +69,7 @@ from handlers.admin import (
     EDIT_D,
     EDIT_CORRECT,
     BROADCAST_MESSAGE,
+    BROADCAST_CONFIRM,
 )
 
 logging.basicConfig(
@@ -186,6 +188,12 @@ def main():
         states={
             BROADCAST_MESSAGE: [
                 MessageHandler(filters.ALL & ~filters.COMMAND, broadcast_message_step)
+            ],
+            BROADCAST_CONFIRM: [
+                CallbackQueryHandler(
+                    broadcast_confirm_step,
+                    pattern=r"^(broadcast_send|broadcast_cancel)$",
+                )
             ],
         },
         fallbacks=[

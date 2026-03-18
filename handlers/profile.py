@@ -145,20 +145,32 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
     chat = update.effective_chat
     user = update.effective_user
     ensure_player(user)
 
-    if chat.type == "private":
-        await send_global_leaderboard_message(update.effective_message, user.id, 0)
+    if query:
+        if chat.type == "private":
+            await show_global_leaderboard(query, user.id, 0)
+        else:
+            await show_group_leaderboard(query, user.id, chat.id, 0)
     else:
-        await send_group_leaderboard_message(update.effective_message, chat.id, user.id, 0)
+        if chat.type == "private":
+            await send_global_leaderboard_message(update.effective_message, user.id, 0)
+        else:
+            await send_group_leaderboard_message(update.effective_message, chat.id, user.id, 0)
 
 
 async def global_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
     user = update.effective_user
     ensure_player(user)
-    await send_global_leaderboard_message(update.effective_message, user.id, 0)
+
+    if query:
+        await show_global_leaderboard(query, user.id, 0)
+    else:
+        await send_global_leaderboard_message(update.effective_message, user.id, 0)
 
 
 async def send_leaderboard_menu(query):

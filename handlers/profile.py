@@ -94,33 +94,42 @@ def build_leaderboard_text(title: str, rows, offset: int, my_rank, my_points) ->
 
 async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
+    chat = update.effective_chat
+    message = update.effective_message
+
     ensure_player(user)
 
     player = get_player(user.id)
-    rank = get_player_rank(user.id)
+    global_rank = get_player_rank(user.id)
 
     if not player:
-        await update.message.reply_text("No profile data yet.")
+        await message.reply_text("No profile data yet.")
         return
 
     display_name = f"@{player['username']}" if player["username"] else player["full_name"]
     fastest = player["fastest_answer_time"]
     fastest_text = f"{fastest:.2f}s" if fastest is not None else "—"
 
-    text = (
-        "👤 Player Profile\n\n"
-        f"Name: {display_name}\n"
-        f"Games played: {player['games_played']}\n"
-        f"Games won: {player['games_won']}\n"
-        f"Correct answers: {player['correct_answers']}\n"
-        f"Wrong answers: {player['wrong_answers']}\n"
-        f"Best streak: {player['best_streak']}\n"
-        f"Total points: {player['total_points']}\n"
-        f"Fastest answer: {fastest_text}\n"
-        f"Global rank: #{rank if rank else '-'}"
-    )
+    text_lines = [
+        "👤 Player Profile",
+        "",
+        f"Name: {display_name}",
+        f"Games played: {player['games_played']}",
+        f"Games won: {player['games_won']}",
+        f"Correct answers: {player['correct_answers']}",
+        f"Wrong answers: {player['wrong_answers']}",
+        f"Best streak: {player['best_streak']}",
+        f"Total points: {player['total_points']}",
+        f"Fastest answer: {fastest_text}",
+        f"Global rank: #{global_rank if global_rank else '-'}",
+    ]
 
-    await update.message.reply_text(text)
+    if chat.type in ("group", "supergroup"):
+        group_rank, group_points = get_player_group_rank_info(chat.id, user.id)
+        text_lines.append(f"Group rank: #{group_rank if group_rank else '-'}")
+        text_lines.append(f"Group points: {group_points}")
+
+    await message.reply_text("\n".join(text_lines))
 
 
 async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -129,15 +138,15 @@ async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ensure_player(user)
 
     if chat.type == "private":
-        await send_global_leaderboard_message(update.message, user.id, 0)
+        await send_global_leaderboard_message(update.effective_message, user.id, 0)
     else:
-        await send_group_leaderboard_message(update.message, chat.id, user.id, 0)
+        await send_group_leaderboard_message(update.effective_message, chat.id, user.id, 0)
 
 
 async def global_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     ensure_player(user)
-    await send_global_leaderboard_message(update.message, user.id, 0)
+    await send_global_leaderboard_message(update.effective_message, user.id, 0)
 
 
 async def send_leaderboard_menu(query):

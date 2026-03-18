@@ -31,6 +31,7 @@ from database import (
     finish_game,
     record_game_result,
 )
+from handlers.profile import profile
 from utils.helpers import (
     safe_task,
     safe_delete_message,
@@ -103,10 +104,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     elif data == "menu_profile":
-        await query.edit_message_text(
-            "Use /profile to see your stats.",
-            reply_markup=InlineKeyboardMarkup(back_keyboard),
-        )
+        await profile(update, context)
         return
 
     elif data == "menu_help":

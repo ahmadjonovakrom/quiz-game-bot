@@ -143,11 +143,14 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     back_keyboard = [[InlineKeyboardButton("⬅️ Back", callback_data="menu_back")]]
 
     if data == "menu_play":
-        await query.edit_message_text(
-            "To start a quiz game, add me to a group and use:\n\n"
-            "/startgame",
-            reply_markup=InlineKeyboardMarkup(back_keyboard),
-        )
+        if query.message.chat.type in ("group", "supergroup"):
+            await start_game(update, context)
+        else:
+            await query.edit_message_text(
+                "To start a quiz game, add me to a group and use:\n\n"
+                "/startgame",
+                reply_markup=InlineKeyboardMarkup(back_keyboard),
+            )
         return
 
     elif data == "menu_profile":

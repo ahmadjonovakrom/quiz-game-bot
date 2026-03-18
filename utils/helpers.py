@@ -34,18 +34,10 @@ def format_category_name(category: str) -> str:
 
 def build_join_text(game, remaining: int) -> str:
     players = game.get("players", {})
-    total_questions = game.get("questions_per_game", 5)
-    category = format_category_name(game.get("category", "mixed"))
-
-    header = (
-        f"Registration is open ({remaining}s)\n\n"
-        f"📚 Questions: {total_questions}\n"
-        f"🗂 Category: {category}\n\n"
-    )
 
     if not players:
         return (
-            header +
+            f"Registration is open ({remaining}s)\n\n"
             f"Total: 0\n"
             f"Minimum needed: {MIN_PLAYERS}"
         )
@@ -53,7 +45,7 @@ def build_join_text(game, remaining: int) -> str:
     players_text = ", ".join(players.values())
 
     return (
-        header +
+        f"Registration is open ({remaining}s)\n\n"
         f"Joined:\n{players_text}\n\n"
         f"Total: {len(players)}\n"
         f"Minimum needed: {MIN_PLAYERS}"

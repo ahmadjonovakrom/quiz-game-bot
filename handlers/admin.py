@@ -46,13 +46,23 @@ def questions_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(keyboard)
 
 
+def back_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("⬅️ Back", callback_data="admin_back")]
+    ])
+
+
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
     if update.message:
         await update.message.reply_text("Cancelled.")
     elif update.callback_query:
         await update.callback_query.answer()
-        await update.callback_query.message.reply_text("Cancelled.")
+        await update.callback_query.edit_message_text(
+            "🛠 *Admin Panel*\n\nChoose an action:",
+            reply_markup=admin_main_keyboard(),
+            parse_mode="Markdown",
+        )
     return ConversationHandler.END
 
 
@@ -113,21 +123,37 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         return ConversationHandler.END
 
     if data == "admin_add_question":
-        await query.message.reply_text("Send the question text:")
+        await query.edit_message_text(
+            "➕ *Add Question*\n\nSend the question text.\n\nUse /cancel to stop.",
+            reply_markup=back_keyboard(),
+            parse_mode="Markdown",
+        )
         return QUESTION
 
     if data == "admin_delete_question":
-        await query.message.reply_text("Send the question ID to delete:")
+        await query.edit_message_text(
+            "🗑 *Delete Question*\n\nSend the question ID to delete.\n\nUse /cancel to stop.",
+            reply_markup=back_keyboard(),
+            parse_mode="Markdown",
+        )
         return DELETE_ID
 
     if data == "admin_edit_question":
-        await query.message.reply_text("Send the question ID to edit:")
+        await query.edit_message_text(
+            "✏️ *Edit Question*\n\nSend the question ID to edit.\n\nUse /cancel to stop.",
+            reply_markup=back_keyboard(),
+            parse_mode="Markdown",
+        )
         return EDIT_ID
 
     if data == "admin_list_questions":
         questions = get_all_questions(limit=30)
         if not questions:
-            await query.message.reply_text("No questions found.")
+            await query.edit_message_text(
+                "📋 *Questions List*\n\nNo questions found.",
+                reply_markup=back_keyboard(),
+                parse_mode="Markdown",
+            )
             return ConversationHandler.END
 
         lines = ["📋 *Questions List:*", ""]
@@ -143,10 +169,19 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             status = "✅" if is_active else "🚫"
             lines.append(
                 f"{status} ID {qid}: {question_text}\n"
-                f"   Correct: {correct_letter} | {category} | {difficulty}"
+                f"Correct: {correct_letter} | {category} | {difficulty}"
             )
 
-        await query.message.reply_text("\n".join(lines), parse_mode="Markdown")
+        text = "\n\n".join(lines)
+
+        if len(text) > 4000:
+            text = text[:3900] + "\n\n..."
+
+        await query.edit_message_text(
+            text,
+            reply_markup=back_keyboard(),
+            parse_mode="Markdown",
+        )
         return ConversationHandler.END
 
     if data == "admin_botstats":
@@ -162,21 +197,29 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             f"🎮 Total games: *{total_games}*\n"
             f"❓ Total questions: *{total_questions}*"
         )
-        await query.message.reply_text(text, parse_mode="Markdown")
+        await query.edit_message_text(
+            text,
+            reply_markup=back_keyboard(),
+            parse_mode="Markdown",
+        )
         return ConversationHandler.END
 
     if data == "admin_broadcast":
         context.user_data.pop("broadcast_source_chat_id", None)
         context.user_data.pop("broadcast_source_message_id", None)
-        await query.message.reply_text(
-            "📢 Send the message you want to broadcast.\n\n"
+
+        await query.edit_message_text(
+            "📢 *Broadcast*\n\n"
+            "Send the message you want to broadcast.\n\n"
             "Supported:\n"
             "• text\n"
             "• photo with caption\n"
             "• video\n"
             "• document\n"
             "• audio / voice\n\n"
-            "Then I’ll ask for confirmation."
+            "Use /cancel to stop.",
+            reply_markup=back_keyboard(),
+            parse_mode="Markdown",
         )
         return BROADCAST_MESSAGE
 

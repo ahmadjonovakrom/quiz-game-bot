@@ -22,8 +22,7 @@ from handlers.game import (
     menu_handler,
     daily_quiz,
     game_setup_callback_handler,
-    botstats,
-    broadcast,
+    myid,
 )
 
 from handlers.profile import (
@@ -85,6 +84,7 @@ def main():
     app = Application.builder().token(BOT_TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("myid", myid))
 
     app.add_handler(
         CommandHandler(
@@ -102,8 +102,6 @@ def main():
     )
 
     app.add_handler(CommandHandler("dailyquiz", daily_quiz))
-    app.add_handler(CommandHandler("botstats", botstats))
-    app.add_handler(CommandHandler("broadcast", broadcast))
 
     app.add_handler(
         CommandHandler(
@@ -114,7 +112,6 @@ def main():
     )
     app.add_handler(CommandHandler("global", global_leaderboard))
     app.add_handler(CommandHandler("profile", profile))
-
     app.add_handler(CommandHandler("admin", admin_panel))
 
     add_question_conv = ConversationHandler(
@@ -188,10 +185,7 @@ def main():
         ],
         states={
             BROADCAST_MESSAGE: [
-                MessageHandler(
-                    (filters.TEXT | filters.PHOTO | filters.FORWARDED) & ~filters.COMMAND,
-                    broadcast_message_step,
-                )
+                MessageHandler(filters.ALL & ~filters.COMMAND, broadcast_message_step)
             ],
         },
         fallbacks=[

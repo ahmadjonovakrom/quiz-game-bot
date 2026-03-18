@@ -1,6 +1,5 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler
-from telegram.constants import ParseMode
 
 from utils.helpers import is_admin
 from database import (
@@ -617,6 +616,11 @@ async def broadcast_message_step(update: Update, context: ContextTypes.DEFAULT_T
         return BROADCAST_MESSAGE
 
     chat_ids = get_broadcast_chat_ids()
+    if not chat_ids:
+        await update.message.reply_text("No users or groups found for broadcast.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
     sent = 0
     failed = 0
     source = update.message
@@ -629,13 +633,11 @@ async def broadcast_message_step(update: Update, context: ContextTypes.DEFAULT_T
                     chat_id=chat_id,
                     photo=largest.file_id,
                     caption=source.caption or "",
-                    parse_mode=ParseMode.HTML,
                 )
             elif source.text:
                 await context.bot.send_message(
                     chat_id=chat_id,
                     text=source.text,
-                    parse_mode=ParseMode.HTML,
                 )
             else:
                 await context.bot.copy_message(

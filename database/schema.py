@@ -120,3 +120,28 @@ def create_tables():
 
         if "times_used" not in existing_columns:
             conn.execute("ALTER TABLE questions ADD COLUMN times_used INTEGER DEFAULT 0")
+
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_players_points
+            ON players(total_points DESC)
+        """)
+
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_questions_category
+            ON questions(category)
+        """)
+
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_questions_difficulty
+            ON questions(difficulty)
+        """)
+
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_questions_usage
+            ON questions(times_used)
+        """)
+
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_group_scores_points
+            ON group_scores(total_points DESC)
+        """)

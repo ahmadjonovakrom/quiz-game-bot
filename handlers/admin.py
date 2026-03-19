@@ -196,15 +196,40 @@ async def reset_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.effective_message.reply_text(admin_only_text())
         return
 
-    with get_conn() as conn:
-        conn.execute("UPDATE players SET points = 0, games_played = 0, games_won = 0")
-        conn.execute("DELETE FROM games")
-        conn.execute("DELETE FROM game_results")
-        conn.execute("DELETE FROM answers")
+    try:
+        with get_conn() as conn:
+            table_rows = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            ).fetchall()
+            table_names = {row[0] for row in table_rows}
 
-    await update.effective_message.reply_text(
-        "✅ Leaderboard reset. All player scores are now 0."
-    )
+            if "players" in table_names:
+                conn.execute(
+                    "UPDATE players SET points = 0, games_played = 0, games_won = 0"
+                )
+
+            if "games" in table_names:
+                conn.execute("DELETE FROM games")
+
+            if "game_results" in table_names:
+                conn.execute("DELETE FROM game_results")
+
+            if "answers" in table_names:
+                conn.execute("DELETE FROM answers")
+
+            if "group_stats" in table_names:
+                conn.execute(
+                    "UPDATE group_stats SET points = 0, games_played = 0, games_won = 0"
+                )
+
+        await update.effective_message.reply_text(
+            "✅ Stats reset completed."
+        )
+
+    except Exception as e:
+        await update.effective_message.reply_text(
+            f"❌ Reset failed: {e}"
+        )
 
 
 async def import_questions_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):

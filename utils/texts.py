@@ -1,3 +1,7 @@
+def admin_only_text():
+    return "❌ Admin only."
+
+
 def format_profile_text(player, global_rank, chat_type, group_rank=None, group_points=None):
     if not player:
         return "No profile data found yet."

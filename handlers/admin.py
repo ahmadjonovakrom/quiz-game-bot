@@ -1,9 +1,15 @@
 import csv
 import io
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import (
+    Update,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    BufferedInputFile,
+)
 from telegram.ext import ContextTypes, ConversationHandler
 
+from config import ALLOWED_CATEGORIES, ALLOWED_DIFFICULTIES
 from utils.helpers import is_admin
 from database import (
     add_question,
@@ -18,12 +24,17 @@ from database import (
     get_total_games,
     get_total_groups,
 )
+from database.questions import (
+    search_questions_by_keyword,
+    export_questions_to_rows,
+)
 
 ADMIN_MENU, QUESTION, A, B, C, D, CORRECT = range(7)
 DELETE_ID, DELETE_CONFIRM = range(7, 9)
-EDIT_ID, EDIT_QUESTION, EDIT_A, EDIT_B, EDIT_C, EDIT_D, EDIT_CORRECT = range(9, 16)
-BROADCAST_MESSAGE, BROADCAST_CONFIRM = range(16, 18)
-IMPORT_FILE = 18
+EDIT_ID, EDIT_QUESTION, EDIT_A, EDIT_B, EDIT_C, EDIT_D, EDIT_CORRECT, EDIT_CATEGORY, EDIT_DIFFICULTY = range(9, 18)
+BROADCAST_MESSAGE, BROADCAST_CONFIRM = range(18, 20)
+IMPORT_FILE = 20
+SEARCH_KEYWORD = 21
 
 
 def admin_only_text() -> str:
@@ -45,8 +56,10 @@ def questions_keyboard() -> InlineKeyboardMarkup:
     keyboard = [
         [InlineKeyboardButton("➕ Add Question", callback_data="admin_add_question")],
         [InlineKeyboardButton("✏️ Edit Question", callback_data="admin_edit_question")],
+        [InlineKeyboardButton("🔎 Search Questions", callback_data="admin_search_questions")],
         [InlineKeyboardButton("🗑 Delete Question", callback_data="admin_delete_question")],
         [InlineKeyboardButton("📋 List Questions", callback_data="admin_list_questions")],
+        [InlineKeyboardButton("📤 Export CSV", callback_data="admin_export_questions")],
         [InlineKeyboardButton("📥 Import CSV", callback_data="admin_import_questions")],
         [InlineKeyboardButton("⬅️ Back", callback_data="admin_back")],
     ]
@@ -62,6 +75,36 @@ def back_keyboard() -> InlineKeyboardMarkup:
 def normalize_text(value: str, default: str = "") -> str:
     value = (value or "").strip()
     return value if value else default
+
+
+def build_question_preview(q: tuple) -> str:
+    question_id = q[0]
+    question_text = q[1]
+    option_a = q[2]
+    option_b = q[3]
+    option_c = q[4]
+    option_d = q[5]
+    correct_letter = q[6]
+    category = q[7]
+    difficulty = q[8]
+    is_active = q[9]
+    times_used = q[10]
+
+    status = "Active" if is_active else "Inactive"
+
+    return (
+        f"ID: {question_id}\n"
+        f"Question: {question_text}\n\n"
+        f"A) {option_a}\n"
+        f"B) {option_b}\n"
+        f"C) {option_c}\n"
+        f"D) {option_d}\n\n"
+        f"Correct: {correct_letter}\n"
+        f"Category: {category}\n"
+        f"Difficulty: {difficulty}\n"
+        f"Status: {status}\n"
+        f"Times used: {times_used}"
+    )
 
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -148,6 +191,10 @@ async def import_questions_entry(update: Update, context: ContextTypes.DEFAULT_T
         "Allowed correct_option values:\n"
         "- A / B / C / D\n"
         "- 1 / 2 / 3 / 4\n\n"
+        "Allowed category values:\n"
+        f"- {', '.join(ALLOWED_CATEGORIES)}\n\n"
+        "Allowed difficulty values:\n"
+        f"- {', '.join(ALLOWED_DIFFICULTIES)}\n\n"
         "If category is empty, it becomes mixed.\n"
         "If difficulty is empty, it becomes easy.\n\n"
         "Use /cancel to stop."
@@ -194,6 +241,7 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         return ADMIN_MENU
 
     if data == "admin_questions":
+        context.user_data.clear()
         await query.edit_message_text(
             "📚 *Question Management*\n\nChoose an action:",
             reply_markup=questions_keyboard(),
@@ -213,7 +261,7 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     if data == "admin_delete_question":
         context.user_data.clear()
         await query.edit_message_text(
-            "🗑 *Delete Question*\n\nSend the question ID to delete.\n\nUse /cancel to stop.",
+            "🗑 *Delete Question*\n\nSend the question ID to preview and delete.\n\nUse /cancel to stop.",
             reply_markup=back_keyboard(),
             parse_mode="Markdown",
         )
@@ -227,6 +275,60 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             parse_mode="Markdown",
         )
         return EDIT_ID
+
+    if data == "admin_search_questions":
+        context.user_data.clear()
+        await query.edit_message_text(
+            "🔎 *Search Questions*\n\nSend a keyword to search in questions, options, category, or difficulty.\n\nUse /cancel to stop.",
+            reply_markup=back_keyboard(),
+            parse_mode="Markdown",
+        )
+        return SEARCH_KEYWORD
+
+    if data == "admin_export_questions":
+        rows = export_questions_to_rows()
+
+        if not rows:
+            await query.edit_message_text(
+                "📤 Export Questions\n\nNo questions found.",
+                reply_markup=back_keyboard(),
+            )
+            return ADMIN_MENU
+
+        output = io.StringIO()
+        writer = csv.DictWriter(
+            output,
+            fieldnames=[
+                "id",
+                "question_text",
+                "option_a",
+                "option_b",
+                "option_c",
+                "option_d",
+                "correct_option",
+                "category",
+                "difficulty",
+                "is_active",
+                "times_used",
+            ],
+        )
+        writer.writeheader()
+        writer.writerows(rows)
+
+        csv_bytes = output.getvalue().encode("utf-8-sig")
+        file = BufferedInputFile(csv_bytes, filename="questions_export.csv")
+
+        await query.message.reply_document(
+            document=file,
+            caption=f"📤 Exported {len(rows)} questions.",
+        )
+
+        await query.edit_message_text(
+            "📚 *Question Management*\n\nChoose an action:",
+            reply_markup=questions_keyboard(),
+            parse_mode="Markdown",
+        )
+        return ADMIN_MENU
 
     if data == "admin_import_questions":
         return await import_questions_entry(update, context)
@@ -390,7 +492,9 @@ async def delete_id_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     await update.message.reply_text(
-        f"Are you sure you want to delete:\n\nID {q[0]}: {q[1]}",
+        "🗑 Question preview:\n\n"
+        f"{build_question_preview(q)}\n\n"
+        "Are you sure you want to delete this question?",
         reply_markup=keyboard,
     )
     return DELETE_CONFIRM
@@ -434,10 +538,14 @@ async def edit_id_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "option_c": q[4],
         "option_d": q[5],
         "correct_option": q[6],
+        "category": q[7],
+        "difficulty": q[8],
     }
 
     await update.message.reply_text(
-        f"Current question:\n{q[1]}\n\nSend new question text:"
+        "✏️ Current question:\n\n"
+        f"{build_question_preview(q)}\n\n"
+        "Send new question text:"
     )
     return EDIT_QUESTION
 
@@ -478,9 +586,45 @@ async def edit_correct_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Invalid. Send only A, B, C, or D:")
         return EDIT_CORRECT
 
+    context.user_data["edit_question"]["correct_option"] = correct
+    await update.message.reply_text(
+        "Send new category:\n\n"
+        f"Allowed: {', '.join(ALLOWED_CATEGORIES)}"
+    )
+    return EDIT_CATEGORY
+
+
+async def edit_category_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    category = update.message.text.strip().lower()
+
+    if category not in ALLOWED_CATEGORIES:
+        await update.message.reply_text(
+            "Invalid category.\n\n"
+            f"Allowed: {', '.join(ALLOWED_CATEGORIES)}"
+        )
+        return EDIT_CATEGORY
+
+    context.user_data["edit_question"]["category"] = category
+    await update.message.reply_text(
+        "Send new difficulty:\n\n"
+        f"Allowed: {', '.join(ALLOWED_DIFFICULTIES)}"
+    )
+    return EDIT_DIFFICULTY
+
+
+async def edit_difficulty_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    difficulty = update.message.text.strip().lower()
+
+    if difficulty not in ALLOWED_DIFFICULTIES:
+        await update.message.reply_text(
+            "Invalid difficulty.\n\n"
+            f"Allowed: {', '.join(ALLOWED_DIFFICULTIES)}"
+        )
+        return EDIT_DIFFICULTY
+
     qid = context.user_data["edit_qid"]
     data = context.user_data["edit_question"]
-    data["correct_option"] = correct
+    data["difficulty"] = difficulty
 
     update_question(
         qid,
@@ -490,10 +634,51 @@ async def edit_correct_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
         data["option_c"],
         data["option_d"],
         data["correct_option"],
+        data["category"],
+        data["difficulty"],
     )
 
     context.user_data.clear()
     await update.message.reply_text("✅ Question updated successfully.")
+    return ConversationHandler.END
+
+
+async def search_keyword_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    keyword = update.message.text.strip()
+
+    if not keyword:
+        await update.message.reply_text("Please send a keyword.")
+        return SEARCH_KEYWORD
+
+    results = search_questions_by_keyword(keyword, limit=15)
+
+    if not results:
+        await update.message.reply_text(
+            f"No questions found for: {keyword}"
+        )
+        return ConversationHandler.END
+
+    lines = [f"🔎 Search results for: {keyword}", ""]
+
+    for q in results:
+        qid = q[0]
+        question_text = q[1]
+        category = q[7]
+        difficulty = q[8]
+        is_active = q[9]
+        times_used = q[10]
+
+        status = "✅" if is_active else "🚫"
+        lines.append(
+            f"{status} ID {qid}: {question_text}\n"
+            f"{category} | {difficulty} | used: {times_used}"
+        )
+
+    text = "\n\n".join(lines)
+    if len(text) > 4000:
+        text = text[:3900] + "\n\n..."
+
+    await update.message.reply_text(text)
     return ConversationHandler.END
 
 

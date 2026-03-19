@@ -1,6 +1,7 @@
 from contextlib import closing
 from typing import List, Optional
 
+from config import ALLOWED_CATEGORIES, ALLOWED_DIFFICULTIES
 from .connection import get_conn
 
 
@@ -28,6 +29,20 @@ def correct_option_to_letter(value: int) -> str:
 
 def normalize_question_text(text: str) -> str:
     return " ".join((text or "").strip().lower().split())
+
+
+def normalize_category(value: str) -> str:
+    value = (value or "mixed").strip().lower()
+    if value not in ALLOWED_CATEGORIES:
+        raise ValueError(f"category must be one of: {', '.join(ALLOWED_CATEGORIES)}")
+    return value
+
+
+def normalize_difficulty(value: str) -> str:
+    value = (value or "easy").strip().lower()
+    if value not in ALLOWED_DIFFICULTIES:
+        raise ValueError(f"difficulty must be one of: {', '.join(ALLOWED_DIFFICULTIES)}")
+    return value
 
 
 def question_exists(question_text: str) -> bool:
@@ -58,9 +73,8 @@ def add_question(
     created_by: Optional[int] = None,
 ):
     correct_option = normalize_correct_option(correct_option)
-
-    category = (category or "mixed").strip().lower()
-    difficulty = (difficulty or "easy").strip().lower()
+    category = normalize_category(category)
+    difficulty = normalize_difficulty(difficulty)
 
     with closing(get_conn()) as conn, conn:
         conn.execute("""
@@ -209,8 +223,12 @@ def update_question(
     option_c: str,
     option_d: str,
     correct_option,
+    category: str = "mixed",
+    difficulty: str = "easy",
 ) -> bool:
     correct_option = normalize_correct_option(correct_option)
+    category = normalize_category(category)
+    difficulty = normalize_difficulty(difficulty)
 
     with closing(get_conn()) as conn, conn:
         cur = conn.execute("""
@@ -220,7 +238,9 @@ def update_question(
                 option_b = ?,
                 option_c = ?,
                 option_d = ?,
-                correct_option = ?
+                correct_option = ?,
+                category = ?,
+                difficulty = ?
             WHERE id = ?
         """, (
             question_text.strip(),
@@ -229,9 +249,87 @@ def update_question(
             option_c.strip(),
             option_d.strip(),
             correct_option,
+            category,
+            difficulty,
             question_id,
         ))
         return cur.rowcount > 0
+
+
+def search_questions_by_keyword(keyword: str, limit: int = 15) -> List[tuple]:
+    keyword = (keyword or "").strip()
+    if not keyword:
+        return []
+
+    like_value = f"%{keyword.lower()}%"
+
+    with closing(get_conn()) as conn:
+        rows = conn.execute("""
+            SELECT *
+            FROM questions
+            WHERE
+                LOWER(question_text) LIKE ?
+                OR LOWER(option_a) LIKE ?
+                OR LOWER(option_b) LIKE ?
+                OR LOWER(option_c) LIKE ?
+                OR LOWER(option_d) LIKE ?
+                OR LOWER(category) LIKE ?
+                OR LOWER(difficulty) LIKE ?
+            ORDER BY id DESC
+            LIMIT ?
+        """, (
+            like_value,
+            like_value,
+            like_value,
+            like_value,
+            like_value,
+            like_value,
+            like_value,
+            limit,
+        )).fetchall()
+
+        result = []
+        for row in rows:
+            result.append((
+                row["id"],
+                row["question_text"],
+                row["option_a"],
+                row["option_b"],
+                row["option_c"],
+                row["option_d"],
+                correct_option_to_letter(row["correct_option"]),
+                row["category"],
+                row["difficulty"],
+                row["is_active"],
+                row["times_used"],
+            ))
+        return result
+
+
+def export_questions_to_rows() -> List[dict]:
+    with closing(get_conn()) as conn:
+        rows = conn.execute("""
+            SELECT *
+            FROM questions
+            ORDER BY id ASC
+        """).fetchall()
+
+        result = []
+        for row in rows:
+            result.append({
+                "id": row["id"],
+                "question_text": row["question_text"],
+                "option_a": row["option_a"],
+                "option_b": row["option_b"],
+                "option_c": row["option_c"],
+                "option_d": row["option_d"],
+                "correct_option": correct_option_to_letter(row["correct_option"]),
+                "category": row["category"],
+                "difficulty": row["difficulty"],
+                "is_active": row["is_active"],
+                "times_used": row["times_used"],
+            })
+        return result
 
 
 def deactivate_question(question_id: int) -> bool:

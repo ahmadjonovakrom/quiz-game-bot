@@ -51,6 +51,9 @@ from handlers.admin import (
     edit_c_step,
     edit_d_step,
     edit_correct_step,
+    edit_category_step,
+    edit_difficulty_step,
+    search_keyword_step,
     broadcast_message_step,
     broadcast_confirm_step,
     import_questions_entry,
@@ -72,9 +75,12 @@ from handlers.admin import (
     EDIT_C,
     EDIT_D,
     EDIT_CORRECT,
+    EDIT_CATEGORY,
+    EDIT_DIFFICULTY,
     BROADCAST_MESSAGE,
     BROADCAST_CONFIRM,
     IMPORT_FILE,
+    SEARCH_KEYWORD,
 )
 
 logging.basicConfig(
@@ -160,6 +166,19 @@ def main():
             ],
             EDIT_CORRECT: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, edit_correct_step),
+                CallbackQueryHandler(admin_button_handler, pattern=r"^(admin_back|admin_close)$"),
+            ],
+            EDIT_CATEGORY: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, edit_category_step),
+                CallbackQueryHandler(admin_button_handler, pattern=r"^(admin_back|admin_close)$"),
+            ],
+            EDIT_DIFFICULTY: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, edit_difficulty_step),
+                CallbackQueryHandler(admin_button_handler, pattern=r"^(admin_back|admin_close)$"),
+            ],
+
+            SEARCH_KEYWORD: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, search_keyword_step),
                 CallbackQueryHandler(admin_button_handler, pattern=r"^(admin_back|admin_close)$"),
             ],
 

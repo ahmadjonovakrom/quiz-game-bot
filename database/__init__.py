@@ -12,6 +12,8 @@ from .questions import (
     get_all_questions,
     get_question_by_id,
     update_question,
+    search_questions_by_keyword,
+    export_questions_to_rows,
     deactivate_question,
     activate_question,
     delete_question,

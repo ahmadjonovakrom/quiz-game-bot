@@ -204,32 +204,65 @@ async def reset_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             table_names = {row[0] for row in table_rows}
 
             if "players" in table_names:
-                conn.execute(
-                    "UPDATE players SET points = 0, games_played = 0, games_won = 0"
-                )
+                player_columns = {
+                    row[1]
+                    for row in conn.execute("PRAGMA table_info(players)").fetchall()
+                }
 
-            if "games" in table_names:
-                conn.execute("DELETE FROM games")
+                set_parts = []
 
-            if "game_results" in table_names:
-                conn.execute("DELETE FROM game_results")
+                if "points" in player_columns:
+                    set_parts.append("points = 0")
+                if "games_played" in player_columns:
+                    set_parts.append("games_played = 0")
+                if "games_won" in player_columns:
+                    set_parts.append("games_won = 0")
+                if "correct_answers" in player_columns:
+                    set_parts.append("correct_answers = 0")
+                if "wrong_answers" in player_columns:
+                    set_parts.append("wrong_answers = 0")
+                if "total_points" in player_columns:
+                    set_parts.append("total_points = 0")
+                if "score" in player_columns:
+                    set_parts.append("score = 0")
 
-            if "answers" in table_names:
-                conn.execute("DELETE FROM answers")
+                if set_parts:
+                    conn.execute(f"UPDATE players SET {', '.join(set_parts)}")
 
             if "group_stats" in table_names:
-                conn.execute(
-                    "UPDATE group_stats SET points = 0, games_played = 0, games_won = 0"
-                )
+                group_columns = {
+                    row[1]
+                    for row in conn.execute("PRAGMA table_info(group_stats)").fetchall()
+                }
 
-        await update.effective_message.reply_text(
-            "✅ Stats reset completed."
-        )
+                set_parts = []
+
+                if "points" in group_columns:
+                    set_parts.append("points = 0")
+                if "games_played" in group_columns:
+                    set_parts.append("games_played = 0")
+                if "games_won" in group_columns:
+                    set_parts.append("games_won = 0")
+                if "correct_answers" in group_columns:
+                    set_parts.append("correct_answers = 0")
+                if "wrong_answers" in group_columns:
+                    set_parts.append("wrong_answers = 0")
+                if "total_points" in group_columns:
+                    set_parts.append("total_points = 0")
+                if "score" in group_columns:
+                    set_parts.append("score = 0")
+
+                if set_parts:
+                    conn.execute(f"UPDATE group_stats SET {', '.join(set_parts)}")
+
+            for table_name in ["games", "game_results", "answers"]:
+                if table_name in table_names:
+                    conn.execute(f"DELETE FROM {table_name}")
+
+        await update.effective_message.reply_text("✅ Stats reset completed.")
 
     except Exception as e:
-        await update.effective_message.reply_text(
-            f"❌ Reset failed: {e}"
-        )
+        await update.effective_message.reply_text(f"❌ Reset failed: {e}")
 
 
 async def import_questions_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):

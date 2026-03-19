@@ -65,6 +65,12 @@ def format_difficulty_name(value: str) -> str:
     return mapping.get(value, value.title())
 
 
+def clear_setup_game(chat_id: int):
+    game = active_games.get(chat_id)
+    if game and game.get("status") == "setup":
+        active_games.pop(chat_id, None)
+
+
 def get_main_menu_keyboard():
     keyboard = [
         [InlineKeyboardButton("🎮 Play Quiz", callback_data="menu_play")],
@@ -203,6 +209,9 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     elif data == "menu_back" or data == "menu_main":
+        chat_id = query.message.chat.id
+        clear_setup_game(chat_id)
+
         await query.edit_message_text(
             "Welcome to English Lemon 🍋!\n\n"
             "Practice vocabulary, play quiz games, and climb the leaderboard.",

@@ -287,6 +287,24 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ADMIN_MENU
 
 
+async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data.clear()
+
+    if update.message:
+        await update.message.reply_text(
+            "Cancelled.",
+            reply_markup=admin_main_keyboard(),
+        )
+    elif update.callback_query:
+        await update.callback_query.answer()
+        await update.callback_query.edit_message_text(
+            "🛠 *Admin Panel*\n\nChoose an action:",
+            reply_markup=admin_main_keyboard(),
+            parse_mode="Markdown",
+        )
+
+    return ConversationHandler.END
+
 async def bot_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if not is_admin(user.id):

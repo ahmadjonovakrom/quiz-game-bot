@@ -2,11 +2,11 @@ import logging
 
 from telegram.ext import (
     Application,
-    CallbackQueryHandler,
     CommandHandler,
+    CallbackQueryHandler,
+    PollAnswerHandler,
     ConversationHandler,
     MessageHandler,
-    PollAnswerHandler,
     filters,
 )
 
@@ -14,64 +14,67 @@ from config import BOT_TOKEN
 from database import create_tables
 
 from handlers.game import (
-    button_handler,
-    daily_quiz,
-    game_setup_callback_handler,
-    menu_handler,
-    myid,
-    receive_poll_answer,
     start,
     start_game,
     stop_game,
+    button_handler,
+    receive_poll_answer,
+    menu_handler,
+    daily_quiz,
+    game_setup_callback_handler,
+    myid,
 )
+
 from handlers.profile import (
-    global_leaderboard,
-    leaderboard,
     profile,
+    leaderboard,
+    global_leaderboard,
     profile_callback_handler,
 )
+
 from handlers.admin import (
-    A,
-    ADMIN_MENU,
-    B,
-    BROADCAST_CONFIRM,
-    BROADCAST_MESSAGE,
-    C,
-    CORRECT,
-    D,
-    DELETE_CONFIRM,
-    DELETE_ID,
-    EDIT_A,
-    EDIT_B,
-    EDIT_C,
-    EDIT_CORRECT,
-    EDIT_D,
-    EDIT_ID,
-    EDIT_QUESTION,
-    IMPORT_FILE,
-    QUESTION,
-    a_step,
-    admin_button_handler,
     admin_panel,
+    admin_button_handler,
+    bot_stats_command,
+    question_step,
+    a_step,
     b_step,
-    broadcast_confirm_step,
-    broadcast_message_step,
     c_step,
-    cancel,
-    correct_step,
     d_step,
-    delete_confirm_step,
+    correct_step,
     delete_id_step,
+    delete_confirm_step,
+    edit_id_step,
+    edit_question_step,
     edit_a_step,
     edit_b_step,
     edit_c_step,
-    edit_correct_step,
     edit_d_step,
-    edit_id_step,
-    edit_question_step,
+    edit_correct_step,
+    broadcast_message_step,
+    broadcast_confirm_step,
     import_questions_entry,
     import_questions_file_step,
-    question_step,
+    cancel,
+    ADMIN_MENU,
+    QUESTION,
+    A,
+    B,
+    C,
+    D,
+    CORRECT,
+    DELETE_ID,
+    DELETE_CONFIRM,
+    EDIT_ID,
+    EDIT_QUESTION,
+    EDIT_A,
+    EDIT_B,
+    EDIT_C,
+    EDIT_D,
+    EDIT_CORRECT,
+    BROADCAST_MESSAGE,
+    BROADCAST_CONFIRM,
+    IMPORT_FILE,
 )
 
 logging.basicConfig(
@@ -96,6 +99,7 @@ def main():
             ADMIN_MENU: [
                 CallbackQueryHandler(admin_button_handler, pattern=r"^admin_"),
             ],
+
             QUESTION: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, question_step),
                 CallbackQueryHandler(admin_button_handler, pattern=r"^(admin_back|admin_close)$"),
@@ -120,6 +124,7 @@ def main():
                 MessageHandler(filters.TEXT & ~filters.COMMAND, correct_step),
                 CallbackQueryHandler(admin_button_handler, pattern=r"^(admin_back|admin_close)$"),
             ],
+
             DELETE_ID: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, delete_id_step),
                 CallbackQueryHandler(admin_button_handler, pattern=r"^(admin_back|admin_close)$"),
@@ -128,6 +133,7 @@ def main():
                 CallbackQueryHandler(delete_confirm_step, pattern=r"^confirm_delete_(yes|no)$"),
                 CallbackQueryHandler(admin_button_handler, pattern=r"^(admin_back|admin_close)$"),
             ],
+
             EDIT_ID: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, edit_id_step),
                 CallbackQueryHandler(admin_button_handler, pattern=r"^(admin_back|admin_close)$"),
@@ -156,6 +162,7 @@ def main():
                 MessageHandler(filters.TEXT & ~filters.COMMAND, edit_correct_step),
                 CallbackQueryHandler(admin_button_handler, pattern=r"^(admin_back|admin_close)$"),
             ],
+
             BROADCAST_MESSAGE: [
                 MessageHandler(
                     (
@@ -174,12 +181,10 @@ def main():
                 CallbackQueryHandler(broadcast_confirm_step, pattern=r"^broadcast_(yes|no)$"),
                 CallbackQueryHandler(admin_button_handler, pattern=r"^(admin_back|admin_close)$"),
             ],
+
             IMPORT_FILE: [
                 MessageHandler(filters.Document.ALL & ~filters.COMMAND, import_questions_file_step),
-                CallbackQueryHandler(
-                    admin_button_handler,
-                    pattern=r"^(admin_back|admin_close|admin_import_questions)$",
-                ),
+                CallbackQueryHandler(admin_button_handler, pattern=r"^(admin_back|admin_close|admin_import_questions)$"),
             ],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
@@ -195,6 +200,7 @@ def main():
     app.add_handler(CommandHandler("leaderboard", leaderboard))
     app.add_handler(CommandHandler("global", global_leaderboard))
     app.add_handler(CommandHandler("dailyquiz", daily_quiz))
+    app.add_handler(CommandHandler("botstats", bot_stats_command))
 
     app.add_handler(admin_conv)
 

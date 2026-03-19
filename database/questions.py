@@ -26,6 +26,26 @@ def correct_option_to_letter(value: int) -> str:
     return mapping.get(value, "?")
 
 
+def normalize_question_text(text: str) -> str:
+    return " ".join((text or "").strip().lower().split())
+
+
+def question_exists(question_text: str) -> bool:
+    normalized = normalize_question_text(question_text)
+
+    with closing(get_conn()) as conn:
+        rows = conn.execute("""
+            SELECT question_text
+            FROM questions
+        """).fetchall()
+
+        for row in rows:
+            if normalize_question_text(row["question_text"]) == normalized:
+                return True
+
+        return False
+
+
 def add_question(
     question_text: str,
     option_a: str,

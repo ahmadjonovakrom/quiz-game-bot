@@ -7,6 +7,7 @@ from telegram.ext import ContextTypes, ConversationHandler
 from utils.helpers import is_admin
 from database import (
     add_question,
+    question_exists,
     get_all_questions,
     get_question_by_id,
     update_question,
@@ -105,6 +106,28 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
     return ADMIN_MENU
+
+
+async def bot_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    if not is_admin(user.id):
+        await update.effective_message.reply_text(admin_only_text())
+        return
+
+    total_users = get_total_users_count()
+    total_questions = get_total_questions_count()
+    total_games = get_total_games()
+    total_groups = get_total_groups()
+
+    text = (
+        "📊 *Bot Stats*\n\n"
+        f"👥 Total users: *{total_users}*\n"
+        f"👨‍👩‍👧‍👦 Total groups: *{total_groups}*\n"
+        f"🎮 Total games: *{total_games}*\n"
+        f"❓ Total questions: *{total_questions}*"
+    )
+
+    await update.effective_message.reply_text(text, parse_mode="Markdown")
 
 
 async def import_questions_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -325,6 +348,12 @@ async def correct_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return CORRECT
 
     data = context.user_data["new_question"]
+
+    if question_exists(data["question_text"]):
+        context.user_data.clear()
+        await update.message.reply_text("⚠️ This question already exists. Skipped.")
+        return ConversationHandler.END
+
     add_question(
         data["question_text"],
         data["option_a"],
@@ -519,7 +548,8 @@ async def import_questions_file_step(update: Update, context: ContextTypes.DEFAU
         return IMPORT_FILE
 
     imported = 0
-    skipped = 0
+    duplicate_skipped = 0
+    invalid_skipped = 0
     errors = []
 
     for row_number, row in enumerate(reader, start=2):
@@ -536,8 +566,12 @@ async def import_questions_file_step(update: Update, context: ContextTypes.DEFAU
             difficulty = normalize_text(normalized_row.get("difficulty"), "easy").lower()
 
             if not all([question_text, option_a, option_b, option_c, option_d, correct_option]):
-                skipped += 1
+                invalid_skipped += 1
                 errors.append(f"Row {row_number}: missing required value")
+                continue
+
+            if question_exists(question_text):
+                duplicate_skipped += 1
                 continue
 
             add_question(
@@ -554,15 +588,19 @@ async def import_questions_file_step(update: Update, context: ContextTypes.DEFAU
             imported += 1
 
         except Exception as e:
-            skipped += 1
+            invalid_skipped += 1
             errors.append(f"Row {row_number}: {str(e)}")
 
     context.user_data.clear()
 
+    total_skipped = duplicate_skipped + invalid_skipped
+
     result_text = (
         f"📥 Import finished\n\n"
         f"✅ Imported: {imported}\n"
-        f"⚠️ Skipped: {skipped}"
+        f"♻️ Duplicate skipped: {duplicate_skipped}\n"
+        f"⚠️ Invalid skipped: {invalid_skipped}\n"
+        f"📊 Total skipped: {total_skipped}"
     )
 
     if errors:

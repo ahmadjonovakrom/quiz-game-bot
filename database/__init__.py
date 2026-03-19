@@ -4,6 +4,8 @@ from .schema import create_tables
 from .questions import (
     normalize_correct_option,
     correct_option_to_letter,
+    normalize_question_text,
+    question_exists,
     add_question,
     get_random_question,
     list_questions,

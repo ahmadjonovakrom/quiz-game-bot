@@ -15,6 +15,8 @@ from database import (
 from database.questions import (
     search_questions_by_keyword,
     export_questions_to_rows,
+    list_questions_paginated,
+    get_total_questions_count,
 )
 
 
@@ -83,6 +85,33 @@ def get_question_details_service(qid: int):
 
 def list_questions_service(limit: int = 15):
     return get_all_questions(limit=limit)
+
+
+def list_questions_paginated_service(limit: int = 10, offset: int = 0):
+    rows = list_questions_paginated(limit=limit, offset=offset)
+
+    result = []
+    for row in rows:
+        result.append((
+            row["id"],
+            row["question_text"],
+            row["option_a"],
+            row["option_b"],
+            row["option_c"],
+            row["option_d"],
+            row["correct_option"],
+            row["category"],
+            row["difficulty"],
+            row["is_active"],
+            row["times_used"],
+        ))
+
+    total = get_total_questions_count()
+
+    return {
+        "questions": result,
+        "total": total,
+    }
 
 
 def update_question_service(qid: int, data: dict):

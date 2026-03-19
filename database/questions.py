@@ -167,6 +167,38 @@ def list_questions(
         return conn.execute(query, params).fetchall()
 
 
+def list_questions_paginated(
+    limit: int = 20,
+    offset: int = 0,
+    category: Optional[str] = None,
+    difficulty: Optional[str] = None,
+    active_only: bool = False,
+):
+    query = """
+        SELECT *
+        FROM questions
+        WHERE 1=1
+    """
+    params = []
+
+    if active_only:
+        query += " AND is_active = 1"
+
+    if category and category != "mixed":
+        query += " AND category = ?"
+        params.append(category.strip().lower())
+
+    if difficulty and difficulty != "mixed":
+        query += " AND difficulty = ?"
+        params.append(difficulty.strip().lower())
+
+    query += " ORDER BY id DESC LIMIT ? OFFSET ?"
+    params.extend([limit, offset])
+
+    with closing(get_conn()) as conn:
+        return conn.execute(query, params).fetchall()
+
+
 def get_all_questions(limit: int = 50) -> List[tuple]:
     rows = list_questions(limit=limit)
     result = []

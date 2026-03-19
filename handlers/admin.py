@@ -16,8 +16,8 @@ from utils.keyboards import (
     back_cancel_keyboard,
     broadcast_confirm_keyboard,
     delete_confirm_keyboard,
-    latest_questions_keyboard,
     question_action_keyboard,
+    questions_pagination_keyboard,
     search_results_keyboard,
 )
 from utils.texts import (
@@ -36,6 +36,7 @@ from database import get_question_by_id
 from services.question_service import (
     create_question_service,
     list_questions_service,
+    list_questions_paginated_service,
     update_question_service,
     delete_question_service,
     toggle_question_status_service,
@@ -457,16 +458,39 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     if data == "admin_import_questions":
         return await import_questions_entry(update, context)
 
-    if data == "admin_list_questions":
-        questions = list_questions_service(limit=15)
+    if data == "admin_page_info":
+        await query.answer()
+        return ADMIN_MENU
+
+    if data.startswith("admin_list"):
+        if data == "admin_list_questions":
+            offset = 0
+        else:
+            offset_text = data.split("_")[-1]
+
+            if not offset_text.isdigit():
+                await query.edit_message_text(
+                    "Invalid page.",
+                    reply_markup=nav_keyboard("admin_questions"),
+                )
+                return ADMIN_MENU
+
+            offset = int(offset_text)
+
+        limit = 10
+
+        result = list_questions_paginated_service(limit, offset)
+        questions = result["questions"]
+        total = result["total"]
 
         text = format_latest_questions_text(questions)
+
         if len(text) > 4000:
             text = text[:3900] + "\n\n..."
 
         await query.edit_message_text(
             text,
-            reply_markup=latest_questions_keyboard(questions) if questions else nav_keyboard("admin_questions"),
+            reply_markup=questions_pagination_keyboard(offset, total, limit),
         )
         return ADMIN_MENU
 

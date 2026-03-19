@@ -67,6 +67,8 @@ def leaderboard_pagination_keyboard(kind: str, offset: int, has_next: bool) -> I
     return InlineKeyboardMarkup(rows)
 
 
+# ---------------- ADMIN ---------------- #
+
 def admin_main_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("📚 Questions", callback_data="admin_questions")],
@@ -146,15 +148,31 @@ def search_results_keyboard(results) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(keyboard)
 
 
-def latest_questions_keyboard(questions) -> InlineKeyboardMarkup:
-    keyboard = []
+# 🔥 PAGINATION KEYBOARD
 
-    for q in questions:
-        qid = q[0]
-        keyboard.append([
-            InlineKeyboardButton(f"📘 {qid}", callback_data=f"admin_open_{qid}")
-        ])
+def questions_pagination_keyboard(offset: int, total: int, limit: int) -> InlineKeyboardMarkup:
+    total_pages = max(1, (total + limit - 1) // limit)
+    current_page = (offset // limit) + 1
 
+    row = []
+
+    if offset > 0:
+        prev_offset = max(0, offset - limit)
+        row.append(
+            InlineKeyboardButton("⬅️ Prev", callback_data=f"admin_list_{prev_offset}")
+        )
+
+    row.append(
+        InlineKeyboardButton(f"📄 {current_page}/{total_pages}", callback_data="admin_page_info")
+    )
+
+    if offset + limit < total:
+        next_offset = offset + limit
+        row.append(
+            InlineKeyboardButton("➡️ Next", callback_data=f"admin_list_{next_offset}")
+        )
+
+    keyboard = [row]
     keyboard.append([InlineKeyboardButton("⬅️ Back", callback_data="admin_questions")])
     keyboard.append([InlineKeyboardButton("❌ Cancel", callback_data="admin_close")])
 

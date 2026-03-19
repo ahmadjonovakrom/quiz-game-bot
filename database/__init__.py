@@ -1,3 +1,4 @@
+from .connection import get_conn
 from .schema import create_tables
 
 from .players import (
@@ -63,6 +64,7 @@ from .games import (
 )
 
 __all__ = [
+    "get_conn",
     "create_tables",
 
     # players

@@ -267,7 +267,8 @@ def search_questions_by_keyword(keyword: str, limit: int = 15) -> List[tuple]:
         rows = conn.execute("""
             SELECT *
             FROM questions
-            WHERE
+            WHERE is_active = 1
+            AND (
                 LOWER(question_text) LIKE ?
                 OR LOWER(option_a) LIKE ?
                 OR LOWER(option_b) LIKE ?
@@ -275,6 +276,7 @@ def search_questions_by_keyword(keyword: str, limit: int = 15) -> List[tuple]:
                 OR LOWER(option_d) LIKE ?
                 OR LOWER(category) LIKE ?
                 OR LOWER(difficulty) LIKE ?
+            )
             ORDER BY id DESC
             LIMIT ?
         """, (
@@ -303,6 +305,7 @@ def search_questions_by_keyword(keyword: str, limit: int = 15) -> List[tuple]:
                 row["is_active"],
                 row["times_used"],
             ))
+
         return result
 
 

@@ -108,78 +108,78 @@ def main():
 
             QUESTION: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, question_step),
-                CallbackQueryHandler(admin_button_handler, pattern=r"^(admin_back|admin_close)$"),
+                CallbackQueryHandler(admin_button_handler, pattern=r"^admin_"),
             ],
             A: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, a_step),
-                CallbackQueryHandler(admin_button_handler, pattern=r"^(admin_back|admin_close)$"),
+                CallbackQueryHandler(admin_button_handler, pattern=r"^admin_"),
             ],
             B: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, b_step),
-                CallbackQueryHandler(admin_button_handler, pattern=r"^(admin_back|admin_close)$"),
+                CallbackQueryHandler(admin_button_handler, pattern=r"^admin_"),
             ],
             C: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, c_step),
-                CallbackQueryHandler(admin_button_handler, pattern=r"^(admin_back|admin_close)$"),
+                CallbackQueryHandler(admin_button_handler, pattern=r"^admin_"),
             ],
             D: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, d_step),
-                CallbackQueryHandler(admin_button_handler, pattern=r"^(admin_back|admin_close)$"),
+                CallbackQueryHandler(admin_button_handler, pattern=r"^admin_"),
             ],
             CORRECT: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, correct_step),
-                CallbackQueryHandler(admin_button_handler, pattern=r"^(admin_back|admin_close)$"),
+                CallbackQueryHandler(admin_button_handler, pattern=r"^admin_"),
             ],
 
             DELETE_ID: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, delete_id_step),
-                CallbackQueryHandler(admin_button_handler, pattern=r"^(admin_back|admin_close)$"),
+                CallbackQueryHandler(admin_button_handler, pattern=r"^admin_"),
             ],
             DELETE_CONFIRM: [
                 CallbackQueryHandler(delete_confirm_step, pattern=r"^confirm_delete_(yes|no)$"),
-                CallbackQueryHandler(admin_button_handler, pattern=r"^(admin_back|admin_close)$"),
+                CallbackQueryHandler(admin_button_handler, pattern=r"^admin_"),
             ],
 
             EDIT_ID: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, edit_id_step),
-                CallbackQueryHandler(admin_button_handler, pattern=r"^(admin_back|admin_close)$"),
+                CallbackQueryHandler(admin_button_handler, pattern=r"^admin_"),
             ],
             EDIT_QUESTION: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, edit_question_step),
-                CallbackQueryHandler(admin_button_handler, pattern=r"^(admin_back|admin_close)$"),
+                CallbackQueryHandler(admin_button_handler, pattern=r"^admin_"),
             ],
             EDIT_A: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, edit_a_step),
-                CallbackQueryHandler(admin_button_handler, pattern=r"^(admin_back|admin_close)$"),
+                CallbackQueryHandler(admin_button_handler, pattern=r"^admin_"),
             ],
             EDIT_B: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, edit_b_step),
-                CallbackQueryHandler(admin_button_handler, pattern=r"^(admin_back|admin_close)$"),
+                CallbackQueryHandler(admin_button_handler, pattern=r"^admin_"),
             ],
             EDIT_C: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, edit_c_step),
-                CallbackQueryHandler(admin_button_handler, pattern=r"^(admin_back|admin_close)$"),
+                CallbackQueryHandler(admin_button_handler, pattern=r"^admin_"),
             ],
             EDIT_D: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, edit_d_step),
-                CallbackQueryHandler(admin_button_handler, pattern=r"^(admin_back|admin_close)$"),
+                CallbackQueryHandler(admin_button_handler, pattern=r"^admin_"),
             ],
             EDIT_CORRECT: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, edit_correct_step),
-                CallbackQueryHandler(admin_button_handler, pattern=r"^(admin_back|admin_close)$"),
+                CallbackQueryHandler(admin_button_handler, pattern=r"^admin_"),
             ],
             EDIT_CATEGORY: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, edit_category_step),
-                CallbackQueryHandler(admin_button_handler, pattern=r"^(admin_back|admin_close)$"),
+                CallbackQueryHandler(admin_button_handler, pattern=r"^admin_"),
             ],
             EDIT_DIFFICULTY: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, edit_difficulty_step),
-                CallbackQueryHandler(admin_button_handler, pattern=r"^(admin_back|admin_close)$"),
+                CallbackQueryHandler(admin_button_handler, pattern=r"^admin_"),
             ],
 
             SEARCH_KEYWORD: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, search_keyword_step),
-                CallbackQueryHandler(admin_button_handler, pattern=r"^(admin_back|admin_close)$"),
+                CallbackQueryHandler(admin_button_handler, pattern=r"^admin_"),
             ],
 
             BROADCAST_MESSAGE: [
@@ -194,16 +194,16 @@ def main():
                     ) & ~filters.COMMAND,
                     broadcast_message_step,
                 ),
-                CallbackQueryHandler(admin_button_handler, pattern=r"^(admin_back|admin_close)$"),
+                CallbackQueryHandler(admin_button_handler, pattern=r"^admin_"),
             ],
             BROADCAST_CONFIRM: [
                 CallbackQueryHandler(broadcast_confirm_step, pattern=r"^broadcast_(yes|no)$"),
-                CallbackQueryHandler(admin_button_handler, pattern=r"^(admin_back|admin_close)$"),
+                CallbackQueryHandler(admin_button_handler, pattern=r"^admin_"),
             ],
 
             IMPORT_FILE: [
                 MessageHandler(filters.Document.ALL & ~filters.COMMAND, import_questions_file_step),
-                CallbackQueryHandler(admin_button_handler, pattern=r"^(admin_back|admin_close|admin_import_questions)$"),
+                CallbackQueryHandler(admin_button_handler, pattern=r"^admin_"),
             ],
         },
         fallbacks=[CommandHandler("cancel", cancel)],

@@ -66,10 +66,32 @@ def questions_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(keyboard)
 
 
-def back_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        [[InlineKeyboardButton("⬅️ Back", callback_data="admin_back")]]
-    )
+def nav_keyboard(back_callback: str = "admin_back") -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("⬅️ Back", callback_data=back_callback)],
+        [InlineKeyboardButton("❌ Cancel", callback_data="admin_close")],
+    ])
+
+
+def delete_confirm_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("✅ Yes, delete", callback_data="confirm_delete_yes"),
+            InlineKeyboardButton("❌ No", callback_data="confirm_delete_no"),
+        ],
+        [InlineKeyboardButton("⬅️ Back", callback_data="admin_questions")],
+        [InlineKeyboardButton("❌ Cancel", callback_data="admin_close")],
+    ])
+
+
+def broadcast_confirm_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("✅ Send", callback_data="broadcast_yes"),
+            InlineKeyboardButton("❌ Cancel", callback_data="broadcast_no"),
+        ],
+        [InlineKeyboardButton("⬅️ Back", callback_data="admin_back")],
+    ])
 
 
 def normalize_text(value: str, default: str = "") -> str:
@@ -123,18 +145,89 @@ def build_search_results_keyboard(results) -> InlineKeyboardMarkup:
             ),
         ])
 
-    keyboard.append([
-        InlineKeyboardButton("⬅️ Back", callback_data="admin_questions")
-    ])
+    keyboard.append([InlineKeyboardButton("⬅️ Back", callback_data="admin_questions")])
+    keyboard.append([InlineKeyboardButton("❌ Cancel", callback_data="admin_close")])
 
     return InlineKeyboardMarkup(keyboard)
+
+
+async def show_admin_panel_message(target):
+    text = "🛠 *Admin Panel*\n\nChoose an action:"
+    await target.edit_message_text(
+        text,
+        reply_markup=admin_main_keyboard(),
+        parse_mode="Markdown",
+    )
+    return ADMIN_MENU
+
+
+async def show_questions_menu(target):
+    text = "📚 *Question Management*\n\nChoose an action:"
+    await target.edit_message_text(
+        text,
+        reply_markup=questions_keyboard(),
+        parse_mode="Markdown",
+    )
+    return ADMIN_MENU
+
+
+async def show_search_results(target, keyword: str):
+    results = search_questions_by_keyword(keyword, limit=15)
+
+    if not results:
+        text = f"🔎 Search results for: {keyword}\n\nNo questions found."
+        markup = nav_keyboard("admin_questions")
+
+        if hasattr(target, "edit_message_text"):
+            await target.edit_message_text(text, reply_markup=markup)
+        else:
+            await target.reply_text(text, reply_markup=markup)
+
+        return ADMIN_MENU
+
+    lines = [
+        f"🔎 Search results for: {keyword}",
+        "",
+        "✅ = active | 🚫 = inactive",
+        "",
+    ]
+
+    for q in results:
+        qid = q[0]
+        question_text = q[1]
+        category = q[7]
+        difficulty = q[8]
+        is_active = q[9]
+        times_used = q[10]
+
+        status = "✅" if is_active else "🚫"
+        lines.append(
+            f"{status} ID {qid}: {question_text}\n"
+            f"{category} | {difficulty} | used: {times_used}"
+        )
+
+    text = "\n\n".join(lines)
+    if len(text) > 4000:
+        text = text[:3900] + "\n\n..."
+
+    markup = build_search_results_keyboard(results)
+
+    if hasattr(target, "edit_message_text"):
+        await target.edit_message_text(text, reply_markup=markup)
+    else:
+        await target.reply_text(text, reply_markup=markup)
+
+    return ADMIN_MENU
 
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
 
     if update.message:
-        await update.message.reply_text("Cancelled.")
+        await update.message.reply_text(
+            "Cancelled.",
+            reply_markup=admin_main_keyboard(),
+        )
     elif update.callback_query:
         await update.callback_query.answer()
         await update.callback_query.edit_message_text(
@@ -219,20 +312,19 @@ async def import_questions_entry(update: Update, context: ContextTypes.DEFAULT_T
         "Allowed difficulty values:\n"
         f"- {', '.join(ALLOWED_DIFFICULTIES)}\n\n"
         "If category is empty, it becomes mixed.\n"
-        "If difficulty is empty, it becomes easy.\n\n"
-        "Use /cancel to stop."
+        "If difficulty is empty, it becomes easy."
     )
 
     if update.message:
         await update.message.reply_text(
             text,
-            reply_markup=back_keyboard(),
+            reply_markup=nav_keyboard(),
         )
     elif update.callback_query:
         await update.callback_query.answer()
         await update.callback_query.edit_message_text(
             text,
-            reply_markup=back_keyboard(),
+            reply_markup=nav_keyboard(),
         )
 
     return IMPORT_FILE
@@ -252,12 +344,19 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     if data.startswith("admin_search_edit_"):
         qid_text = data.replace("admin_search_edit_", "").strip()
         if not qid_text.isdigit():
-            await query.edit_message_text("Invalid question ID.")
+            await query.edit_message_text(
+                "Invalid question ID.",
+                reply_markup=nav_keyboard("admin_questions"),
+            )
             return ADMIN_MENU
 
         qid = int(qid_text)
         q = get_question_by_id(qid)
         if not q:
+            keyword = context.user_data.get("search_keyword")
+            if keyword:
+                return await show_search_results(query, keyword)
+
             await query.edit_message_text(
                 "Question not found.",
                 reply_markup=questions_keyboard(),
@@ -280,18 +379,26 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             "✏️ Current question:\n\n"
             f"{build_question_preview(q)}\n\n"
             "Send new question text:",
+            reply_markup=nav_keyboard("admin_questions"),
         )
         return EDIT_QUESTION
 
     if data.startswith("admin_search_delete_"):
         qid_text = data.replace("admin_search_delete_", "").strip()
         if not qid_text.isdigit():
-            await query.edit_message_text("Invalid question ID.")
+            await query.edit_message_text(
+                "Invalid question ID.",
+                reply_markup=nav_keyboard("admin_questions"),
+            )
             return ADMIN_MENU
 
         qid = int(qid_text)
         q = get_question_by_id(qid)
         if not q:
+            keyword = context.user_data.get("search_keyword")
+            if keyword:
+                return await show_search_results(query, keyword)
+
             await query.edit_message_text(
                 "Question not found.",
                 reply_markup=questions_keyboard(),
@@ -299,20 +406,12 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             return ADMIN_MENU
 
         context.user_data["delete_qid"] = qid
-        keyboard = InlineKeyboardMarkup(
-            [
-                [
-                    InlineKeyboardButton("✅ Yes, delete", callback_data="confirm_delete_yes"),
-                    InlineKeyboardButton("❌ No", callback_data="confirm_delete_no"),
-                ]
-            ]
-        )
 
         await query.edit_message_text(
             "🗑 Question preview:\n\n"
             f"{build_question_preview(q)}\n\n"
             "Are you sure you want to delete this question?",
-            reply_markup=keyboard,
+            reply_markup=delete_confirm_keyboard(),
         )
         return DELETE_CONFIRM
 
@@ -323,27 +422,17 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
 
     if data == "admin_back":
         context.user_data.clear()
-        await query.edit_message_text(
-            "🛠 *Admin Panel*\n\nChoose an action:",
-            reply_markup=admin_main_keyboard(),
-            parse_mode="Markdown",
-        )
-        return ADMIN_MENU
+        return await show_admin_panel_message(query)
 
     if data == "admin_questions":
         context.user_data.clear()
-        await query.edit_message_text(
-            "📚 *Question Management*\n\nChoose an action:",
-            reply_markup=questions_keyboard(),
-            parse_mode="Markdown",
-        )
-        return ADMIN_MENU
+        return await show_questions_menu(query)
 
     if data == "admin_add_question":
         context.user_data.clear()
         await query.edit_message_text(
-            "➕ *Add Question*\n\nSend the question text.\n\nUse /cancel to stop.",
-            reply_markup=back_keyboard(),
+            "➕ *Add Question*\n\nSend the question text.",
+            reply_markup=nav_keyboard("admin_questions"),
             parse_mode="Markdown",
         )
         return QUESTION
@@ -351,8 +440,8 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     if data == "admin_delete_question":
         context.user_data.clear()
         await query.edit_message_text(
-            "🗑 *Delete Question*\n\nSend the question ID to preview and delete.\n\nUse /cancel to stop.",
-            reply_markup=back_keyboard(),
+            "🗑 *Delete Question*\n\nSend the question ID to preview and delete.",
+            reply_markup=nav_keyboard("admin_questions"),
             parse_mode="Markdown",
         )
         return DELETE_ID
@@ -360,8 +449,8 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     if data == "admin_edit_question":
         context.user_data.clear()
         await query.edit_message_text(
-            "✏️ *Edit Question*\n\nSend the question ID to edit.\n\nUse /cancel to stop.",
-            reply_markup=back_keyboard(),
+            "✏️ *Edit Question*\n\nSend the question ID to edit.",
+            reply_markup=nav_keyboard("admin_questions"),
             parse_mode="Markdown",
         )
         return EDIT_ID
@@ -369,8 +458,8 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     if data == "admin_search_questions":
         context.user_data.clear()
         await query.edit_message_text(
-            "🔎 *Search Questions*\n\nSend a keyword to search in questions, options, category, or difficulty.\n\nUse /cancel to stop.",
-            reply_markup=back_keyboard(),
+            "🔎 *Search Questions*\n\nSend a keyword to search in questions, options, category, or difficulty.",
+            reply_markup=nav_keyboard("admin_questions"),
             parse_mode="Markdown",
         )
         return SEARCH_KEYWORD
@@ -381,7 +470,7 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         if not rows:
             await query.edit_message_text(
                 "📤 Export Questions\n\nNo questions found.",
-                reply_markup=back_keyboard(),
+                reply_markup=nav_keyboard("admin_questions"),
             )
             return ADMIN_MENU
 
@@ -414,12 +503,7 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             caption=f"📤 Exported {len(rows)} questions.",
         )
 
-        await query.edit_message_text(
-            "📚 *Question Management*\n\nChoose an action:",
-            reply_markup=questions_keyboard(),
-            parse_mode="Markdown",
-        )
-        return ADMIN_MENU
+        return await show_questions_menu(query)
 
     if data == "admin_import_questions":
         return await import_questions_entry(update, context)
@@ -430,7 +514,7 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         if not questions:
             await query.edit_message_text(
                 "📋 Questions List\n\nNo questions found.",
-                reply_markup=back_keyboard(),
+                reply_markup=nav_keyboard("admin_questions"),
             )
             return ADMIN_MENU
 
@@ -457,7 +541,7 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
 
         await query.edit_message_text(
             text,
-            reply_markup=back_keyboard(),
+            reply_markup=nav_keyboard("admin_questions"),
         )
         return ADMIN_MENU
 
@@ -477,7 +561,7 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
 
         await query.edit_message_text(
             text,
-            reply_markup=back_keyboard(),
+            reply_markup=nav_keyboard(),
             parse_mode="Markdown",
         )
         return ADMIN_MENU
@@ -494,9 +578,8 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             "• photo with caption\n"
             "• video\n"
             "• document\n"
-            "• audio / voice\n\n"
-            "Use /cancel to stop.",
-            reply_markup=back_keyboard(),
+            "• audio / voice",
+            reply_markup=nav_keyboard(),
             parse_mode="Markdown",
         )
         return BROADCAST_MESSAGE
@@ -506,45 +589,54 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
 
 async def question_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["new_question"] = {"question_text": update.message.text}
-    await update.message.reply_text("Send option A:")
+    await update.message.reply_text("Send option A:", reply_markup=nav_keyboard("admin_questions"))
     return A
 
 
 async def a_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["new_question"]["option_a"] = update.message.text
-    await update.message.reply_text("Send option B:")
+    await update.message.reply_text("Send option B:", reply_markup=nav_keyboard("admin_questions"))
     return B
 
 
 async def b_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["new_question"]["option_b"] = update.message.text
-    await update.message.reply_text("Send option C:")
+    await update.message.reply_text("Send option C:", reply_markup=nav_keyboard("admin_questions"))
     return C
 
 
 async def c_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["new_question"]["option_c"] = update.message.text
-    await update.message.reply_text("Send option D:")
+    await update.message.reply_text("Send option D:", reply_markup=nav_keyboard("admin_questions"))
     return D
 
 
 async def d_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["new_question"]["option_d"] = update.message.text
-    await update.message.reply_text("Send correct option letter (A/B/C/D):")
+    await update.message.reply_text(
+        "Send correct option letter (A/B/C/D):",
+        reply_markup=nav_keyboard("admin_questions"),
+    )
     return CORRECT
 
 
 async def correct_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
     correct = update.message.text.strip().upper()
     if correct not in ("A", "B", "C", "D"):
-        await update.message.reply_text("Invalid. Send only A, B, C, or D:")
+        await update.message.reply_text(
+            "Invalid. Send only A, B, C, or D:",
+            reply_markup=nav_keyboard("admin_questions"),
+        )
         return CORRECT
 
     data = context.user_data["new_question"]
 
     if question_exists(data["question_text"]):
         context.user_data.clear()
-        await update.message.reply_text("⚠️ This question already exists. Skipped.")
+        await update.message.reply_text(
+            "⚠️ This question already exists. Skipped.",
+            reply_markup=questions_keyboard(),
+        )
         return ConversationHandler.END
 
     add_question(
@@ -556,37 +648,38 @@ async def correct_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
         correct,
     )
     context.user_data.clear()
-    await update.message.reply_text("✅ Question added successfully.")
+    await update.message.reply_text(
+        "✅ Question added successfully.",
+        reply_markup=questions_keyboard(),
+    )
     return ConversationHandler.END
 
 
 async def delete_id_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
     if not text.isdigit():
-        await update.message.reply_text("Please send a valid numeric question ID.")
+        await update.message.reply_text(
+            "Please send a valid numeric question ID.",
+            reply_markup=nav_keyboard("admin_questions"),
+        )
         return DELETE_ID
 
     qid = int(text)
     q = get_question_by_id(qid)
     if not q:
-        await update.message.reply_text("Question not found.")
-        return ConversationHandler.END
+        await update.message.reply_text(
+            "Question not found.",
+            reply_markup=nav_keyboard("admin_questions"),
+        )
+        return DELETE_ID
 
     context.user_data["delete_qid"] = qid
-    keyboard = InlineKeyboardMarkup(
-        [
-            [
-                InlineKeyboardButton("✅ Yes, delete", callback_data="confirm_delete_yes"),
-                InlineKeyboardButton("❌ No", callback_data="confirm_delete_no"),
-            ]
-        ]
-    )
 
     await update.message.reply_text(
         "🗑 Question preview:\n\n"
         f"{build_question_preview(q)}\n\n"
         "Are you sure you want to delete this question?",
-        reply_markup=keyboard,
+        reply_markup=delete_confirm_keyboard(),
     )
     return DELETE_CONFIRM
 
@@ -596,30 +689,52 @@ async def delete_confirm_step(update: Update, context: ContextTypes.DEFAULT_TYPE
     await query.answer()
 
     if query.data == "confirm_delete_no":
-        context.user_data.clear()
-        await query.edit_message_text("Deletion cancelled.")
-        return ConversationHandler.END
+        context.user_data.pop("delete_qid", None)
+        keyword = context.user_data.get("search_keyword")
+
+        if keyword:
+            return await show_search_results(query, keyword)
+
+        await query.edit_message_text(
+            "Deletion cancelled.",
+            reply_markup=nav_keyboard("admin_questions"),
+        )
+        return ADMIN_MENU
 
     qid = context.user_data.get("delete_qid")
     if qid:
         delete_question(qid)
 
-    context.user_data.clear()
-    await query.edit_message_text("✅ Question deleted successfully.")
-    return ConversationHandler.END
+    context.user_data.pop("delete_qid", None)
+
+    keyword = context.user_data.get("search_keyword")
+    if keyword:
+        return await show_search_results(query, keyword)
+
+    await query.edit_message_text(
+        "✅ Question deleted successfully.",
+        reply_markup=nav_keyboard("admin_questions"),
+    )
+    return ADMIN_MENU
 
 
 async def edit_id_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
     if not text.isdigit():
-        await update.message.reply_text("Please send a valid numeric question ID.")
+        await update.message.reply_text(
+            "Please send a valid numeric question ID.",
+            reply_markup=nav_keyboard("admin_questions"),
+        )
         return EDIT_ID
 
     qid = int(text)
     q = get_question_by_id(qid)
     if not q:
-        await update.message.reply_text("Question not found.")
-        return ConversationHandler.END
+        await update.message.reply_text(
+            "Question not found.",
+            reply_markup=nav_keyboard("admin_questions"),
+        )
+        return EDIT_ID
 
     context.user_data["edit_qid"] = qid
     context.user_data["edit_question"] = {
@@ -636,51 +751,59 @@ async def edit_id_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "✏️ Current question:\n\n"
         f"{build_question_preview(q)}\n\n"
-        "Send new question text:"
+        "Send new question text:",
+        reply_markup=nav_keyboard("admin_questions"),
     )
     return EDIT_QUESTION
 
 
 async def edit_question_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["edit_question"]["question_text"] = update.message.text
-    await update.message.reply_text("Send new option A:")
+    await update.message.reply_text("Send new option A:", reply_markup=nav_keyboard("admin_questions"))
     return EDIT_A
 
 
 async def edit_a_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["edit_question"]["option_a"] = update.message.text
-    await update.message.reply_text("Send new option B:")
+    await update.message.reply_text("Send new option B:", reply_markup=nav_keyboard("admin_questions"))
     return EDIT_B
 
 
 async def edit_b_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["edit_question"]["option_b"] = update.message.text
-    await update.message.reply_text("Send new option C:")
+    await update.message.reply_text("Send new option C:", reply_markup=nav_keyboard("admin_questions"))
     return EDIT_C
 
 
 async def edit_c_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["edit_question"]["option_c"] = update.message.text
-    await update.message.reply_text("Send new option D:")
+    await update.message.reply_text("Send new option D:", reply_markup=nav_keyboard("admin_questions"))
     return EDIT_D
 
 
 async def edit_d_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["edit_question"]["option_d"] = update.message.text
-    await update.message.reply_text("Send correct option letter (A/B/C/D):")
+    await update.message.reply_text(
+        "Send correct option letter (A/B/C/D):",
+        reply_markup=nav_keyboard("admin_questions"),
+    )
     return EDIT_CORRECT
 
 
 async def edit_correct_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
     correct = update.message.text.strip().upper()
     if correct not in ("A", "B", "C", "D"):
-        await update.message.reply_text("Invalid. Send only A, B, C, or D:")
+        await update.message.reply_text(
+            "Invalid. Send only A, B, C, or D:",
+            reply_markup=nav_keyboard("admin_questions"),
+        )
         return EDIT_CORRECT
 
     context.user_data["edit_question"]["correct_option"] = correct
     await update.message.reply_text(
         "Send new category:\n\n"
-        f"Allowed: {', '.join(ALLOWED_CATEGORIES)}"
+        f"Allowed: {', '.join(ALLOWED_CATEGORIES)}",
+        reply_markup=nav_keyboard("admin_questions"),
     )
     return EDIT_CATEGORY
 
@@ -691,14 +814,16 @@ async def edit_category_step(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if category not in ALLOWED_CATEGORIES:
         await update.message.reply_text(
             "Invalid category.\n\n"
-            f"Allowed: {', '.join(ALLOWED_CATEGORIES)}"
+            f"Allowed: {', '.join(ALLOWED_CATEGORIES)}",
+            reply_markup=nav_keyboard("admin_questions"),
         )
         return EDIT_CATEGORY
 
     context.user_data["edit_question"]["category"] = category
     await update.message.reply_text(
         "Send new difficulty:\n\n"
-        f"Allowed: {', '.join(ALLOWED_DIFFICULTIES)}"
+        f"Allowed: {', '.join(ALLOWED_DIFFICULTIES)}",
+        reply_markup=nav_keyboard("admin_questions"),
     )
     return EDIT_DIFFICULTY
 
@@ -709,7 +834,8 @@ async def edit_difficulty_step(update: Update, context: ContextTypes.DEFAULT_TYP
     if difficulty not in ALLOWED_DIFFICULTIES:
         await update.message.reply_text(
             "Invalid difficulty.\n\n"
-            f"Allowed: {', '.join(ALLOWED_DIFFICULTIES)}"
+            f"Allowed: {', '.join(ALLOWED_DIFFICULTIES)}",
+            reply_markup=nav_keyboard("admin_questions"),
         )
         return EDIT_DIFFICULTY
 
@@ -717,7 +843,7 @@ async def edit_difficulty_step(update: Update, context: ContextTypes.DEFAULT_TYP
     data = context.user_data["edit_question"]
     data["difficulty"] = difficulty
 
-    update_question(
+    updated = update_question(
         qid,
         data["question_text"],
         data["option_a"],
@@ -730,7 +856,18 @@ async def edit_difficulty_step(update: Update, context: ContextTypes.DEFAULT_TYP
     )
 
     context.user_data.clear()
-    await update.message.reply_text("✅ Question updated successfully.")
+
+    if not updated:
+        await update.message.reply_text(
+            "❌ Failed to update question.",
+            reply_markup=questions_keyboard(),
+        )
+        return ConversationHandler.END
+
+    await update.message.reply_text(
+        "✅ Question updated successfully.",
+        reply_markup=questions_keyboard(),
+    )
     return ConversationHandler.END
 
 
@@ -740,55 +877,29 @@ async def search_keyword_step(update: Update, context: ContextTypes.DEFAULT_TYPE
     if not keyword:
         await update.message.reply_text(
             "Please send a keyword.",
-            reply_markup=back_keyboard(),
+            reply_markup=nav_keyboard("admin_questions"),
         )
         return SEARCH_KEYWORD
 
-    results = search_questions_by_keyword(keyword, limit=15)
-
-    if not results:
-        await update.message.reply_text(
-            f"No questions found for: {keyword}",
-            reply_markup=questions_keyboard(),
-        )
-        return ADMIN_MENU
-
-    lines = [f"🔎 Search results for: {keyword}", ""]
-
-    for q in results:
-        qid = q[0]
-        question_text = q[1]
-        category = q[7]
-        difficulty = q[8]
-        is_active = q[9]
-        times_used = q[10]
-
-        status = "✅" if is_active else "🚫"
-        lines.append(
-            f"{status} ID {qid}: {question_text}\n"
-            f"{category} | {difficulty} | used: {times_used}"
-        )
-
-    text = "\n\n".join(lines)
-    if len(text) > 4000:
-        text = text[:3900] + "\n\n..."
-
-    await update.message.reply_text(
-        text,
-        reply_markup=build_search_results_keyboard(results),
-    )
-    return ADMIN_MENU
+    context.user_data["search_keyword"] = keyword
+    return await show_search_results(update.message, keyword)
 
 
 async def import_questions_file_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
     document = update.message.document
 
     if not document:
-        await update.message.reply_text("Please send a CSV file.")
+        await update.message.reply_text(
+            "Please send a CSV file.",
+            reply_markup=nav_keyboard("admin_questions"),
+        )
         return IMPORT_FILE
 
     if not document.file_name or not document.file_name.lower().endswith(".csv"):
-        await update.message.reply_text("Please send a valid CSV file ending in .csv")
+        await update.message.reply_text(
+            "Please send a valid CSV file ending in .csv",
+            reply_markup=nav_keyboard("admin_questions"),
+        )
         return IMPORT_FILE
 
     file = await document.get_file()
@@ -801,7 +912,8 @@ async def import_questions_file_step(update: Update, context: ContextTypes.DEFAU
             text = content.decode("utf-8")
         except UnicodeDecodeError:
             await update.message.reply_text(
-                "Could not read this CSV file. Please save it as UTF-8 and try again."
+                "Could not read this CSV file. Please save it as UTF-8 and try again.",
+                reply_markup=nav_keyboard("admin_questions"),
             )
             return IMPORT_FILE
 
@@ -819,14 +931,18 @@ async def import_questions_file_step(update: Update, context: ContextTypes.DEFAU
     }
 
     if not reader.fieldnames:
-        await update.message.reply_text("CSV file is empty or invalid.")
+        await update.message.reply_text(
+            "CSV file is empty or invalid.",
+            reply_markup=nav_keyboard("admin_questions"),
+        )
         return IMPORT_FILE
 
     fieldnames = {name.strip() for name in reader.fieldnames if name}
     missing = required_columns - fieldnames
     if missing:
         await update.message.reply_text(
-            "Missing required columns:\n" + "\n".join(sorted(missing))
+            "Missing required columns:\n" + "\n".join(sorted(missing)),
+            reply_markup=nav_keyboard("admin_questions"),
         )
         return IMPORT_FILE
 
@@ -893,7 +1009,10 @@ async def import_questions_file_step(update: Update, context: ContextTypes.DEFAU
         if len(errors) > 10:
             result_text += f"\n\n...and {len(errors) - 10} more."
 
-    await update.message.reply_text(result_text)
+    await update.message.reply_text(
+        result_text,
+        reply_markup=questions_keyboard(),
+    )
     return ConversationHandler.END
 
 
@@ -903,18 +1022,9 @@ async def broadcast_message_step(update: Update, context: ContextTypes.DEFAULT_T
     context.user_data["broadcast_source_chat_id"] = message.chat_id
     context.user_data["broadcast_source_message_id"] = message.message_id
 
-    keyboard = InlineKeyboardMarkup(
-        [
-            [
-                InlineKeyboardButton("✅ Send", callback_data="broadcast_yes"),
-                InlineKeyboardButton("❌ Cancel", callback_data="broadcast_no"),
-            ]
-        ]
-    )
-
     await update.message.reply_text(
         "📢 Broadcast preview saved.\n\nSend confirmation?",
-        reply_markup=keyboard,
+        reply_markup=broadcast_confirm_keyboard(),
     )
     return BROADCAST_CONFIRM
 
@@ -926,14 +1036,20 @@ async def broadcast_confirm_step(update: Update, context: ContextTypes.DEFAULT_T
     if query.data == "broadcast_no":
         context.user_data.pop("broadcast_source_chat_id", None)
         context.user_data.pop("broadcast_source_message_id", None)
-        await query.edit_message_text("Broadcast cancelled.")
+        await query.edit_message_text(
+            "Broadcast cancelled.",
+            reply_markup=admin_main_keyboard(),
+        )
         return ConversationHandler.END
 
     source_chat_id = context.user_data.get("broadcast_source_chat_id")
     source_message_id = context.user_data.get("broadcast_source_message_id")
 
     if not source_chat_id or not source_message_id:
-        await query.edit_message_text("Broadcast data missing. Please try again.")
+        await query.edit_message_text(
+            "Broadcast data missing. Please try again.",
+            reply_markup=admin_main_keyboard(),
+        )
         return ConversationHandler.END
 
     chat_ids = get_broadcast_chat_ids()
@@ -959,6 +1075,7 @@ async def broadcast_confirm_step(update: Update, context: ContextTypes.DEFAULT_T
     await query.message.reply_text(
         "✅ Broadcast finished.\n\n"
         f"Delivered: {success}\n"
-        f"Failed: {failed}"
+        f"Failed: {failed}",
+        reply_markup=admin_main_keyboard(),
     )
     return ConversationHandler.END

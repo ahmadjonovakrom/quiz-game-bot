@@ -1,5 +1,5 @@
 from contextlib import closing
-from typing import List, Optional
+from typing import Optional
 
 from .connection import get_conn
 
@@ -45,6 +45,11 @@ def add_points(user_id: int, points: int):
                 last_played_at = CURRENT_TIMESTAMP
             WHERE user_id = ?
         """, (points, user_id))
+
+        conn.execute("""
+            INSERT INTO player_points_history (user_id, points)
+            VALUES (?, ?)
+        """, (user_id, points))
 
 
 def record_correct_answer(user_id: int, answer_time: Optional[float] = None):
@@ -138,6 +143,11 @@ def add_manual_points(user_id: int, points: int):
             WHERE user_id = ?
         """, (points, user_id))
 
+        conn.execute("""
+            INSERT INTO player_points_history (user_id, points)
+            VALUES (?, ?)
+        """, (user_id, points))
+
 
 def get_player_profile(user_id: int):
     player = get_player(user_id)
@@ -202,6 +212,92 @@ def get_player_global_rank_info(user_id: int):
                 return i, me["total_points"]
 
         return None, me["total_points"]
+
+
+def _period_where_clause(period: str) -> str:
+    if period == "daily":
+        return "DATE(h.created_at) = DATE('now')"
+    if period == "weekly":
+        return "strftime('%Y-%W', h.created_at) = strftime('%Y-%W', 'now')"
+    if period == "monthly":
+        return "strftime('%Y-%m', h.created_at) = strftime('%Y-%m', 'now')"
+    raise ValueError(f"Unsupported period: {period}")
+
+
+def get_period_leaderboard_page(period: str, limit: int = 15, offset: int = 0):
+    where_clause = _period_where_clause(period)
+
+    with closing(get_conn()) as conn:
+        query = f"""
+            SELECT
+                p.*,
+                SUM(h.points) AS period_points
+            FROM player_points_history h
+            JOIN players p ON p.user_id = h.user_id
+            WHERE {where_clause}
+            GROUP BY h.user_id
+            ORDER BY period_points DESC, p.correct_answers DESC, p.games_won DESC, p.user_id ASC
+            LIMIT ? OFFSET ?
+        """
+        return conn.execute(query, (limit, offset)).fetchall()
+
+
+def get_player_period_rank_info(user_id: int, period: str):
+    where_clause = _period_where_clause(period)
+
+    with closing(get_conn()) as conn:
+        me = conn.execute(f"""
+            SELECT COALESCE(SUM(h.points), 0) AS period_points
+            FROM player_points_history h
+            WHERE h.user_id = ? AND {where_clause}
+        """, (user_id,)).fetchone()
+
+        if not me:
+            return None, 0
+
+        rows = conn.execute(f"""
+            SELECT
+                h.user_id,
+                SUM(h.points) AS period_points
+            FROM player_points_history h
+            JOIN players p ON p.user_id = h.user_id
+            WHERE {where_clause}
+            GROUP BY h.user_id
+            ORDER BY period_points DESC, p.correct_answers DESC, p.games_won DESC, p.user_id ASC
+        """).fetchall()
+
+        if me["period_points"] == 0:
+            return None, 0
+
+        for i, row in enumerate(rows, start=1):
+            if row["user_id"] == user_id:
+                return i, row["period_points"]
+
+        return None, me["period_points"]
+
+
+def get_daily_leaderboard_page(limit: int = 15, offset: int = 0):
+    return get_period_leaderboard_page("daily", limit, offset)
+
+
+def get_weekly_leaderboard_page(limit: int = 15, offset: int = 0):
+    return get_period_leaderboard_page("weekly", limit, offset)
+
+
+def get_monthly_leaderboard_page(limit: int = 15, offset: int = 0):
+    return get_period_leaderboard_page("monthly", limit, offset)
+
+
+def get_player_daily_rank_info(user_id: int):
+    return get_player_period_rank_info(user_id, "daily")
+
+
+def get_player_weekly_rank_info(user_id: int):
+    return get_player_period_rank_info(user_id, "weekly")
+
+
+def get_player_monthly_rank_info(user_id: int):
+    return get_player_period_rank_info(user_id, "monthly")
 
 
 def get_all_user_ids():

@@ -9,6 +9,12 @@ from database import (
     get_group_leaderboard_page,
     get_player_global_rank_info,
     get_player_group_rank_info,
+    get_daily_leaderboard_page,
+    get_weekly_leaderboard_page,
+    get_monthly_leaderboard_page,
+    get_player_daily_rank_info,
+    get_player_weekly_rank_info,
+    get_player_monthly_rank_info,
 )
 from utils.keyboards import (
     back_keyboard,
@@ -84,6 +90,39 @@ async def global_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await send_global_leaderboard_message(update.effective_message, user.id, 0)
 
 
+async def daily_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user = update.effective_user
+    ensure_player(user)
+
+    if query:
+        await show_daily_leaderboard(query, user.id, 0)
+    else:
+        await send_daily_leaderboard_message(update.effective_message, user.id, 0)
+
+
+async def weekly_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user = update.effective_user
+    ensure_player(user)
+
+    if query:
+        await show_weekly_leaderboard(query, user.id, 0)
+    else:
+        await send_weekly_leaderboard_message(update.effective_message, user.id, 0)
+
+
+async def monthly_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user = update.effective_user
+    ensure_player(user)
+
+    if query:
+        await show_monthly_leaderboard(query, user.id, 0)
+    else:
+        await send_monthly_leaderboard_message(update.effective_message, user.id, 0)
+
+
 async def send_leaderboard_menu(query):
     chat_type = query.message.chat.type
     await query.edit_message_text(
@@ -138,6 +177,69 @@ async def send_group_leaderboard_message(message, chat_id: int, user_id: int, of
     )
 
 
+async def send_daily_leaderboard_message(message, user_id: int, offset: int):
+    rows = get_daily_leaderboard_page(limit=LEADERBOARD_PAGE_SIZE + 1, offset=offset)
+    has_next = len(rows) > LEADERBOARD_PAGE_SIZE
+    rows = rows[:LEADERBOARD_PAGE_SIZE]
+
+    my_rank, my_points = get_player_daily_rank_info(user_id)
+
+    text = format_leaderboard_text(
+        "📅 Daily Leaderboard",
+        rows,
+        offset,
+        my_rank,
+        my_points,
+    )
+
+    await message.reply_text(
+        text,
+        reply_markup=leaderboard_pagination_keyboard("daily", offset, has_next),
+    )
+
+
+async def send_weekly_leaderboard_message(message, user_id: int, offset: int):
+    rows = get_weekly_leaderboard_page(limit=LEADERBOARD_PAGE_SIZE + 1, offset=offset)
+    has_next = len(rows) > LEADERBOARD_PAGE_SIZE
+    rows = rows[:LEADERBOARD_PAGE_SIZE]
+
+    my_rank, my_points = get_player_weekly_rank_info(user_id)
+
+    text = format_leaderboard_text(
+        "📊 Weekly Leaderboard",
+        rows,
+        offset,
+        my_rank,
+        my_points,
+    )
+
+    await message.reply_text(
+        text,
+        reply_markup=leaderboard_pagination_keyboard("weekly", offset, has_next),
+    )
+
+
+async def send_monthly_leaderboard_message(message, user_id: int, offset: int):
+    rows = get_monthly_leaderboard_page(limit=LEADERBOARD_PAGE_SIZE + 1, offset=offset)
+    has_next = len(rows) > LEADERBOARD_PAGE_SIZE
+    rows = rows[:LEADERBOARD_PAGE_SIZE]
+
+    my_rank, my_points = get_player_monthly_rank_info(user_id)
+
+    text = format_leaderboard_text(
+        "🗓 Monthly Leaderboard",
+        rows,
+        offset,
+        my_rank,
+        my_points,
+    )
+
+    await message.reply_text(
+        text,
+        reply_markup=leaderboard_pagination_keyboard("monthly", offset, has_next),
+    )
+
+
 async def show_global_leaderboard(query, user_id: int, offset: int):
     rows = get_global_leaderboard_page(limit=LEADERBOARD_PAGE_SIZE + 1, offset=offset)
     has_next = len(rows) > LEADERBOARD_PAGE_SIZE
@@ -184,6 +286,69 @@ async def show_group_leaderboard(query, user_id: int, chat_id: int, offset: int)
     )
 
 
+async def show_daily_leaderboard(query, user_id: int, offset: int):
+    rows = get_daily_leaderboard_page(limit=LEADERBOARD_PAGE_SIZE + 1, offset=offset)
+    has_next = len(rows) > LEADERBOARD_PAGE_SIZE
+    rows = rows[:LEADERBOARD_PAGE_SIZE]
+
+    my_rank, my_points = get_player_daily_rank_info(user_id)
+
+    text = format_leaderboard_text(
+        "📅 Daily Leaderboard",
+        rows,
+        offset,
+        my_rank,
+        my_points,
+    )
+
+    await query.edit_message_text(
+        text,
+        reply_markup=leaderboard_pagination_keyboard("daily", offset, has_next),
+    )
+
+
+async def show_weekly_leaderboard(query, user_id: int, offset: int):
+    rows = get_weekly_leaderboard_page(limit=LEADERBOARD_PAGE_SIZE + 1, offset=offset)
+    has_next = len(rows) > LEADERBOARD_PAGE_SIZE
+    rows = rows[:LEADERBOARD_PAGE_SIZE]
+
+    my_rank, my_points = get_player_weekly_rank_info(user_id)
+
+    text = format_leaderboard_text(
+        "📊 Weekly Leaderboard",
+        rows,
+        offset,
+        my_rank,
+        my_points,
+    )
+
+    await query.edit_message_text(
+        text,
+        reply_markup=leaderboard_pagination_keyboard("weekly", offset, has_next),
+    )
+
+
+async def show_monthly_leaderboard(query, user_id: int, offset: int):
+    rows = get_monthly_leaderboard_page(limit=LEADERBOARD_PAGE_SIZE + 1, offset=offset)
+    has_next = len(rows) > LEADERBOARD_PAGE_SIZE
+    rows = rows[:LEADERBOARD_PAGE_SIZE]
+
+    my_rank, my_points = get_player_monthly_rank_info(user_id)
+
+    text = format_leaderboard_text(
+        "🗓 Monthly Leaderboard",
+        rows,
+        offset,
+        my_rank,
+        my_points,
+    )
+
+    await query.edit_message_text(
+        text,
+        reply_markup=leaderboard_pagination_keyboard("monthly", offset, has_next),
+    )
+
+
 async def show_my_rank(query, user_id: int, chat_type: str, chat_id: int):
     global_rank, global_points = get_player_global_rank_info(user_id)
 
@@ -227,4 +392,19 @@ async def profile_callback_handler(update: Update, context: ContextTypes.DEFAULT
     if data.startswith("lb_group_"):
         offset = int(data.split("_")[-1])
         await show_group_leaderboard(query, user_id, chat_id, offset)
+        return
+
+    if data.startswith("lb_daily_"):
+        offset = int(data.split("_")[-1])
+        await show_daily_leaderboard(query, user_id, offset)
+        return
+
+    if data.startswith("lb_weekly_"):
+        offset = int(data.split("_")[-1])
+        await show_weekly_leaderboard(query, user_id, offset)
+        return
+
+    if data.startswith("lb_monthly_"):
+        offset = int(data.split("_")[-1])
+        await show_monthly_leaderboard(query, user_id, offset)
         return

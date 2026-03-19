@@ -1,6 +1,5 @@
 import logging
 
-from telegram import Update
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -8,7 +7,6 @@ from telegram.ext import (
     PollAnswerHandler,
     ConversationHandler,
     MessageHandler,
-    ContextTypes,
     filters,
 )
 
@@ -31,6 +29,9 @@ from handlers.profile import (
     profile,
     leaderboard,
     global_leaderboard,
+    daily_leaderboard,
+    weekly_leaderboard,
+    monthly_leaderboard,
     profile_callback_handler,
 )
 
@@ -38,7 +39,6 @@ from handlers.admin import (
     admin_panel,
     admin_button_handler,
     bot_stats_command,
-    reset_stats,
     question_step,
     a_step,
     b_step,
@@ -62,7 +62,6 @@ from handlers.admin import (
     import_questions_entry,
     import_questions_file_step,
     cancel,
-    ADMIN_MENU,
     QUESTION,
     A,
     B,
@@ -80,187 +79,135 @@ from handlers.admin import (
     EDIT_CORRECT,
     EDIT_CATEGORY,
     EDIT_DIFFICULTY,
+    SEARCH_KEYWORD,
     BROADCAST_MESSAGE,
     BROADCAST_CONFIRM,
     IMPORT_FILE,
-    SEARCH_KEYWORD,
 )
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO,
 )
+
 logger = logging.getLogger(__name__)
-
-
-async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
-    logger.exception("Unhandled exception while processing update", exc_info=context.error)
-
-    if isinstance(update, Update):
-        try:
-            if update.effective_message:
-                await update.effective_message.reply_text(
-                    "Something went wrong while processing that action."
-                )
-        except Exception:
-            logger.exception("Failed to notify user about the error")
-
-
-def build_admin_conversation() -> ConversationHandler:
-    return ConversationHandler(
-        entry_points=[
-            CommandHandler("admin", admin_panel),
-            CommandHandler("importquestions", import_questions_entry),
-            CallbackQueryHandler(admin_button_handler, pattern=r"^admin_"),
-        ],
-        states={
-            ADMIN_MENU: [
-                CallbackQueryHandler(admin_button_handler, pattern=r"^admin_"),
-            ],
-
-            QUESTION: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, question_step),
-                CallbackQueryHandler(admin_button_handler, pattern=r"^admin_"),
-            ],
-            A: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, a_step),
-                CallbackQueryHandler(admin_button_handler, pattern=r"^admin_"),
-            ],
-            B: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, b_step),
-                CallbackQueryHandler(admin_button_handler, pattern=r"^admin_"),
-            ],
-            C: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, c_step),
-                CallbackQueryHandler(admin_button_handler, pattern=r"^admin_"),
-            ],
-            D: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, d_step),
-                CallbackQueryHandler(admin_button_handler, pattern=r"^admin_"),
-            ],
-            CORRECT: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, correct_step),
-                CallbackQueryHandler(admin_button_handler, pattern=r"^admin_"),
-            ],
-
-            DELETE_ID: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, delete_id_step),
-                CallbackQueryHandler(admin_button_handler, pattern=r"^admin_"),
-            ],
-            DELETE_CONFIRM: [
-                CallbackQueryHandler(delete_confirm_step, pattern=r"^confirm_delete_(yes|no)$"),
-                CallbackQueryHandler(admin_button_handler, pattern=r"^admin_"),
-            ],
-
-            EDIT_ID: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, edit_id_step),
-                CallbackQueryHandler(admin_button_handler, pattern=r"^admin_"),
-            ],
-            EDIT_QUESTION: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, edit_question_step),
-                CallbackQueryHandler(admin_button_handler, pattern=r"^admin_"),
-            ],
-            EDIT_A: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, edit_a_step),
-                CallbackQueryHandler(admin_button_handler, pattern=r"^admin_"),
-            ],
-            EDIT_B: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, edit_b_step),
-                CallbackQueryHandler(admin_button_handler, pattern=r"^admin_"),
-            ],
-            EDIT_C: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, edit_c_step),
-                CallbackQueryHandler(admin_button_handler, pattern=r"^admin_"),
-            ],
-            EDIT_D: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, edit_d_step),
-                CallbackQueryHandler(admin_button_handler, pattern=r"^admin_"),
-            ],
-            EDIT_CORRECT: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, edit_correct_step),
-                CallbackQueryHandler(admin_button_handler, pattern=r"^admin_"),
-            ],
-            EDIT_CATEGORY: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, edit_category_step),
-                CallbackQueryHandler(admin_button_handler, pattern=r"^admin_"),
-            ],
-            EDIT_DIFFICULTY: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, edit_difficulty_step),
-                CallbackQueryHandler(admin_button_handler, pattern=r"^admin_"),
-            ],
-
-            SEARCH_KEYWORD: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, search_keyword_step),
-                CallbackQueryHandler(admin_button_handler, pattern=r"^admin_"),
-            ],
-
-            BROADCAST_MESSAGE: [
-                MessageHandler(
-                    (
-                        filters.TEXT
-                        | filters.PHOTO
-                        | filters.VIDEO
-                        | filters.Document.ALL
-                        | filters.AUDIO
-                        | filters.VOICE
-                    ) & ~filters.COMMAND,
-                    broadcast_message_step,
-                ),
-                CallbackQueryHandler(admin_button_handler, pattern=r"^admin_"),
-            ],
-            BROADCAST_CONFIRM: [
-                CallbackQueryHandler(broadcast_confirm_step, pattern=r"^broadcast_(yes|no)$"),
-                CallbackQueryHandler(admin_button_handler, pattern=r"^admin_"),
-            ],
-
-            IMPORT_FILE: [
-                MessageHandler(filters.Document.ALL & ~filters.COMMAND, import_questions_file_step),
-                CallbackQueryHandler(admin_button_handler, pattern=r"^admin_"),
-            ],
-        },
-        fallbacks=[
-            CommandHandler("cancel", cancel),
-        ],
-        allow_reentry=True,
-    )
 
 
 def main():
     create_tables()
 
-    app = (
-        Application.builder()
-        .token(BOT_TOKEN)
-        .concurrent_updates(False)
-        .build()
+    application = Application.builder().token(BOT_TOKEN).build()
+
+    # -------- COMMANDS --------
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("play", start_game))
+    application.add_handler(CommandHandler("stopgame", stop_game))
+    application.add_handler(CommandHandler("dailyquiz", daily_quiz))
+    application.add_handler(CommandHandler("profile", profile))
+
+    # Leaderboards
+    application.add_handler(CommandHandler("leaderboard", leaderboard))
+    application.add_handler(CommandHandler("global", global_leaderboard))
+    application.add_handler(CommandHandler("daily", daily_leaderboard))
+    application.add_handler(CommandHandler("weekly", weekly_leaderboard))
+    application.add_handler(CommandHandler("monthly", monthly_leaderboard))
+
+    application.add_handler(CommandHandler("admin", admin_panel))
+    application.add_handler(CommandHandler("botstats", bot_stats_command))
+    application.add_handler(CommandHandler("importquestions", import_questions_entry))
+    application.add_handler(CommandHandler("myid", myid))
+
+    # -------- ADMIN CONVERSATION --------
+    admin_conversation = ConversationHandler(
+        entry_points=[
+            CommandHandler("admin", admin_panel),
+            CallbackQueryHandler(
+                admin_button_handler,
+                pattern=(
+                    r"^admin_"
+                    r"|^confirm_delete_"
+                    r"|^broadcast_"
+                ),
+            ),
+        ],
+        states={
+            QUESTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, question_step)],
+            A: [MessageHandler(filters.TEXT & ~filters.COMMAND, a_step)],
+            B: [MessageHandler(filters.TEXT & ~filters.COMMAND, b_step)],
+            C: [MessageHandler(filters.TEXT & ~filters.COMMAND, c_step)],
+            D: [MessageHandler(filters.TEXT & ~filters.COMMAND, d_step)],
+            CORRECT: [MessageHandler(filters.TEXT & ~filters.COMMAND, correct_step)],
+
+            DELETE_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, delete_id_step)],
+            DELETE_CONFIRM: [
+                CallbackQueryHandler(delete_confirm_step, pattern=r"^confirm_delete_(yes|no)$")
+            ],
+
+            EDIT_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_id_step)],
+            EDIT_QUESTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_question_step)],
+            EDIT_A: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_a_step)],
+            EDIT_B: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_b_step)],
+            EDIT_C: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_c_step)],
+            EDIT_D: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_d_step)],
+            EDIT_CORRECT: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_correct_step)],
+            EDIT_CATEGORY: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_category_step)],
+            EDIT_DIFFICULTY: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_difficulty_step)],
+
+            SEARCH_KEYWORD: [MessageHandler(filters.TEXT & ~filters.COMMAND, search_keyword_step)],
+
+            BROADCAST_MESSAGE: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_message_step)
+            ],
+            BROADCAST_CONFIRM: [
+                CallbackQueryHandler(broadcast_confirm_step, pattern=r"^broadcast_(yes|no)$")
+            ],
+
+            IMPORT_FILE: [
+                MessageHandler(filters.Document.ALL & ~filters.COMMAND, import_questions_file_step)
+            ],
+        },
+        fallbacks=[
+            CommandHandler("cancel", cancel),
+            CallbackQueryHandler(cancel, pattern=r"^admin_close$"),
+        ],
+        allow_reentry=True,
+    )
+    application.add_handler(admin_conversation)
+
+    # -------- CALLBACKS --------
+    application.add_handler(
+        CallbackQueryHandler(
+            profile_callback_handler,
+            pattern=r"^lb_(global|group|daily|weekly|monthly)_\d+$|^lb_myrank$",
+        )
     )
 
-    admin_conv = build_admin_conversation()
+    application.add_handler(
+        CallbackQueryHandler(
+            game_setup_callback_handler,
+            pattern=r"^(quiz_count_|quiz_category_|quiz_difficulty_|quiz_start_confirm)",
+        )
+    )
 
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("myid", myid))
-    app.add_handler(CommandHandler("startgame", start_game))
-    app.add_handler(CommandHandler("play", start_game))
-    app.add_handler(CommandHandler("stopgame", stop_game))
-    app.add_handler(CommandHandler("profile", profile))
-    app.add_handler(CommandHandler("leaderboard", leaderboard))
-    app.add_handler(CommandHandler("global", global_leaderboard))
-    app.add_handler(CommandHandler("dailyquiz", daily_quiz))
-    app.add_handler(CommandHandler("botstats", bot_stats_command))
-    app.add_handler(CommandHandler("resetstats", reset_stats))
+    application.add_handler(
+        CallbackQueryHandler(
+            menu_handler,
+            pattern=r"^(menu_|profile$|play_quiz$)",
+        )
+    )
 
-    app.add_handler(admin_conv)
+    application.add_handler(
+        CallbackQueryHandler(
+            button_handler,
+            pattern=r"^(join_quiz|stop_quiz)$",
+        )
+    )
 
-    app.add_handler(CallbackQueryHandler(menu_handler, pattern=r"^menu_"))
-    app.add_handler(CallbackQueryHandler(profile_callback_handler, pattern=r"^lb_"))
-    app.add_handler(CallbackQueryHandler(game_setup_callback_handler, pattern=r"^setup_"))
-    app.add_handler(CallbackQueryHandler(button_handler, pattern=r"^join\|"))
-
-    app.add_handler(PollAnswerHandler(receive_poll_answer))
-    app.add_error_handler(error_handler)
+    # -------- POLL ANSWERS --------
+    application.add_handler(PollAnswerHandler(receive_poll_answer))
 
     logger.info("Bot is running...")
-    app.run_polling(drop_pending_updates=True)
+    application.run_polling()
 
 
 if __name__ == "__main__":

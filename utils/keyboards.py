@@ -29,14 +29,20 @@ def back_cancel_keyboard(back_callback: str, cancel_callback: str = "admin_close
 def leaderboard_menu_keyboard(chat_type: str) -> InlineKeyboardMarkup:
     if chat_type == "private":
         keyboard = [
-            [InlineKeyboardButton("🌍 Global", callback_data="lb_global_0")],
+            [InlineKeyboardButton("🌍 All-Time", callback_data="lb_global_0")],
+            [InlineKeyboardButton("📅 Daily", callback_data="lb_daily_0")],
+            [InlineKeyboardButton("📊 Weekly", callback_data="lb_weekly_0")],
+            [InlineKeyboardButton("🗓 Monthly", callback_data="lb_monthly_0")],
             [InlineKeyboardButton("🪪 My Rank", callback_data="lb_myrank")],
             [InlineKeyboardButton("⬅️ Back", callback_data="menu_main")],
         ]
     else:
         keyboard = [
             [InlineKeyboardButton("👥 This Group", callback_data="lb_group_0")],
-            [InlineKeyboardButton("🌍 Global", callback_data="lb_global_0")],
+            [InlineKeyboardButton("🌍 All-Time", callback_data="lb_global_0")],
+            [InlineKeyboardButton("📅 Daily", callback_data="lb_daily_0")],
+            [InlineKeyboardButton("📊 Weekly", callback_data="lb_weekly_0")],
+            [InlineKeyboardButton("🗓 Monthly", callback_data="lb_monthly_0")],
             [InlineKeyboardButton("🪪 My Rank", callback_data="lb_myrank")],
             [InlineKeyboardButton("⬅️ Back", callback_data="menu_main")],
         ]
@@ -147,8 +153,6 @@ def search_results_keyboard(results) -> InlineKeyboardMarkup:
 
     return InlineKeyboardMarkup(keyboard)
 
-
-# 🔥 PAGINATION KEYBOARD
 
 def questions_pagination_keyboard(offset: int, total: int, limit: int) -> InlineKeyboardMarkup:
     total_pages = max(1, (total + limit - 1) // limit)

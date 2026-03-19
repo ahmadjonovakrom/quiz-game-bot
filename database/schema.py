@@ -104,6 +104,17 @@ def create_tables():
             )
         """)
 
+        # NEW: points history for daily / weekly / monthly leaderboards
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS player_points_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                points INTEGER NOT NULL,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES players(user_id)
+            )
+        """)
+
         existing_columns = [row["name"] for row in conn.execute("PRAGMA table_info(questions)").fetchall()]
 
         if "category" not in existing_columns:
@@ -144,4 +155,14 @@ def create_tables():
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_group_scores_points
             ON group_scores(total_points DESC)
+        """)
+
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_player_points_history_user
+            ON player_points_history(user_id)
+        """)
+
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_player_points_history_created
+            ON player_points_history(created_at)
         """)

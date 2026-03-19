@@ -648,16 +648,20 @@ async def search_keyword_step(update: Update, context: ContextTypes.DEFAULT_TYPE
     keyword = update.message.text.strip()
 
     if not keyword:
-        await update.message.reply_text("Please send a keyword.")
+        await update.message.reply_text(
+            "Please send a keyword.",
+            reply_markup=back_keyboard(),
+        )
         return SEARCH_KEYWORD
 
     results = search_questions_by_keyword(keyword, limit=15)
 
     if not results:
         await update.message.reply_text(
-            f"No questions found for: {keyword}"
+            f"No questions found for: {keyword}",
+            reply_markup=questions_keyboard(),
         )
-        return ConversationHandler.END
+        return ADMIN_MENU
 
     lines = [f"🔎 Search results for: {keyword}", ""]
 
@@ -679,8 +683,11 @@ async def search_keyword_step(update: Update, context: ContextTypes.DEFAULT_TYPE
     if len(text) > 4000:
         text = text[:3900] + "\n\n..."
 
-    await update.message.reply_text(text)
-    return ConversationHandler.END
+    await update.message.reply_text(
+        text,
+        reply_markup=questions_keyboard(),
+    )
+    return ADMIN_MENU
 
 
 async def import_questions_file_step(update: Update, context: ContextTypes.DEFAULT_TYPE):

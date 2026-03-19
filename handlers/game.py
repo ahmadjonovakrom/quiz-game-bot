@@ -1,3 +1,6 @@
+# handlers/game.py
+
+import math
 import time
 import asyncio
 import logging
@@ -5,8 +8,8 @@ from datetime import date
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
-from utils.shuffle import shuffle_question
 
+from utils.shuffle import shuffle_question
 from config import (
     MIN_PLAYERS,
     JOIN_SECONDS,
@@ -55,6 +58,19 @@ logger = logging.getLogger(__name__)
 active_games = {}
 poll_map = {}
 daily_quiz_players = {}
+_game_locks = {}
+
+
+def get_game_lock(chat_id: int) -> asyncio.Lock:
+    lock = _game_locks.get(chat_id)
+    if lock is None:
+        lock = asyncio.Lock()
+        _game_locks[chat_id] = lock
+    return lock
+
+
+def cleanup_game_lock(chat_id: int) -> None:
+    _game_locks.pop(chat_id, None)
 
 
 def format_difficulty_name(value: str) -> str:
@@ -70,6 +86,7 @@ def clear_setup_game(chat_id: int):
     game = active_games.get(chat_id)
     if game and game.get("status") == "setup":
         active_games.pop(chat_id, None)
+        cleanup_game_lock(chat_id)
 
 
 def get_main_menu_keyboard():
@@ -90,7 +107,7 @@ def get_question_count_keyboard():
         row.append(
             InlineKeyboardButton(
                 f"{count} Questions",
-                callback_data=f"setup_questions_{count}"
+                callback_data=f"setup_questions_{count}",
             )
         )
         if len(row) == 2:
@@ -111,7 +128,7 @@ def get_category_keyboard():
         rows.append([
             InlineKeyboardButton(
                 format_category_name(category),
-                callback_data=f"setup_category_{category}"
+                callback_data=f"setup_category_{category}",
             )
         ])
 
@@ -126,7 +143,7 @@ def get_difficulty_keyboard():
         rows.append([
             InlineKeyboardButton(
                 format_difficulty_name(difficulty),
-                callback_data=f"setup_difficulty_{difficulty}"
+                callback_data=f"setup_difficulty_{difficulty}",
             )
         ])
 
@@ -142,12 +159,42 @@ def get_join_keyboard(chat_id: int):
 
 def get_unused_question(game):
     exclude_ids = list(game["used_question_ids"])
-
     return get_random_question(
         exclude_ids=exclude_ids,
         category=game.get("category"),
         difficulty=game.get("difficulty"),
     )
+
+
+def get_join_remaining_seconds(game) -> int:
+    deadline = game.get("join_deadline")
+    if deadline is None:
+        return 0
+    remaining = math.ceil(deadline - time.monotonic())
+    return max(0, remaining)
+
+
+async def refresh_join_message(context: ContextTypes.DEFAULT_TYPE, chat_id: int):
+    game = active_games.get(chat_id)
+    if not game or game.get("status") != "joining":
+        return
+
+    join_message_id = game.get("join_message_id")
+    if not join_message_id:
+        return
+
+    remaining = get_join_remaining_seconds(game)
+
+    try:
+        await context.bot.edit_message_text(
+            chat_id=chat_id,
+            message_id=join_message_id,
+            text=build_join_text(game, remaining),
+            reply_markup=get_join_keyboard(chat_id),
+            parse_mode="HTML",
+        )
+    except Exception as e:
+        logger.warning("Failed to refresh join message in chat %s: %s", chat_id, e)
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -193,15 +240,15 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         return
 
-    elif data == "menu_leaderboard":
+    if data == "menu_leaderboard":
         await send_leaderboard_menu(query)
         return
 
-    elif data == "menu_profile":
+    if data == "menu_profile":
         await profile(update, context)
         return
 
-    elif data == "menu_help":
+    if data == "menu_help":
         await query.edit_message_text(
             "English Lemon 🍋 Commands:\n\n"
             "/start - open the main menu\n"
@@ -216,7 +263,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    elif data == "menu_back" or data == "menu_main":
+    if data in ("menu_back", "menu_main"):
         chat_id = query.message.chat.id
         clear_setup_game(chat_id)
 
@@ -253,22 +300,26 @@ async def daily_quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     q_id = question["id"]
     q_text = question["question_text"]
-
     options, correct_index = shuffle_question(question)
 
     if correct_index not in (0, 1, 2, 3):
         await update.message.reply_text("This daily question has an invalid correct answer.")
         return
 
-    msg = await context.bot.send_poll(
-        chat_id=chat.id,
-        question=f"📅 Daily Quiz\n\n{q_text}",
-        options=options,
-        type="quiz",
-        correct_option_id=correct_index,
-        is_anonymous=False,
-        open_period=QUESTION_SECONDS,
-    )
+    try:
+        msg = await context.bot.send_poll(
+            chat_id=chat.id,
+            question=f"📅 Daily Quiz\n\n{q_text}",
+            options=options,
+            type="quiz",
+            correct_option_id=correct_index,
+            is_anonymous=False,
+            open_period=QUESTION_SECONDS,
+        )
+    except Exception:
+        logger.exception("Failed to send daily quiz poll for user %s", user.id)
+        await update.message.reply_text("Failed to send the daily quiz. Please try again.")
+        return
 
     poll_map[msg.poll.id] = {
         "chat_id": chat.id,
@@ -305,45 +356,48 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await message.reply_text("Use /startgame in a group.")
         return
 
-    game = active_games.get(chat.id)
-    if game:
-        if game["status"] == "setup":
-            text = "Game setup is already in progress."
-        elif game["status"] == "joining":
-            text = "A game is already waiting for players."
-        elif game["status"] == "running":
-            text = "A game is already running."
-        else:
-            text = "A game already exists in this group."
+    lock = get_game_lock(chat.id)
+    async with lock:
+        game = active_games.get(chat.id)
+        if game:
+            if game["status"] == "setup":
+                text = "Game setup is already in progress."
+            elif game["status"] == "joining":
+                text = "A game is already waiting for players."
+            elif game["status"] == "running":
+                text = "A game is already running."
+            else:
+                text = "A game already exists in this group."
 
-        if query:
-            await query.answer(text, show_alert=True)
-        else:
-            await message.reply_text(text)
-        return
+            if query:
+                await query.answer(text, show_alert=True)
+            else:
+                await message.reply_text(text)
+            return
 
-    active_games[chat.id] = {
-        "status": "setup",
-        "started_by": user.id,
-        "players": {},
-        "player_objects": {},
-        "scores": {},
-        "round": 0,
-        "answered": set(),
-        "current_poll_id": None,
-        "correct": None,
-        "join_message_id": None,
-        "used_question_ids": set(),
-        "question_started_at": None,
-        "speed_bonus_awarded": {},
-        "correct_counts": {},
-        "wrong_counts": {},
-        "answer_times": {},
-        "db_game_id": None,
-        "questions_per_game": DEFAULT_QUESTIONS_PER_GAME,
-        "category": DEFAULT_CATEGORY,
-        "difficulty": DEFAULT_DIFFICULTY,
-    }
+        active_games[chat.id] = {
+            "status": "setup",
+            "started_by": user.id,
+            "players": {},
+            "player_objects": {},
+            "scores": {},
+            "round": 0,
+            "answered": set(),
+            "current_poll_id": None,
+            "correct": None,
+            "join_message_id": None,
+            "join_deadline": None,
+            "used_question_ids": set(),
+            "question_started_at": None,
+            "speed_bonus_awarded": {},
+            "correct_counts": {},
+            "wrong_counts": {},
+            "answer_times": {},
+            "db_game_id": None,
+            "questions_per_game": DEFAULT_QUESTIONS_PER_GAME,
+            "category": DEFAULT_CATEGORY,
+            "difficulty": DEFAULT_DIFFICULTY,
+        }
 
     if query:
         await query.edit_message_text(
@@ -365,32 +419,39 @@ async def stop_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Admin only.")
         return
 
-    if chat.id not in active_games:
-        await update.message.reply_text("No game is currently running.")
-        return
+    lock = get_game_lock(chat.id)
+    async with lock:
+        if chat.id not in active_games:
+            await update.message.reply_text("No game is currently running.")
+            return
 
-    game = active_games.get(chat.id)
+        game = active_games.get(chat.id)
+        poll_id = game.get("current_poll_id")
+        join_message_id = game.get("join_message_id")
+        db_game_id = game.get("db_game_id")
+        total_players = len(game.get("players", {}))
+        total_rounds = game.get("round", 0)
 
-    poll_id = game.get("current_poll_id")
-    if poll_id:
-        poll_map.pop(poll_id, None)
+        if poll_id:
+            poll_map.pop(poll_id, None)
 
-    await safe_delete_message(context.bot, chat.id, game.get("join_message_id"))
+        active_games.pop(chat.id, None)
+        cleanup_game_lock(chat.id)
 
-    db_game_id = game.get("db_game_id")
+    await safe_delete_message(context.bot, chat.id, join_message_id)
+
     if db_game_id:
         try:
             finish_game(
                 game_id=db_game_id,
                 winner_user_id=None,
-                total_players=len(game["players"]),
-                total_rounds=game.get("round", 0),
+                total_players=total_players,
+                total_rounds=total_rounds,
                 status="stopped",
             )
         except Exception:
-            logger.exception("Failed to mark stopped game in database")
+            logger.exception("Failed to mark stopped game in database for chat %s", chat.id)
 
-    active_games.pop(chat.id, None)
     await update.message.reply_text("Game stopped.")
 
 
@@ -406,140 +467,156 @@ async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFA
         await query.answer("Admin only.", show_alert=True)
         return
 
-    game = active_games.get(chat_id)
-    if not game:
-        await query.edit_message_text("No active game setup found.")
-        return
-
-    if game["status"] != "setup":
-        await query.answer("Setup is closed.", show_alert=True)
-        return
-
-    if data.startswith("setup_questions_"):
-        try:
-            count = int(data.split("_")[-1])
-        except ValueError:
-            await query.answer("Invalid question count.", show_alert=True)
+    lock = get_game_lock(chat_id)
+    async with lock:
+        game = active_games.get(chat_id)
+        if not game:
+            await query.edit_message_text("No active game setup found.")
             return
 
-        if count not in ALLOWED_QUESTION_COUNTS:
-            await query.answer("Invalid question count.", show_alert=True)
+        if game["status"] != "setup":
+            await query.answer("Setup is closed.", show_alert=True)
             return
 
-        game["questions_per_game"] = count
+        if data.startswith("setup_questions_"):
+            try:
+                count = int(data.split("_")[-1])
+            except ValueError:
+                await query.answer("Invalid question count.", show_alert=True)
+                return
 
-        await query.edit_message_text(
-            f"🎮 Game Setup\n\n"
-            f"✅ Questions: {count}\n\n"
-            f"Now choose category:",
-            reply_markup=get_category_keyboard(),
-        )
-        return
+            if count not in ALLOWED_QUESTION_COUNTS:
+                await query.answer("Invalid question count.", show_alert=True)
+                return
 
-    if data.startswith("setup_category_"):
-        category = data.replace("setup_category_", "", 1)
+            game["questions_per_game"] = count
 
-        if category not in ALLOWED_CATEGORIES:
-            await query.answer("Invalid category.", show_alert=True)
+            await query.edit_message_text(
+                f"🎮 Game Setup\n\n"
+                f"✅ Questions: {count}\n\n"
+                f"Now choose category:",
+                reply_markup=get_category_keyboard(),
+            )
             return
 
-        game["category"] = category
+        if data.startswith("setup_category_"):
+            category = data.replace("setup_category_", "", 1)
 
-        await query.edit_message_text(
-            f"🎮 Game Setup\n\n"
-            f"✅ Questions: {game['questions_per_game']}\n"
-            f"✅ Category: {format_category_name(category)}\n\n"
-            f"Now choose difficulty:",
-            reply_markup=get_difficulty_keyboard(),
-        )
-        return
+            if category not in ALLOWED_CATEGORIES:
+                await query.answer("Invalid category.", show_alert=True)
+                return
 
-    if data.startswith("setup_difficulty_"):
-        difficulty = data.replace("setup_difficulty_", "", 1)
+            game["category"] = category
 
-        if difficulty not in ALLOWED_DIFFICULTIES:
-            await query.answer("Invalid difficulty.", show_alert=True)
+            await query.edit_message_text(
+                f"🎮 Game Setup\n\n"
+                f"✅ Questions: {game['questions_per_game']}\n"
+                f"✅ Category: {format_category_name(category)}\n\n"
+                f"Now choose difficulty:",
+                reply_markup=get_difficulty_keyboard(),
+            )
             return
 
-        game["difficulty"] = difficulty
+        if data.startswith("setup_difficulty_"):
+            difficulty = data.replace("setup_difficulty_", "", 1)
 
-        keyboard = get_join_keyboard(chat_id)
+            if difficulty not in ALLOWED_DIFFICULTIES:
+                await query.answer("Invalid difficulty.", show_alert=True)
+                return
 
-        msg = await context.bot.send_message(
-            chat_id=chat_id,
-            text=build_join_text(game, JOIN_SECONDS),
-            reply_markup=keyboard,
-            parse_mode="HTML",
-        )
+            game["difficulty"] = difficulty
+            game["status"] = "joining"
+            game["join_deadline"] = time.monotonic() + JOIN_SECONDS
 
-        game["status"] = "joining"
+    msg = await context.bot.send_message(
+        chat_id=chat_id,
+        text=build_join_text(active_games[chat_id], JOIN_SECONDS),
+        reply_markup=get_join_keyboard(chat_id),
+        parse_mode="HTML",
+    )
+
+    lock = get_game_lock(chat_id)
+    async with lock:
+        game = active_games.get(chat_id)
+        if not game or game.get("status") != "joining":
+            await safe_delete_message(context.bot, chat_id, msg.message_id)
+            return
+
         game["join_message_id"] = msg.message_id
 
-        await query.edit_message_text(
-            "✅ Game created.\n\n"
-            f"📚 Questions: {game['questions_per_game']}\n"
-            f"🗂 Category: {format_category_name(game['category'])}\n"
-            f"🎯 Difficulty: {format_difficulty_name(game['difficulty'])}\n\n"
-            "Players can join now."
-        )
+    await query.edit_message_text(
+        "✅ Game created.\n\n"
+        f"📚 Questions: {active_games[chat_id]['questions_per_game']}\n"
+        f"🗂 Category: {format_category_name(active_games[chat_id]['category'])}\n"
+        f"🎯 Difficulty: {format_difficulty_name(active_games[chat_id]['difficulty'])}\n\n"
+        "Players can join now."
+    )
 
-        safe_task(begin_game_after_join(chat_id, context))
-        return
+    safe_task(begin_game_after_join(chat_id, context))
 
 
 async def begin_game_after_join(chat_id, context):
-    remaining = JOIN_SECONDS
+    try:
+        while True:
+            lock = get_game_lock(chat_id)
+            async with lock:
+                game = active_games.get(chat_id)
+                if not game or game["status"] != "joining":
+                    return
 
-    while remaining > 0:
-        game = active_games.get(chat_id)
-        if not game or game["status"] != "joining":
+                remaining = get_join_remaining_seconds(game)
+                if remaining <= 0:
+                    break
+
+            await refresh_join_message(context, chat_id)
+            await asyncio.sleep(min(10, max(1, remaining)))
+
+        lock = get_game_lock(chat_id)
+        async with lock:
+            game = active_games.get(chat_id)
+            if not game or game["status"] != "joining":
+                return
+
+            join_message_id = game.get("join_message_id")
+
+            if len(game["players"]) < MIN_PLAYERS:
+                active_games.pop(chat_id, None)
+                cleanup_game_lock(chat_id)
+                not_enough_players = True
+            else:
+                game["status"] = "running"
+                not_enough_players = False
+
+        await safe_delete_message(context.bot, chat_id, join_message_id)
+
+        if not_enough_players:
+            await context.bot.send_message(
+                chat_id,
+                f"❌ Not enough players.\nGame cancelled.\n\nMinimum players needed: {MIN_PLAYERS}",
+            )
             return
 
-        try:
-            await context.bot.edit_message_text(
-                chat_id=chat_id,
-                message_id=game["join_message_id"],
-                text=build_join_text(game, remaining),
-                reply_markup=get_join_keyboard(chat_id),
-                parse_mode="HTML",
-            )
-        except Exception as e:
-            logger.warning("Failed to edit join message: %s", e)
+        lock = get_game_lock(chat_id)
+        async with lock:
+            game = active_games.get(chat_id)
+            if not game or game["status"] != "running":
+                return
 
-        sleep_for = min(10, remaining)
-        await asyncio.sleep(sleep_for)
-        remaining -= sleep_for
+            try:
+                game["db_game_id"] = create_game(
+                    chat_id=chat_id,
+                    total_players=len(game["players"]),
+                    total_rounds=game["questions_per_game"],
+                    status="running",
+                )
+            except Exception:
+                logger.exception("Failed to create game record for chat %s", chat_id)
 
-    game = active_games.get(chat_id)
-    if not game:
-        return
+        await context.bot.send_message(chat_id, "Game started! Get ready for the first question.")
+        await send_question(chat_id, context)
 
-    if len(game["players"]) < MIN_PLAYERS:
-        await safe_delete_message(context.bot, chat_id, game.get("join_message_id"))
-
-        await context.bot.send_message(
-            chat_id,
-            f"❌ Not enough players.\nGame cancelled.\n\nMinimum players needed: {MIN_PLAYERS}",
-        )
-
-        active_games.pop(chat_id, None)
-        return
-
-    game["status"] = "running"
-
-    try:
-        game["db_game_id"] = create_game(
-            chat_id=chat_id,
-            total_players=len(game["players"]),
-            total_rounds=game["questions_per_game"],
-            status="running",
-        )
     except Exception:
-        logger.exception("Failed to create game record")
-
-    await safe_delete_message(context.bot, chat_id, game.get("join_message_id"))
-    await context.bot.send_message(chat_id, "Game started! Get ready for the first question.")
-    await send_question(chat_id, context)
+        logger.exception("Error in begin_game_after_join for chat %s", chat_id)
 
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -550,79 +627,89 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer()
         return
 
-    chat_id = int(data[1])
+    try:
+        chat_id = int(data[1])
+    except (IndexError, ValueError):
+        await query.answer("Invalid join request.")
+        return
 
     if query.message and query.message.chat:
         ensure_chat(query.message.chat)
 
-    game = active_games.get(chat_id)
+    lock = get_game_lock(chat_id)
+    async with lock:
+        game = active_games.get(chat_id)
 
-    if not game:
-        await query.answer("No active game")
-        return
+        if not game:
+            await query.answer("No active game")
+            return
 
-    if game["status"] != "joining":
-        await query.answer("Joining closed")
-        return
+        if game["status"] != "joining":
+            await query.answer("Joining closed")
+            return
 
-    user = query.from_user
+        user = query.from_user
 
-    if user.id in game["players"]:
-        await query.answer("Already joined")
-        return
+        if user.id in game["players"]:
+            await query.answer("Already joined")
+            return
 
-    name = clickable_name(user)
+        name = clickable_name(user)
 
-    game["players"][user.id] = name
-    game["player_objects"][user.id] = user
-    game["scores"][user.id] = 0
-    game["correct_counts"][user.id] = 0
-    game["wrong_counts"][user.id] = 0
-    game["answer_times"][user.id] = []
+        game["players"][user.id] = name
+        game["player_objects"][user.id] = user
+        game["scores"][user.id] = 0
+        game["correct_counts"][user.id] = 0
+        game["wrong_counts"][user.id] = 0
+        game["answer_times"][user.id] = []
 
-    ensure_player(user)
+        ensure_player(user)
 
-    try:
-        await context.bot.edit_message_text(
-            chat_id=chat_id,
-            message_id=game["join_message_id"],
-            text=build_join_text(game, JOIN_SECONDS),
-            reply_markup=get_join_keyboard(chat_id),
-            parse_mode="HTML",
-        )
-    except Exception as e:
-        logger.warning("Failed to update join message after join: %s", e)
-
+    await refresh_join_message(context, chat_id)
     await query.answer("Joined!")
 
 
 async def send_question(chat_id, context):
-    game = active_games.get(chat_id)
-    if not game:
-        return
+    lock = get_game_lock(chat_id)
+    async with lock:
+        game = active_games.get(chat_id)
+        if not game or game["status"] != "running":
+            return
 
-    if game["status"] != "running":
-        return
+        game["round"] += 1
+        current_round = game["round"]
 
-    game["round"] += 1
+        if current_round > game["questions_per_game"]:
+            should_end = True
+        else:
+            should_end = False
 
-    if game["round"] > game["questions_per_game"]:
+    if should_end:
         await end_game(chat_id, context)
         return
 
-    question = get_unused_question(game)
+    lock = get_game_lock(chat_id)
+    async with lock:
+        game = active_games.get(chat_id)
+        if not game or game["status"] != "running":
+            return
 
-    if not question:
+        question = get_unused_question(game)
+        if not question:
+            no_question = True
+        else:
+            no_question = False
+
+    if no_question:
         await context.bot.send_message(
             chat_id,
-            "No more unused questions available for this category/difficulty. Ending game."
+            "No more unused questions available for this category/difficulty. Ending game.",
         )
         await end_game(chat_id, context)
         return
 
     q_id = question["id"]
     q_text = question["question_text"]
-
     options, correct_index = shuffle_question(question)
 
     if correct_index not in (0, 1, 2, 3):
@@ -633,63 +720,73 @@ async def send_question(chat_id, context):
         await end_game(chat_id, context)
         return
 
-    game["used_question_ids"].add(q_id)
-    game["correct"] = correct_index
-    game["answered"] = set()
-    game["speed_bonus_awarded"] = {}
+    try:
+        msg = await context.bot.send_poll(
+            chat_id=chat_id,
+            question=f"[{current_round}/{active_games[chat_id]['questions_per_game']}] {q_text}",
+            options=options,
+            type="quiz",
+            correct_option_id=correct_index,
+            is_anonymous=False,
+            open_period=QUESTION_SECONDS,
+        )
+    except Exception:
+        logger.exception("Failed to send poll in chat %s round %s", chat_id, current_round)
+        await context.bot.send_message(chat_id, "Failed to send the next question. Ending game.")
+        await end_game(chat_id, context)
+        return
 
-    msg = await context.bot.send_poll(
-        chat_id=chat_id,
-        question=f"[{game['round']}/{game['questions_per_game']}] {q_text}",
-        options=options,
-        type="quiz",
-        correct_option_id=correct_index,
-        is_anonymous=False,
-        open_period=QUESTION_SECONDS,
-    )
+    lock = get_game_lock(chat_id)
+    async with lock:
+        game = active_games.get(chat_id)
+        if not game or game["status"] != "running":
+            poll_map.pop(msg.poll.id, None)
+            return
 
-    game["question_started_at"] = time.monotonic()
-    game["current_poll_id"] = msg.poll.id
-    poll_map[msg.poll.id] = {"chat_id": chat_id, "round": game["round"]}
+        game["used_question_ids"].add(q_id)
+        game["correct"] = correct_index
+        game["answered"] = set()
+        game["speed_bonus_awarded"] = {}
+        game["question_started_at"] = time.monotonic()
+        game["current_poll_id"] = msg.poll.id
 
-    logger.info("Sent poll %s in chat %s for round %s", msg.poll.id, chat_id, game["round"])
+    poll_map[msg.poll.id] = {"chat_id": chat_id, "round": current_round}
 
-    safe_task(wait_and_continue(chat_id, context, msg.poll.id, game["round"]))
+    logger.info("Sent poll %s in chat %s for round %s", msg.poll.id, chat_id, current_round)
+    safe_task(wait_and_continue(chat_id, context, msg.poll.id, current_round))
 
 
 async def wait_and_continue(chat_id, context, poll_id, round_number):
     try:
         logger.info(
             "wait_and_continue started: chat_id=%s poll_id=%s round=%s",
-            chat_id, poll_id, round_number
+            chat_id, poll_id, round_number,
         )
 
         await asyncio.sleep(QUESTION_SECONDS + 2)
 
-        game = active_games.get(chat_id)
-        if not game:
-            poll_map.pop(poll_id, None)
-            return
+        lock = get_game_lock(chat_id)
+        async with lock:
+            game = active_games.get(chat_id)
+            if not game or game["status"] != "running":
+                poll_map.pop(poll_id, None)
+                return
 
-        if game["status"] != "running":
-            poll_map.pop(poll_id, None)
-            return
+            if game.get("current_poll_id") != poll_id:
+                poll_map.pop(poll_id, None)
+                return
 
-        if game.get("current_poll_id") != poll_id:
-            poll_map.pop(poll_id, None)
-            return
+            if game.get("round") != round_number:
+                poll_map.pop(poll_id, None)
+                return
 
-        if game.get("round") != round_number:
             poll_map.pop(poll_id, None)
-            return
-
-        poll_map.pop(poll_id, None)
 
         await asyncio.sleep(1)
         await send_question(chat_id, context)
 
     except Exception:
-        logger.exception("Error in wait_and_continue")
+        logger.exception("Error in wait_and_continue for chat %s", chat_id)
 
 
 async def delete_later(context, chat_id, message_id, delay):
@@ -719,7 +816,7 @@ async def receive_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
             display_name = f"@{user.username}" if user.username else user.full_name
             msg = await context.bot.send_message(
                 info["chat_id"],
-                f"✅ {display_name} +{CORRECT_POINTS} 🍋"
+                f"✅ {display_name} +{CORRECT_POINTS} 🍋",
             )
             safe_task(delete_later(context, info["chat_id"], msg.message_id, 4))
         else:
@@ -727,7 +824,7 @@ async def receive_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
 
             msg = await context.bot.send_message(
                 info["chat_id"],
-                f"📅 Daily Quiz\n❌ {user.full_name} got it wrong."
+                f"📅 Daily Quiz\n❌ {user.full_name} got it wrong.",
             )
             safe_task(delete_later(context, info["chat_id"], msg.message_id, 4))
 
@@ -735,44 +832,52 @@ async def receive_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
 
     chat_id = info["chat_id"]
-    game = active_games.get(chat_id)
+    lock = get_game_lock(chat_id)
 
-    if not game:
-        return
+    async with lock:
+        game = active_games.get(chat_id)
+        if not game:
+            return
 
-    user = answer.user
-    ensure_player(user)
+        user = answer.user
+        ensure_player(user)
 
-    if user.id not in game["players"]:
-        return
+        if user.id not in game["players"]:
+            return
 
-    if user.id in game["answered"]:
-        return
+        if user.id in game["answered"]:
+            return
 
-    game["answered"].add(user.id)
+        game["answered"].add(user.id)
 
-    is_correct = bool(answer.option_ids) and answer.option_ids[0] == game["correct"]
+        is_correct = bool(answer.option_ids) and answer.option_ids[0] == game["correct"]
+
+        if is_correct:
+            points_to_add = CORRECT_POINTS
+            got_speed_bonus = False
+            elapsed = None
+
+            started_at = game.get("question_started_at")
+            if started_at is not None:
+                elapsed = time.monotonic() - started_at
+                game["answer_times"][user.id].append(elapsed)
+
+                if elapsed <= SPEED_BONUS_SECONDS:
+                    points_to_add += SPEED_BONUS_POINTS
+                    got_speed_bonus = True
+                    game["speed_bonus_awarded"][user.id] = True
+                else:
+                    game["speed_bonus_awarded"][user.id] = False
+
+            game["scores"][user.id] += points_to_add
+            game["correct_counts"][user.id] += 1
+        else:
+            game["wrong_counts"][user.id] += 1
+            points_to_add = 0
+            got_speed_bonus = False
+            elapsed = None
 
     if is_correct:
-        points_to_add = CORRECT_POINTS
-        got_speed_bonus = False
-        elapsed = None
-
-        started_at = game.get("question_started_at")
-        if started_at is not None:
-            elapsed = time.monotonic() - started_at
-            game["answer_times"][user.id].append(elapsed)
-
-            if elapsed <= SPEED_BONUS_SECONDS:
-                points_to_add += SPEED_BONUS_POINTS
-                got_speed_bonus = True
-                game["speed_bonus_awarded"][user.id] = True
-            else:
-                game["speed_bonus_awarded"][user.id] = False
-
-        game["scores"][user.id] += points_to_add
-        game["correct_counts"][user.id] += 1
-
         add_points(user.id, points_to_add)
         record_correct_answer(user.id, answer_time=elapsed)
 
@@ -788,28 +893,43 @@ async def receive_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
         msg = await context.bot.send_message(chat_id, reward_text)
         safe_task(delete_later(context, chat_id, msg.message_id, 4))
     else:
-        game["wrong_counts"][user.id] += 1
         record_wrong_answer(user.id)
 
 
 async def end_game(chat_id, context):
-    game = active_games.get(chat_id)
-    if not game:
-        return
+    lock = get_game_lock(chat_id)
+    async with lock:
+        game = active_games.get(chat_id)
+        if not game:
+            return
 
-    current_poll_id = game.get("current_poll_id")
-    if current_poll_id:
-        poll_map.pop(current_poll_id, None)
+        game["status"] = "ending"
 
-    ranking = sorted(
-        game["scores"].items(),
-        key=lambda x: x[1],
-        reverse=True,
-    )
+        current_poll_id = game.get("current_poll_id")
+        if current_poll_id:
+            poll_map.pop(current_poll_id, None)
 
-    winner_user_id = ranking[0][0] if ranking else None
+        ranking = sorted(
+            game["scores"].items(),
+            key=lambda x: x[1],
+            reverse=True,
+        )
 
-    for uid in game["players"].keys():
+        winner_user_id = ranking[0][0] if ranking else None
+
+        players = dict(game["players"])
+        player_objects = dict(game["player_objects"])
+        scores = dict(game["scores"])
+        correct_counts = dict(game["correct_counts"])
+        wrong_counts = dict(game["wrong_counts"])
+        answer_times_map = dict(game["answer_times"])
+        db_game_id = game.get("db_game_id")
+        total_rounds = min(game["round"], game["questions_per_game"])
+
+        active_games.pop(chat_id, None)
+        cleanup_game_lock(chat_id)
+
+    for uid in players.keys():
         try:
             increment_games_played(uid)
         except Exception:
@@ -817,7 +937,7 @@ async def end_game(chat_id, context):
 
         try:
             if chat_id < 0:
-                player_user = game["player_objects"].get(uid)
+                player_user = player_objects.get(uid)
                 if player_user:
                     increment_group_games_played(chat_id, player_user)
         except Exception:
@@ -831,21 +951,20 @@ async def end_game(chat_id, context):
 
         try:
             if chat_id < 0:
-                winner_user = game["player_objects"].get(winner_user_id)
+                winner_user = player_objects.get(winner_user_id)
                 if winner_user:
                     increment_group_games_won(chat_id, winner_user)
         except Exception:
             logger.exception("Failed to increment group games_won for %s", winner_user_id)
 
-    db_game_id = game.get("db_game_id")
     if db_game_id:
         try:
             position_map = {}
             for i, (uid, _) in enumerate(ranking, start=1):
                 position_map[uid] = i
 
-            for uid in game["players"].keys():
-                answer_times = game["answer_times"].get(uid, [])
+            for uid in players.keys():
+                answer_times = answer_times_map.get(uid, [])
                 avg_answer_time = (
                     sum(answer_times) / len(answer_times) if answer_times else None
                 )
@@ -853,9 +972,9 @@ async def end_game(chat_id, context):
                 record_game_result(
                     game_id=db_game_id,
                     user_id=uid,
-                    score=game["scores"].get(uid, 0),
-                    correct_count=game["correct_counts"].get(uid, 0),
-                    wrong_count=game["wrong_counts"].get(uid, 0),
+                    score=scores.get(uid, 0),
+                    correct_count=correct_counts.get(uid, 0),
+                    wrong_count=wrong_counts.get(uid, 0),
                     avg_answer_time=avg_answer_time,
                     position=position_map.get(uid),
                 )
@@ -863,12 +982,12 @@ async def end_game(chat_id, context):
             finish_game(
                 game_id=db_game_id,
                 winner_user_id=winner_user_id,
-                total_players=len(game["players"]),
-                total_rounds=min(game["round"], game["questions_per_game"]),
+                total_players=len(players),
+                total_rounds=total_rounds,
                 status="finished",
             )
         except Exception:
-            logger.exception("Failed to save game results")
+            logger.exception("Failed to save game results for chat %s", chat_id)
 
     text = "🏆 Game Results\n\n"
 
@@ -876,9 +995,7 @@ async def end_game(chat_id, context):
         text += "No players scored any points."
     else:
         for i, (uid, pts) in enumerate(ranking, start=1):
-            name = game["players"][uid]
+            name = players[uid]
             text += f"{i}. {name} — {pts} 🍋\n"
 
     await context.bot.send_message(chat_id, text, parse_mode="HTML")
-
-    active_games.pop(chat_id, None)

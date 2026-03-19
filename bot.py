@@ -1,5 +1,8 @@
+# bot.py
+
 import logging
 
+from telegram import Update
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -7,6 +10,7 @@ from telegram.ext import (
     PollAnswerHandler,
     ConversationHandler,
     MessageHandler,
+    ContextTypes,
     filters,
 )
 
@@ -90,12 +94,21 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def main():
-    create_tables()
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    logger.exception("Unhandled exception while processing update", exc_info=context.error)
 
-    app = Application.builder().token(BOT_TOKEN).build()
+    if isinstance(update, Update):
+        try:
+            if update.effective_message:
+                await update.effective_message.reply_text(
+                    "Something went wrong while processing that action."
+                )
+        except Exception:
+            logger.exception("Failed to notify user about the error")
 
-    admin_conv = ConversationHandler(
+
+def build_admin_conversation() -> ConversationHandler:
+    return ConversationHandler(
         entry_points=[
             CommandHandler("admin", admin_panel),
             CommandHandler("importquestions", import_questions_entry),
@@ -212,6 +225,19 @@ def main():
         allow_reentry=True,
     )
 
+
+def main():
+    create_tables()
+
+    app = (
+        Application.builder()
+        .token(BOT_TOKEN)
+        .concurrent_updates(False)
+        .build()
+    )
+
+    admin_conv = build_admin_conversation()
+
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("myid", myid))
     app.add_handler(CommandHandler("startgame", start_game))
@@ -231,9 +257,10 @@ def main():
     app.add_handler(CallbackQueryHandler(button_handler, pattern=r"^join\|"))
 
     app.add_handler(PollAnswerHandler(receive_poll_answer))
+    app.add_error_handler(error_handler)
 
     logger.info("Bot is running...")
-    app.run_polling()
+    app.run_polling(drop_pending_updates=True)
 
 
 if __name__ == "__main__":

@@ -244,27 +244,24 @@ async def daily_quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("No questions available.")
         return
 
-    q_id = question["id"]
-    q_text = question["question_text"]
-    a = question["option_a"]
-    b = question["option_b"]
-    c = question["option_c"]
-    d = question["option_d"]
-    correct_index = question["correct_option"] - 1
+q_id = question["id"]
+q_text = question["question_text"]
 
-    if correct_index not in (0, 1, 2, 3):
-        await update.message.reply_text("This daily question has an invalid correct answer.")
-        return
+options, correct_index = shuffle_question(question)
 
-    msg = await context.bot.send_poll(
-        chat_id=chat.id,
-        question=f"📅 Daily Quiz\n\n{q_text}",
-        options=[a, b, c, d],
-        type="quiz",
-        correct_option_id=correct_index,
-        is_anonymous=False,
-        open_period=QUESTION_SECONDS,
-    )
+if correct_index not in (0, 1, 2, 3):
+    await update.message.reply_text("This daily question has an invalid correct answer.")
+    return
+
+msg = await context.bot.send_poll(
+    chat_id=chat.id,
+    question=f"📅 Daily Quiz\n\n{q_text}",
+    options=options,
+    type="quiz",
+    correct_option_id=correct_index,
+    is_anonymous=False,
+    open_period=QUESTION_SECONDS,
+)
 
     poll_map[msg.poll.id] = {
         "chat_id": chat.id,
@@ -616,36 +613,33 @@ async def send_question(chat_id, context):
         await end_game(chat_id, context)
         return
 
-    q_id = question["id"]
-    q_text = question["question_text"]
-    a = question["option_a"]
-    b = question["option_b"]
-    c = question["option_c"]
-    d = question["option_d"]
-    correct_index = question["correct_option"] - 1
+q_id = question["id"]
+q_text = question["question_text"]
 
-    if correct_index not in (0, 1, 2, 3):
-        await context.bot.send_message(
-            chat_id,
-            f"Question ID {q_id} has an invalid correct option.",
-        )
-        await end_game(chat_id, context)
-        return
+options, correct_index = shuffle_question(question)
 
-    game["used_question_ids"].add(q_id)
-    game["correct"] = correct_index
-    game["answered"] = set()
-    game["speed_bonus_awarded"] = {}
-
-    msg = await context.bot.send_poll(
-        chat_id=chat_id,
-        question=f"[{game['round']}/{game['questions_per_game']}] {q_text}",
-        options=[a, b, c, d],
-        type="quiz",
-        correct_option_id=correct_index,
-        is_anonymous=False,
-        open_period=QUESTION_SECONDS,
+if correct_index not in (0, 1, 2, 3):
+    await context.bot.send_message(
+        chat_id,
+        f"Question ID {q_id} has an invalid correct option.",
     )
+    await end_game(chat_id, context)
+    return
+
+game["used_question_ids"].add(q_id)
+game["correct"] = correct_index
+game["answered"] = set()
+game["speed_bonus_awarded"] = {}
+
+msg = await context.bot.send_poll(
+    chat_id=chat_id,
+    question=f"[{game['round']}/{game['questions_per_game']}] {q_text}",
+    options=options,
+    type="quiz",
+    correct_option_id=correct_index,
+    is_anonymous=False,
+    open_period=QUESTION_SECONDS,
+)
 
     game["question_started_at"] = time.monotonic()
     game["current_poll_id"] = msg.poll.id

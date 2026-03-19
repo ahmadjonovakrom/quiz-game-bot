@@ -199,28 +199,6 @@ async def show_question_details(target, qid: int, source: str = "questions"):
     return ADMIN_MENU
 
 
-def build_search_results_keyboard(results) -> InlineKeyboardMarkup:
-    keyboard = []
-
-    for q in results:
-        qid = q[0]
-        keyboard.append([
-            InlineKeyboardButton(
-                f"✏️ Edit {qid}",
-                callback_data=f"admin_search_edit_{qid}"
-            ),
-            InlineKeyboardButton(
-                f"🗑 Delete {qid}",
-                callback_data=f"admin_search_delete_{qid}"
-            ),
-        ])
-
-    keyboard.append([InlineKeyboardButton("⬅️ Back", callback_data="admin_questions")])
-    keyboard.append([InlineKeyboardButton("❌ Cancel", callback_data="admin_close")])
-
-    return InlineKeyboardMarkup(keyboard)
-
-
 async def show_admin_panel_message(target):
     text = "🛠 *Admin Panel*\n\nChoose an action:"
     await target.edit_message_text(
@@ -240,7 +218,73 @@ async def show_questions_menu(target):
     )
     return ADMIN_MENU
 
+async def show_search_results(target, keyword: str):
+    results = search_questions_by_keyword(keyword, limit=15)
 
+    if not results:
+        text = f"🔎 Search results for: {keyword}\n\nNo active questions found."
+        markup = nav_keyboard("admin_questions")
+
+        if hasattr(target, "edit_message_text"):
+            await target.edit_message_text(text, reply_markup=markup)
+        else:
+            await target.reply_text(text, reply_markup=markup)
+
+        return ADMIN_MENU
+
+    lines = [f"🔎 Search results for: {keyword}", ""]
+
+    for q in results:
+        qid = q[0]
+        question_text = q[1]
+        category = q[7]
+        difficulty = q[8]
+        times_used = q[10]
+
+        short_question = question_text[:55] + "..." if len(question_text) > 55 else question_text
+
+        lines.append(
+            f"✅ ID {qid}: {short_question}\n"
+            f"{category} | {difficulty} | used: {times_used}"
+        )
+
+    text = "\n\n".join(lines)
+    markup = build_search_results_keyboard(results)
+
+    if hasattr(target, "edit_message_text"):
+        await target.edit_message_text(text, reply_markup=markup)
+    else:
+        await target.reply_text(text, reply_markup=markup)
+
+    return ADMIN_MENU
+
+async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+
+    if not is_admin(user.id):
+        if update.message:
+            await update.message.reply_text(admin_only_text())
+        elif update.callback_query:
+            await update.callback_query.answer(admin_only_text(), show_alert=True)
+        return ConversationHandler.END
+
+    text = "🛠 *Admin Panel*\n\nChoose an action:"
+
+    if update.message:
+        await update.message.reply_text(
+            text,
+            reply_markup=admin_main_keyboard(),
+            parse_mode="Markdown",
+        )
+    elif update.callback_query:
+        await update.callback_query.answer()
+        await update.callback_query.edit_message_text(
+            text,
+            reply_markup=admin_main_keyboard(),
+            parse_mode="Markdown",
+        )
+
+    return ADMIN_MENU
 
 
 async def bot_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):

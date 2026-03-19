@@ -107,6 +107,29 @@ def build_question_preview(q: tuple) -> str:
     )
 
 
+def build_search_results_keyboard(results) -> InlineKeyboardMarkup:
+    keyboard = []
+
+    for q in results:
+        qid = q[0]
+        keyboard.append([
+            InlineKeyboardButton(
+                f"✏️ Edit {qid}",
+                callback_data=f"admin_search_edit_{qid}"
+            ),
+            InlineKeyboardButton(
+                f"🗑 Delete {qid}",
+                callback_data=f"admin_search_delete_{qid}"
+            ),
+        ])
+
+    keyboard.append([
+        InlineKeyboardButton("⬅️ Back", callback_data="admin_questions")
+    ])
+
+    return InlineKeyboardMarkup(keyboard)
+
+
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
 
@@ -225,6 +248,73 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
 
     await query.answer()
     data = query.data
+
+    if data.startswith("admin_search_edit_"):
+        qid_text = data.replace("admin_search_edit_", "").strip()
+        if not qid_text.isdigit():
+            await query.edit_message_text("Invalid question ID.")
+            return ADMIN_MENU
+
+        qid = int(qid_text)
+        q = get_question_by_id(qid)
+        if not q:
+            await query.edit_message_text(
+                "Question not found.",
+                reply_markup=questions_keyboard(),
+            )
+            return ADMIN_MENU
+
+        context.user_data["edit_qid"] = qid
+        context.user_data["edit_question"] = {
+            "question_text": q[1],
+            "option_a": q[2],
+            "option_b": q[3],
+            "option_c": q[4],
+            "option_d": q[5],
+            "correct_option": q[6],
+            "category": q[7],
+            "difficulty": q[8],
+        }
+
+        await query.edit_message_text(
+            "✏️ Current question:\n\n"
+            f"{build_question_preview(q)}\n\n"
+            "Send new question text:",
+        )
+        return EDIT_QUESTION
+
+    if data.startswith("admin_search_delete_"):
+        qid_text = data.replace("admin_search_delete_", "").strip()
+        if not qid_text.isdigit():
+            await query.edit_message_text("Invalid question ID.")
+            return ADMIN_MENU
+
+        qid = int(qid_text)
+        q = get_question_by_id(qid)
+        if not q:
+            await query.edit_message_text(
+                "Question not found.",
+                reply_markup=questions_keyboard(),
+            )
+            return ADMIN_MENU
+
+        context.user_data["delete_qid"] = qid
+        keyboard = InlineKeyboardMarkup(
+            [
+                [
+                    InlineKeyboardButton("✅ Yes, delete", callback_data="confirm_delete_yes"),
+                    InlineKeyboardButton("❌ No", callback_data="confirm_delete_no"),
+                ]
+            ]
+        )
+
+        await query.edit_message_text(
+            "🗑 Question preview:\n\n"
+            f"{build_question_preview(q)}\n\n"
+            "Are you sure you want to delete this question?",
+            reply_markup=keyboard,
+        )
+        return DELETE_CONFIRM
 
     if data == "admin_close":
         context.user_data.clear()
@@ -685,7 +775,7 @@ async def search_keyword_step(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     await update.message.reply_text(
         text,
-        reply_markup=questions_keyboard(),
+        reply_markup=build_search_results_keyboard(results),
     )
     return ADMIN_MENU
 

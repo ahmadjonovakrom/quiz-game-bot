@@ -244,24 +244,24 @@ async def daily_quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("No questions available.")
         return
 
-q_id = question["id"]
-q_text = question["question_text"]
+    q_id = question["id"]
+    q_text = question["question_text"]
 
-options, correct_index = shuffle_question(question)
+    options, correct_index = shuffle_question(question)
 
-if correct_index not in (0, 1, 2, 3):
-    await update.message.reply_text("This daily question has an invalid correct answer.")
-    return
+    if correct_index not in (0, 1, 2, 3):
+        await update.message.reply_text("This daily question has an invalid correct answer.")
+        return
 
-msg = await context.bot.send_poll(
-    chat_id=chat.id,
-    question=f"📅 Daily Quiz\n\n{q_text}",
-    options=options,
-    type="quiz",
-    correct_option_id=correct_index,
-    is_anonymous=False,
-    open_period=QUESTION_SECONDS,
-)
+    msg = await context.bot.send_poll(
+        chat_id=chat.id,
+        question=f"📅 Daily Quiz\n\n{q_text}",
+        options=options,
+        type="quiz",
+        correct_option_id=correct_index,
+        is_anonymous=False,
+        open_period=QUESTION_SECONDS,
+    )
 
     poll_map[msg.poll.id] = {
         "chat_id": chat.id,
@@ -613,33 +613,33 @@ async def send_question(chat_id, context):
         await end_game(chat_id, context)
         return
 
-q_id = question["id"]
-q_text = question["question_text"]
+    q_id = question["id"]
+    q_text = question["question_text"]
 
-options, correct_index = shuffle_question(question)
+    options, correct_index = shuffle_question(question)
 
-if correct_index not in (0, 1, 2, 3):
-    await context.bot.send_message(
-        chat_id,
-        f"Question ID {q_id} has an invalid correct option.",
+    if correct_index not in (0, 1, 2, 3):
+        await context.bot.send_message(
+            chat_id,
+            f"Question ID {q_id} has an invalid correct option.",
+        )
+        await end_game(chat_id, context)
+        return
+
+    game["used_question_ids"].add(q_id)
+    game["correct"] = correct_index
+    game["answered"] = set()
+    game["speed_bonus_awarded"] = {}
+
+    msg = await context.bot.send_poll(
+        chat_id=chat_id,
+        question=f"[{game['round']}/{game['questions_per_game']}] {q_text}",
+        options=options,
+        type="quiz",
+        correct_option_id=correct_index,
+        is_anonymous=False,
+        open_period=QUESTION_SECONDS,
     )
-    await end_game(chat_id, context)
-    return
-
-game["used_question_ids"].add(q_id)
-game["correct"] = correct_index
-game["answered"] = set()
-game["speed_bonus_awarded"] = {}
-
-msg = await context.bot.send_poll(
-    chat_id=chat_id,
-    question=f"[{game['round']}/{game['questions_per_game']}] {q_text}",
-    options=options,
-    type="quiz",
-    correct_option_id=correct_index,
-    is_anonymous=False,
-    open_period=QUESTION_SECONDS,
-)
 
     game["question_started_at"] = time.monotonic()
     game["current_poll_id"] = msg.poll.id

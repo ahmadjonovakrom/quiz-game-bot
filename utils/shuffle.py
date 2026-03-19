@@ -1,5 +1,6 @@
 import random
 
+
 def shuffle_question(question_row):
     options = [
         (0, question_row["option_a"]),

@@ -11,25 +11,20 @@ from telegram.ext import ContextTypes, ConversationHandler
 
 from config import ALLOWED_CATEGORIES, ALLOWED_DIFFICULTIES
 from utils.helpers import is_admin
-from database import (
-    add_question,
-    question_exists,
-    get_all_questions,
-    get_question_by_id,
-    update_question,
-    delete_question,
-    activate_question,
-    deactivate_question,
-    get_broadcast_chat_ids,
-    get_total_users_count,
-    get_total_questions_count,
-    get_total_games,
-    get_total_groups,
+from database import get_question_by_id
+
+from services.question_service import (
+    create_question_service,
+    list_questions_service,
+    update_question_service,
+    delete_question_service,
+    toggle_question_status_service,
+    search_questions_service,
+    export_questions_service,
+    import_questions_from_csv_service,
 )
-from database.questions import (
-    search_questions_by_keyword,
-    export_questions_to_rows,
-)
+from services.stats_service import get_bot_stats_service
+from services.broadcast_service import broadcast_copied_message_service
 
 ADMIN_MENU, QUESTION, A, B, C, D, CORRECT = range(7)
 DELETE_ID, DELETE_CONFIRM = range(7, 9)
@@ -94,11 +89,6 @@ def broadcast_confirm_keyboard() -> InlineKeyboardMarkup:
         ],
         [InlineKeyboardButton("⬅️ Back", callback_data="admin_back")],
     ])
-
-
-def normalize_text(value: str, default: str = "") -> str:
-    value = (value or "").strip()
-    return value if value else default
 
 
 def build_question_preview(q: tuple) -> str:
@@ -218,11 +208,25 @@ async def show_questions_menu(target):
     )
     return ADMIN_MENU
 
+
 async def show_search_results(target, keyword: str):
-    results = search_questions_by_keyword(keyword, limit=15)
+    result = search_questions_service(keyword, limit=15)
+
+    if not result["ok"]:
+        text = result["message"]
+        markup = nav_keyboard("admin_questions")
+
+        if hasattr(target, "edit_message_text"):
+            await target.edit_message_text(text, reply_markup=markup)
+        else:
+            await target.reply_text(text, reply_markup=markup)
+        return ADMIN_MENU
+
+    results = result["results"]
+    keyword = result["keyword"]
 
     if not results:
-        text = f"🔎 Search results for: {keyword}\n\nNo active questions found."
+        text = f"🔎 Search results for: {keyword}\n\nNo questions found."
         markup = nav_keyboard("admin_questions")
 
         if hasattr(target, "edit_message_text"):
@@ -257,6 +261,7 @@ async def show_search_results(target, keyword: str):
         await target.reply_text(text, reply_markup=markup)
 
     return ADMIN_MENU
+
 
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
@@ -305,23 +310,21 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     return ConversationHandler.END
 
+
 async def bot_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if not is_admin(user.id):
         await update.effective_message.reply_text(admin_only_text())
         return
 
-    total_users = get_total_users_count()
-    total_questions = get_total_questions_count()
-    total_games = get_total_games()
-    total_groups = get_total_groups()
+    stats = get_bot_stats_service()
 
     text = (
         "📊 *Bot Stats*\n\n"
-        f"👥 Total users: *{total_users}*\n"
-        f"👨‍👩‍👧‍👦 Total groups: *{total_groups}*\n"
-        f"🎮 Total games: *{total_games}*\n"
-        f"❓ Total questions: *{total_questions}*"
+        f"👥 Total users: *{stats['total_users']}*\n"
+        f"👨‍👩‍👧‍👦 Total groups: *{stats['total_groups']}*\n"
+        f"🎮 Total games: *{stats['total_games']}*\n"
+        f"❓ Total questions: *{stats['total_questions']}*"
     )
 
     await update.effective_message.reply_text(text, parse_mode="Markdown")
@@ -416,7 +419,7 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             reply_markup=nav_keyboard("admin_questions"),
         )
         return EDIT_QUESTION
-    
+
     if data.startswith("admin_open_"):
         qid_text = data.replace("admin_open_", "").strip()
         if not qid_text.isdigit():
@@ -428,7 +431,7 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
 
         qid = int(qid_text)
         return await show_question_details(query, qid, "questions")
-    
+
     if data.startswith("admin_toggle_"):
         parts = data.split("_")
         if len(parts) < 5:
@@ -450,11 +453,14 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             return ADMIN_MENU
 
         qid = int(qid_text)
+        result = toggle_question_status_service(qid, action)
 
-        if action == "activate":
-            activate_question(qid)
-        elif action == "deactivate":
-            deactivate_question(qid)
+        if not result["ok"]:
+            await query.edit_message_text(
+                result["message"],
+                reply_markup=nav_keyboard("admin_questions"),
+            )
+            return ADMIN_MENU
 
         if source == "search":
             keyword = context.user_data.get("search_keyword")
@@ -463,7 +469,7 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             return await show_questions_menu(query)
 
         return await show_question_details(query, qid, source)
-    
+
     if data.startswith("admin_return_"):
         source = data.replace("admin_return_", "").strip()
 
@@ -519,7 +525,6 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         )
         return EDIT_QUESTION
 
-
     if data == "admin_close":
         context.user_data.clear()
         await query.edit_message_text("Closed.")
@@ -570,7 +575,7 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         return SEARCH_KEYWORD
 
     if data == "admin_export_questions":
-        rows = export_questions_to_rows()
+        rows = export_questions_service()
 
         if not rows:
             await query.edit_message_text(
@@ -614,7 +619,7 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         return await import_questions_entry(update, context)
 
     if data == "admin_list_questions":
-        questions = get_all_questions(limit=15)
+        questions = list_questions_service(limit=15)
 
         if not questions:
             await query.edit_message_text(
@@ -624,7 +629,6 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             return ADMIN_MENU
 
         lines = ["📋 Latest Questions", ""]
-
         keyboard = []
 
         for q in questions:
@@ -659,17 +663,14 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         return ADMIN_MENU
 
     if data == "admin_botstats":
-        total_users = get_total_users_count()
-        total_questions = get_total_questions_count()
-        total_games = get_total_games()
-        total_groups = get_total_groups()
+        stats = get_bot_stats_service()
 
         text = (
             "📊 *Bot Stats*\n\n"
-            f"👥 Total users: *{total_users}*\n"
-            f"👨‍👩‍👧‍👦 Total groups: *{total_groups}*\n"
-            f"🎮 Total games: *{total_games}*\n"
-            f"❓ Total questions: *{total_questions}*"
+            f"👥 Total users: *{stats['total_users']}*\n"
+            f"👨‍👩‍👧‍👦 Total groups: *{stats['total_groups']}*\n"
+            f"🎮 Total games: *{stats['total_games']}*\n"
+            f"❓ Total questions: *{stats['total_questions']}*"
         )
 
         await query.edit_message_text(
@@ -743,26 +744,23 @@ async def correct_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return CORRECT
 
     data = context.user_data["new_question"]
+    data["correct_option"] = correct
+    data["category"] = "mixed"
+    data["difficulty"] = "easy"
+    data["created_by"] = update.effective_user.id
 
-    if question_exists(data["question_text"]):
-        context.user_data.clear()
+    result = create_question_service(data)
+    context.user_data.clear()
+
+    if not result["ok"]:
         await update.message.reply_text(
-            "⚠️ This question already exists. Skipped.",
+            result["message"],
             reply_markup=questions_keyboard(),
         )
         return ConversationHandler.END
 
-    add_question(
-        data["question_text"],
-        data["option_a"],
-        data["option_b"],
-        data["option_c"],
-        data["option_d"],
-        correct,
-    )
-    context.user_data.clear()
     await update.message.reply_text(
-        "✅ Question added successfully.",
+        result["message"],
         reply_markup=questions_keyboard(),
     )
     return ConversationHandler.END
@@ -815,10 +813,16 @@ async def delete_confirm_step(update: Update, context: ContextTypes.DEFAULT_TYPE
         return ADMIN_MENU
 
     qid = context.user_data.get("delete_qid")
-    if qid:
-        delete_question(qid)
-
     context.user_data.pop("delete_qid", None)
+
+    if qid:
+        result = delete_question_service(qid)
+        if not result["ok"]:
+            await query.edit_message_text(
+                result["message"],
+                reply_markup=nav_keyboard("admin_questions"),
+            )
+            return ADMIN_MENU
 
     keyword = context.user_data.get("search_keyword")
     if keyword:
@@ -956,29 +960,11 @@ async def edit_difficulty_step(update: Update, context: ContextTypes.DEFAULT_TYP
     data = context.user_data["edit_question"]
     data["difficulty"] = difficulty
 
-    updated = update_question(
-        qid,
-        data["question_text"],
-        data["option_a"],
-        data["option_b"],
-        data["option_c"],
-        data["option_d"],
-        data["correct_option"],
-        data["category"],
-        data["difficulty"],
-    )
-
+    result = update_question_service(qid, data)
     context.user_data.clear()
 
-    if not updated:
-        await update.message.reply_text(
-            "❌ Failed to update question.",
-            reply_markup=questions_keyboard(),
-        )
-        return ConversationHandler.END
-
     await update.message.reply_text(
-        "✅ Question updated successfully.",
+        result["message"],
         reply_markup=questions_keyboard(),
     )
     return ConversationHandler.END
@@ -1030,91 +1016,31 @@ async def import_questions_file_step(update: Update, context: ContextTypes.DEFAU
             )
             return IMPORT_FILE
 
-    reader = csv.DictReader(io.StringIO(text))
+    result = import_questions_from_csv_service(
+        csv_text=text,
+        created_by=update.effective_user.id,
+    )
 
-    required_columns = {
-        "question_text",
-        "option_a",
-        "option_b",
-        "option_c",
-        "option_d",
-        "correct_option",
-        "category",
-        "difficulty",
-    }
-
-    if not reader.fieldnames:
+    if not result["ok"]:
         await update.message.reply_text(
-            "CSV file is empty or invalid.",
+            result["message"],
             reply_markup=nav_keyboard("admin_questions"),
         )
         return IMPORT_FILE
-
-    fieldnames = {name.strip() for name in reader.fieldnames if name}
-    missing = required_columns - fieldnames
-    if missing:
-        await update.message.reply_text(
-            "Missing required columns:\n" + "\n".join(sorted(missing)),
-            reply_markup=nav_keyboard("admin_questions"),
-        )
-        return IMPORT_FILE
-
-    imported = 0
-    duplicate_skipped = 0
-    invalid_skipped = 0
-    errors = []
-
-    for row_number, row in enumerate(reader, start=2):
-        try:
-            normalized_row = {(k or "").strip(): v for k, v in row.items()}
-
-            question_text = normalize_text(normalized_row.get("question_text"))
-            option_a = normalize_text(normalized_row.get("option_a"))
-            option_b = normalize_text(normalized_row.get("option_b"))
-            option_c = normalize_text(normalized_row.get("option_c"))
-            option_d = normalize_text(normalized_row.get("option_d"))
-            correct_option = normalize_text(normalized_row.get("correct_option")).upper()
-            category = normalize_text(normalized_row.get("category"), "mixed").lower()
-            difficulty = normalize_text(normalized_row.get("difficulty"), "easy").lower()
-
-            if not all([question_text, option_a, option_b, option_c, option_d, correct_option]):
-                invalid_skipped += 1
-                errors.append(f"Row {row_number}: missing required value")
-                continue
-
-            if question_exists(question_text):
-                duplicate_skipped += 1
-                continue
-
-            add_question(
-                question_text=question_text,
-                option_a=option_a,
-                option_b=option_b,
-                option_c=option_c,
-                option_d=option_d,
-                correct_option=correct_option,
-                category=category,
-                difficulty=difficulty,
-                created_by=update.effective_user.id,
-            )
-            imported += 1
-
-        except Exception as e:
-            invalid_skipped += 1
-            errors.append(f"Row {row_number}: {str(e)}")
 
     context.user_data.clear()
 
-    total_skipped = duplicate_skipped + invalid_skipped
+    total_skipped = result["duplicate_skipped"] + result["invalid_skipped"]
 
     result_text = (
         f"📥 Import finished\n\n"
-        f"✅ Imported: {imported}\n"
-        f"♻️ Duplicate skipped: {duplicate_skipped}\n"
-        f"⚠️ Invalid skipped: {invalid_skipped}\n"
+        f"✅ Imported: {result['imported']}\n"
+        f"♻️ Duplicate skipped: {result['duplicate_skipped']}\n"
+        f"⚠️ Invalid skipped: {result['invalid_skipped']}\n"
         f"📊 Total skipped: {total_skipped}"
     )
 
+    errors = result["errors"]
     if errors:
         preview = "\n".join(errors[:10])
         result_text += f"\n\nFirst errors:\n{preview}"
@@ -1165,30 +1091,21 @@ async def broadcast_confirm_step(update: Update, context: ContextTypes.DEFAULT_T
         )
         return ConversationHandler.END
 
-    chat_ids = get_broadcast_chat_ids()
-    success = 0
-    failed = 0
+    await query.edit_message_text("📡 Broadcasting...")
 
-    await query.edit_message_text(f"📡 Broadcasting to {len(chat_ids)} chats...")
-
-    for chat_id in chat_ids:
-        try:
-            await context.bot.copy_message(
-                chat_id=chat_id,
-                from_chat_id=source_chat_id,
-                message_id=source_message_id,
-            )
-            success += 1
-        except Exception:
-            failed += 1
+    result = await broadcast_copied_message_service(
+        bot=context.bot,
+        source_chat_id=source_chat_id,
+        source_message_id=source_message_id,
+    )
 
     context.user_data.pop("broadcast_source_chat_id", None)
     context.user_data.pop("broadcast_source_message_id", None)
 
     await query.message.reply_text(
         "✅ Broadcast finished.\n\n"
-        f"Delivered: {success}\n"
-        f"Failed: {failed}",
+        f"Delivered: {result['success']}\n"
+        f"Failed: {result['failed']}",
         reply_markup=admin_main_keyboard(),
     )
     return ConversationHandler.END

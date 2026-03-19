@@ -206,7 +206,9 @@ def main():
                 CallbackQueryHandler(admin_button_handler, pattern=r"^admin_"),
             ],
         },
-        fallbacks=[CommandHandler("cancel", cancel)],
+        fallbacks=[
+            CommandHandler("cancel", cancel),
+        ],
         allow_reentry=True,
     )
 

@@ -2,6 +2,154 @@ def admin_only_text():
     return "❌ Admin only."
 
 
+def format_admin_panel_text():
+    return "\n".join([
+        "🛠 Admin Panel",
+        "",
+        "Choose an action:",
+    ])
+
+
+def format_questions_menu_text():
+    return "\n".join([
+        "📚 Question Management",
+        "",
+        "Choose an action:",
+    ])
+
+
+def format_bot_stats_text(stats):
+    total_users = stats.get("total_users", 0)
+    total_players = stats.get("total_players", 0)
+    total_questions = stats.get("total_questions", 0)
+    total_games = stats.get("total_games", 0)
+    total_groups = stats.get("total_groups", 0)
+
+    return "\n".join([
+        "📊 Bot Stats",
+        "",
+        f"👤 Total Users: {total_users}",
+        f"🎮 Total Players: {total_players}",
+        f"📚 Total Questions: {total_questions}",
+        f"🕹 Total Games: {total_games}",
+        f"👥 Total Groups: {total_groups}",
+    ])
+
+
+def format_import_help_text(allowed_categories, allowed_difficulties):
+    return "\n".join([
+        "📥 Import Questions from CSV",
+        "",
+        "Expected CSV columns:",
+        "question_text, option_a, option_b, option_c, option_d, correct_option, category, difficulty",
+        "",
+        f"Allowed categories: {', '.join(allowed_categories)}",
+        f"Allowed difficulties: {', '.join(allowed_difficulties)}",
+        "",
+        "Send a .csv file to import questions.",
+    ])
+
+
+def format_question_preview(q):
+    question_text = q[1]
+    option_a = q[2]
+    option_b = q[3]
+    option_c = q[4]
+    option_d = q[5]
+    correct_option = q[6]
+    category = q[7]
+    difficulty = q[8]
+    is_active = q[9] if len(q) > 9 else 1
+
+    status = "Active" if is_active else "Disabled"
+
+    return "\n".join([
+        f"ID: {q[0]}",
+        f"Question: {question_text}",
+        f"A) {option_a}",
+        f"B) {option_b}",
+        f"C) {option_c}",
+        f"D) {option_d}",
+        f"Correct: {correct_option}",
+        f"Category: {category}",
+        f"Difficulty: {difficulty}",
+        f"Status: {status}",
+    ])
+
+
+def format_question_details_text(q):
+    times_used = q[10] if len(q) > 10 else 0
+
+    return "\n".join([
+        "📘 Question Details",
+        "",
+        format_question_preview(q),
+        f"Times Used: {times_used}",
+    ])
+
+
+def format_latest_questions_text(questions):
+    if not questions:
+        return "\n".join([
+            "📋 Latest Questions",
+            "",
+            "No questions found.",
+        ])
+
+    lines = [
+        "📋 Latest Questions",
+        "",
+    ]
+
+    for q in questions:
+        qid = q[0]
+        question_text = q[1]
+        category = q[7] if len(q) > 7 else "mixed"
+        difficulty = q[8] if len(q) > 8 else "easy"
+        is_active = q[9] if len(q) > 9 else 1
+        status = "✅" if is_active else "🚫"
+
+        short_text = question_text if len(question_text) <= 80 else question_text[:77] + "..."
+
+        lines.append(f"{status} #{qid} [{category}/{difficulty}]")
+        lines.append(short_text)
+        lines.append("")
+
+    return "\n".join(lines).strip()
+
+
+def format_search_results_text(keyword, results):
+    if not results:
+        return "\n".join([
+            "🔎 Search Results",
+            "",
+            f"Keyword: {keyword}",
+            "",
+            "No matching questions found.",
+        ])
+
+    lines = [
+        "🔎 Search Results",
+        "",
+        f"Keyword: {keyword}",
+        f"Found: {len(results)}",
+        "",
+    ]
+
+    for q in results:
+        qid = q[0]
+        question_text = q[1]
+        category = q[7] if len(q) > 7 else "mixed"
+        difficulty = q[8] if len(q) > 8 else "easy"
+        is_active = q[9] if len(q) > 9 else 1
+        status = "✅" if is_active else "🚫"
+
+        short_text = question_text if len(question_text) <= 70 else question_text[:67] + "..."
+        lines.append(f"{status} #{qid} [{category}/{difficulty}] {short_text}")
+
+    return "\n".join(lines)
+
+
 def format_profile_text(player, global_rank, chat_type, group_rank=None, group_points=None):
     if not player:
         return "No profile data found yet."

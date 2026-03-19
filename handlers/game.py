@@ -5,6 +5,7 @@ from datetime import date
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
+from utils.shuffle import shuffle_question
 
 from config import (
     MIN_PLAYERS,

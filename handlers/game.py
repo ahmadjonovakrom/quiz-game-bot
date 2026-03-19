@@ -177,6 +177,13 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if data == "menu_play":
         if query.message.chat.type in ("group", "supergroup"):
+            if not is_admin(query.from_user.id):
+                await query.edit_message_text(
+                    "❌ Admin only.\n\nOnly a group admin can start a quiz game.",
+                    reply_markup=InlineKeyboardMarkup(back_keyboard),
+                )
+                return
+
             await start_game(update, context)
         else:
             await query.edit_message_text(
@@ -286,9 +293,9 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if not user or not is_admin(user.id):
         if query:
-            await query.answer("Admin only.", show_alert=True)
+            await query.edit_message_text("❌ Admin only.")
         else:
-            await message.reply_text("Admin only.")
+            await message.reply_text("❌ Admin only.")
         return
 
     if chat.type == "private":

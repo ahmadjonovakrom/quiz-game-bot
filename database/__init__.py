@@ -42,25 +42,24 @@ from .questions import (
 )
 
 from .games import (
+    ensure_chat,
+    deactivate_chat,
+    get_all_chat_ids,
+    add_group_points,
+    record_group_correct_answer,
+    increment_group_games_played,
+    increment_group_games_won,
+    get_group_leaderboard,
+    get_group_leaderboard_page,
+    get_player_group_rank_info,
     create_game,
     finish_game,
     record_game_result,
     get_total_games,
     get_total_groups,
-)
-
-from .groups import (
-    ensure_chat,
-    add_group_points,
-    record_group_correct_answer,
-    increment_group_games_played,
-    increment_group_games_won,
-    get_group_leaderboard_page,
-    get_player_group_rank_info,
-)
-
-from .chats import (
     get_broadcast_chat_ids,
+    has_played_daily_quiz,
+    record_daily_quiz_attempt,
 )
 
 __all__ = [
@@ -105,22 +104,23 @@ __all__ = [
     "get_question_count",
     "get_total_questions_count",
 
-    # games
+    # group/chat/game functions
+    "ensure_chat",
+    "deactivate_chat",
+    "get_all_chat_ids",
+    "add_group_points",
+    "record_group_correct_answer",
+    "increment_group_games_played",
+    "increment_group_games_won",
+    "get_group_leaderboard",
+    "get_group_leaderboard_page",
+    "get_player_group_rank_info",
     "create_game",
     "finish_game",
     "record_game_result",
     "get_total_games",
     "get_total_groups",
-
-    # groups
-    "ensure_chat",
-    "add_group_points",
-    "record_group_correct_answer",
-    "increment_group_games_played",
-    "increment_group_games_won",
-    "get_group_leaderboard_page",
-    "get_player_group_rank_info",
-
-    # chats
     "get_broadcast_chat_ids",
+    "has_played_daily_quiz",
+    "record_daily_quiz_attempt",
 ]

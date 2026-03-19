@@ -1,5 +1,3 @@
-# bot.py
-
 import logging
 
 from telegram import Update
@@ -40,6 +38,7 @@ from handlers.admin import (
     admin_panel,
     admin_button_handler,
     bot_stats_command,
+    reset_stats,
     question_step,
     a_step,
     b_step,
@@ -248,6 +247,7 @@ def main():
     app.add_handler(CommandHandler("global", global_leaderboard))
     app.add_handler(CommandHandler("dailyquiz", daily_quiz))
     app.add_handler(CommandHandler("botstats", bot_stats_command))
+    app.add_handler(CommandHandler("resetstats", reset_stats))
 
     app.add_handler(admin_conv)
 

@@ -31,7 +31,7 @@ from utils.texts import (
     format_questions_menu_text,
     format_search_results_text,
 )
-from database import get_question_by_id
+from database import get_question_by_id, get_conn
 
 from services.question_service import (
     create_question_service,
@@ -187,6 +187,24 @@ async def bot_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = format_bot_stats_text(stats)
 
     await update.effective_message.reply_text(text)
+
+
+async def reset_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+
+    if not is_admin(user.id):
+        await update.effective_message.reply_text(admin_only_text())
+        return
+
+    with get_conn() as conn:
+        conn.execute("UPDATE players SET points = 0, games_played = 0, games_won = 0")
+        conn.execute("DELETE FROM games")
+        conn.execute("DELETE FROM game_results")
+        conn.execute("DELETE FROM answers")
+
+    await update.effective_message.reply_text(
+        "✅ Leaderboard reset. All player scores are now 0."
+    )
 
 
 async def import_questions_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):

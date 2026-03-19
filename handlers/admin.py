@@ -18,6 +18,8 @@ from database import (
     get_question_by_id,
     update_question,
     delete_question,
+    activate_question,
+    deactivate_question,
     get_broadcast_chat_ids,
     get_total_users_count,
     get_total_questions_count,
@@ -112,21 +114,89 @@ def build_question_preview(q: tuple) -> str:
     is_active = q[9]
     times_used = q[10]
 
-    status = "Active" if is_active else "Inactive"
-
     return (
-        f"ID: {question_id}\n"
-        f"Question: {question_text}\n\n"
+        f"🆔 ID: {question_id}\n"
+        f"📌 Status: {status_text(is_active)}\n"
+        f"🏷 Category: {category}\n"
+        f"📈 Difficulty: {difficulty}\n"
+        f"🔁 Times used: {times_used}\n\n"
+        f"❓ {question_text}\n\n"
         f"A) {option_a}\n"
         f"B) {option_b}\n"
         f"C) {option_c}\n"
         f"D) {option_d}\n\n"
-        f"Correct: {correct_letter}\n"
-        f"Category: {category}\n"
-        f"Difficulty: {difficulty}\n"
-        f"Status: {status}\n"
-        f"Times used: {times_used}"
+        f"✅ Correct: {correct_letter}"
     )
+
+
+def status_text(is_active: int) -> str:
+    return "✅ Active" if is_active else "🚫 Inactive"
+
+
+def question_action_keyboard(qid: int, is_active: int, source: str = "questions") -> InlineKeyboardMarkup:
+    toggle_label = "🚫 Deactivate" if is_active else "♻️ Activate"
+    toggle_action = "deactivate" if is_active else "activate"
+
+    keyboard = [
+        [
+            InlineKeyboardButton("✏️ Edit", callback_data=f"admin_edit_direct_{qid}"),
+            InlineKeyboardButton(toggle_label, callback_data=f"admin_toggle_{toggle_action}_{qid}_{source}"),
+        ],
+        [InlineKeyboardButton("⬅️ Back", callback_data=f"admin_return_{source}")],
+        [InlineKeyboardButton("❌ Cancel", callback_data="admin_close")],
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
+def build_search_results_keyboard(results) -> InlineKeyboardMarkup:
+    keyboard = []
+
+    for q in results:
+        qid = q[0]
+        is_active = q[9]
+
+        toggle_label = "🚫 Deactivate" if is_active else "♻️ Activate"
+        toggle_action = "deactivate" if is_active else "activate"
+
+        keyboard.append([
+            InlineKeyboardButton(f"✏️ Edit {qid}", callback_data=f"admin_search_edit_{qid}"),
+            InlineKeyboardButton(toggle_label, callback_data=f"admin_toggle_{toggle_action}_{qid}_search"),
+        ])
+
+    keyboard.append([InlineKeyboardButton("⬅️ Back", callback_data="admin_questions")])
+    keyboard.append([InlineKeyboardButton("❌ Cancel", callback_data="admin_close")])
+
+    return InlineKeyboardMarkup(keyboard)
+
+
+async def show_question_details(target, qid: int, source: str = "questions"):
+    q = get_question_by_id(qid)
+    if not q:
+        if hasattr(target, "edit_message_text"):
+            await target.edit_message_text(
+                "Question not found.",
+                reply_markup=nav_keyboard("admin_questions"),
+            )
+        else:
+            await target.reply_text(
+                "Question not found.",
+                reply_markup=nav_keyboard("admin_questions"),
+            )
+        return ADMIN_MENU
+
+    text = (
+        "📘 Question Details\n\n"
+        f"{build_question_preview(q)}"
+    )
+
+    markup = question_action_keyboard(qid, q[9], source)
+
+    if hasattr(target, "edit_message_text"):
+        await target.edit_message_text(text, reply_markup=markup)
+    else:
+        await target.reply_text(text, reply_markup=markup)
+
+    return ADMIN_MENU
 
 
 def build_search_results_keyboard(results) -> InlineKeyboardMarkup:
@@ -171,100 +241,6 @@ async def show_questions_menu(target):
     return ADMIN_MENU
 
 
-async def show_search_results(target, keyword: str):
-    results = search_questions_by_keyword(keyword, limit=15)
-
-    if not results:
-        text = f"🔎 Search results for: {keyword}\n\nNo questions found."
-        markup = nav_keyboard("admin_questions")
-
-        if hasattr(target, "edit_message_text"):
-            await target.edit_message_text(text, reply_markup=markup)
-        else:
-            await target.reply_text(text, reply_markup=markup)
-
-        return ADMIN_MENU
-
-    lines = [
-        f"🔎 Search results for: {keyword}",
-        "",
-        "✅ = active | 🚫 = inactive",
-        "",
-    ]
-
-    for q in results:
-        qid = q[0]
-        question_text = q[1]
-        category = q[7]
-        difficulty = q[8]
-        is_active = q[9]
-        times_used = q[10]
-
-        status = "✅" if is_active else "🚫"
-        lines.append(
-            f"{status} ID {qid}: {question_text}\n"
-            f"{category} | {difficulty} | used: {times_used}"
-        )
-
-    text = "\n\n".join(lines)
-    if len(text) > 4000:
-        text = text[:3900] + "\n\n..."
-
-    markup = build_search_results_keyboard(results)
-
-    if hasattr(target, "edit_message_text"):
-        await target.edit_message_text(text, reply_markup=markup)
-    else:
-        await target.reply_text(text, reply_markup=markup)
-
-    return ADMIN_MENU
-
-
-async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data.clear()
-
-    if update.message:
-        await update.message.reply_text(
-            "Cancelled.",
-            reply_markup=admin_main_keyboard(),
-        )
-    elif update.callback_query:
-        await update.callback_query.answer()
-        await update.callback_query.edit_message_text(
-            "🛠 *Admin Panel*\n\nChoose an action:",
-            reply_markup=admin_main_keyboard(),
-            parse_mode="Markdown",
-        )
-
-    return ConversationHandler.END
-
-
-async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    if not is_admin(user.id):
-        if update.message:
-            await update.message.reply_text(admin_only_text())
-        elif update.callback_query:
-            await update.callback_query.answer(admin_only_text(), show_alert=True)
-        return ConversationHandler.END
-
-    text = "🛠 *Admin Panel*\n\nChoose an action:"
-
-    if update.message:
-        await update.message.reply_text(
-            text,
-            reply_markup=admin_main_keyboard(),
-            parse_mode="Markdown",
-        )
-    elif update.callback_query:
-        await update.callback_query.answer()
-        await update.callback_query.edit_message_text(
-            text,
-            reply_markup=admin_main_keyboard(),
-            parse_mode="Markdown",
-        )
-
-    return ADMIN_MENU
 
 
 async def bot_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -341,6 +317,104 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     await query.answer()
     data = query.data
 
+    if data.startswith("admin_edit_direct_"):
+        qid_text = data.replace("admin_edit_direct_", "").strip()
+        if not qid_text.isdigit():
+            await query.edit_message_text(
+                "Invalid question ID.",
+                reply_markup=nav_keyboard("admin_questions"),
+            )
+            return ADMIN_MENU
+
+        qid = int(qid_text)
+        q = get_question_by_id(qid)
+        if not q:
+            await query.edit_message_text(
+                "Question not found.",
+                reply_markup=nav_keyboard("admin_questions"),
+            )
+            return ADMIN_MENU
+
+        context.user_data["edit_qid"] = qid
+        context.user_data["edit_question"] = {
+            "question_text": q[1],
+            "option_a": q[2],
+            "option_b": q[3],
+            "option_c": q[4],
+            "option_d": q[5],
+            "correct_option": q[6],
+            "category": q[7],
+            "difficulty": q[8],
+        }
+
+        await query.edit_message_text(
+            "✏️ Edit Question\n\n"
+            f"{build_question_preview(q)}\n\n"
+            "Send new question text:",
+            reply_markup=nav_keyboard("admin_questions"),
+        )
+        return EDIT_QUESTION
+    
+    if data.startswith("admin_open_"):
+        qid_text = data.replace("admin_open_", "").strip()
+        if not qid_text.isdigit():
+            await query.edit_message_text(
+                "Invalid question ID.",
+                reply_markup=nav_keyboard("admin_questions"),
+            )
+            return ADMIN_MENU
+
+        qid = int(qid_text)
+        return await show_question_details(query, qid, "questions")
+    
+    if data.startswith("admin_toggle_"):
+        parts = data.split("_")
+        if len(parts) < 5:
+            await query.edit_message_text(
+                "Invalid action.",
+                reply_markup=nav_keyboard("admin_questions"),
+            )
+            return ADMIN_MENU
+
+        action = parts[2]
+        qid_text = parts[3]
+        source = parts[4]
+
+        if not qid_text.isdigit():
+            await query.edit_message_text(
+                "Invalid question ID.",
+                reply_markup=nav_keyboard("admin_questions"),
+            )
+            return ADMIN_MENU
+
+        qid = int(qid_text)
+
+        if action == "activate":
+            activate_question(qid)
+        elif action == "deactivate":
+            deactivate_question(qid)
+
+        if source == "search":
+            keyword = context.user_data.get("search_keyword")
+            if keyword:
+                return await show_search_results(query, keyword)
+            return await show_questions_menu(query)
+
+        return await show_question_details(query, qid, source)
+    
+    if data.startswith("admin_return_"):
+        source = data.replace("admin_return_", "").strip()
+
+        if source == "search":
+            keyword = context.user_data.get("search_keyword")
+            if keyword:
+                return await show_search_results(query, keyword)
+
+        if source == "questions":
+            return await show_questions_menu(query)
+
+        return await show_admin_panel_message(query)
+
     if data.startswith("admin_search_edit_"):
         qid_text = data.replace("admin_search_edit_", "").strip()
         if not qid_text.isdigit():
@@ -376,44 +450,13 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         }
 
         await query.edit_message_text(
-            "✏️ Current question:\n\n"
+            "✏️ Edit Question\n\n"
             f"{build_question_preview(q)}\n\n"
             "Send new question text:",
             reply_markup=nav_keyboard("admin_questions"),
         )
         return EDIT_QUESTION
 
-    if data.startswith("admin_search_delete_"):
-        qid_text = data.replace("admin_search_delete_", "").strip()
-        if not qid_text.isdigit():
-            await query.edit_message_text(
-                "Invalid question ID.",
-                reply_markup=nav_keyboard("admin_questions"),
-            )
-            return ADMIN_MENU
-
-        qid = int(qid_text)
-        q = get_question_by_id(qid)
-        if not q:
-            keyword = context.user_data.get("search_keyword")
-            if keyword:
-                return await show_search_results(query, keyword)
-
-            await query.edit_message_text(
-                "Question not found.",
-                reply_markup=questions_keyboard(),
-            )
-            return ADMIN_MENU
-
-        context.user_data["delete_qid"] = qid
-
-        await query.edit_message_text(
-            "🗑 Question preview:\n\n"
-            f"{build_question_preview(q)}\n\n"
-            "Are you sure you want to delete this question?",
-            reply_markup=delete_confirm_keyboard(),
-        )
-        return DELETE_CONFIRM
 
     if data == "admin_close":
         context.user_data.clear()
@@ -509,7 +552,7 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         return await import_questions_entry(update, context)
 
     if data == "admin_list_questions":
-        questions = get_all_questions(limit=30)
+        questions = get_all_questions(limit=15)
 
         if not questions:
             await query.edit_message_text(
@@ -518,22 +561,30 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             )
             return ADMIN_MENU
 
-        lines = ["📋 Questions List", ""]
+        lines = ["📋 Latest Questions", ""]
+
+        keyboard = []
 
         for q in questions:
             qid = q[0]
             question_text = q[1]
-            correct_letter = q[6]
             category = q[7]
             difficulty = q[8]
             is_active = q[9]
-            times_used = q[10]
 
-            status = "✅" if is_active else "🚫"
+            short_question = question_text[:45] + "..." if len(question_text) > 45 else question_text
             lines.append(
-                f"{status} ID {qid}: {question_text}\n"
-                f"Correct: {correct_letter} | {category} | {difficulty} | used: {times_used}"
+                f"{status_text(is_active)} | ID {qid}\n"
+                f"{short_question}\n"
+                f"{category} | {difficulty}"
             )
+
+            keyboard.append([
+                InlineKeyboardButton(f"📘 Open {qid}", callback_data=f"admin_open_{qid}"),
+            ])
+
+        keyboard.append([InlineKeyboardButton("⬅️ Back", callback_data="admin_questions")])
+        keyboard.append([InlineKeyboardButton("❌ Cancel", callback_data="admin_close")])
 
         text = "\n\n".join(lines)
         if len(text) > 4000:
@@ -541,7 +592,7 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
 
         await query.edit_message_text(
             text,
-            reply_markup=nav_keyboard("admin_questions"),
+            reply_markup=InlineKeyboardMarkup(keyboard),
         )
         return ADMIN_MENU
 

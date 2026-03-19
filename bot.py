@@ -28,10 +28,9 @@ from handlers.game import (
 from handlers.profile import (
     profile,
     leaderboard,
-    global_leaderboard,
-    daily_leaderboard,
-    weekly_leaderboard,
-    monthly_leaderboard,
+    daily,
+    weekly,
+    monthly,
     profile_callback_handler,
 )
 
@@ -62,6 +61,7 @@ from handlers.admin import (
     import_questions_entry,
     import_questions_file_step,
     cancel,
+    ADMIN_MENU,
     QUESTION,
     A,
     B,
@@ -79,10 +79,10 @@ from handlers.admin import (
     EDIT_CORRECT,
     EDIT_CATEGORY,
     EDIT_DIFFICULTY,
-    SEARCH_KEYWORD,
     BROADCAST_MESSAGE,
     BROADCAST_CONFIRM,
     IMPORT_FILE,
+    SEARCH_KEYWORD,
 )
 
 logging.basicConfig(
@@ -90,45 +90,17 @@ logging.basicConfig(
     level=logging.INFO,
 )
 
-logger = logging.getLogger(__name__)
-
 
 def main():
     create_tables()
 
-    application = Application.builder().token(BOT_TOKEN).build()
+    app = Application.builder().token(BOT_TOKEN).build()
 
-    # -------- COMMANDS --------
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("play", start_game))
-    application.add_handler(CommandHandler("stopgame", stop_game))
-    application.add_handler(CommandHandler("dailyquiz", daily_quiz))
-    application.add_handler(CommandHandler("profile", profile))
-
-    # Leaderboards
-    application.add_handler(CommandHandler("leaderboard", leaderboard))
-    application.add_handler(CommandHandler("global", global_leaderboard))
-    application.add_handler(CommandHandler("daily", daily_leaderboard))
-    application.add_handler(CommandHandler("weekly", weekly_leaderboard))
-    application.add_handler(CommandHandler("monthly", monthly_leaderboard))
-
-    application.add_handler(CommandHandler("admin", admin_panel))
-    application.add_handler(CommandHandler("botstats", bot_stats_command))
-    application.add_handler(CommandHandler("importquestions", import_questions_entry))
-    application.add_handler(CommandHandler("myid", myid))
-
-    # -------- ADMIN CONVERSATION --------
-    admin_conversation = ConversationHandler(
+    admin_conv = ConversationHandler(
         entry_points=[
             CommandHandler("admin", admin_panel),
-            CallbackQueryHandler(
-                admin_button_handler,
-                pattern=(
-                    r"^admin_"
-                    r"|^confirm_delete_"
-                    r"|^broadcast_"
-                ),
-            ),
+            CallbackQueryHandler(admin_button_handler, pattern=r"^admin_"),
+            CallbackQueryHandler(import_questions_entry, pattern=r"^import_questions$"),
         ],
         states={
             QUESTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, question_step)],
@@ -137,12 +109,8 @@ def main():
             C: [MessageHandler(filters.TEXT & ~filters.COMMAND, c_step)],
             D: [MessageHandler(filters.TEXT & ~filters.COMMAND, d_step)],
             CORRECT: [MessageHandler(filters.TEXT & ~filters.COMMAND, correct_step)],
-
             DELETE_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, delete_id_step)],
-            DELETE_CONFIRM: [
-                CallbackQueryHandler(delete_confirm_step, pattern=r"^confirm_delete_(yes|no)$")
-            ],
-
+            DELETE_CONFIRM: [MessageHandler(filters.TEXT & ~filters.COMMAND, delete_confirm_step)],
             EDIT_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_id_step)],
             EDIT_QUESTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_question_step)],
             EDIT_A: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_a_step)],
@@ -152,19 +120,11 @@ def main():
             EDIT_CORRECT: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_correct_step)],
             EDIT_CATEGORY: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_category_step)],
             EDIT_DIFFICULTY: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_difficulty_step)],
-
+            BROADCAST_MESSAGE: [MessageHandler(filters.ALL & ~filters.COMMAND, broadcast_message_step)],
+            BROADCAST_CONFIRM: [CallbackQueryHandler(broadcast_confirm_step)],
+            IMPORT_FILE: [MessageHandler(filters.Document.ALL, import_questions_file_step)],
             SEARCH_KEYWORD: [MessageHandler(filters.TEXT & ~filters.COMMAND, search_keyword_step)],
-
-            BROADCAST_MESSAGE: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_message_step)
-            ],
-            BROADCAST_CONFIRM: [
-                CallbackQueryHandler(broadcast_confirm_step, pattern=r"^broadcast_(yes|no)$")
-            ],
-
-            IMPORT_FILE: [
-                MessageHandler(filters.Document.ALL & ~filters.COMMAND, import_questions_file_step)
-            ],
+            ADMIN_MENU: [CallbackQueryHandler(admin_button_handler, pattern=r"^admin_")],
         },
         fallbacks=[
             CommandHandler("cancel", cancel),
@@ -172,42 +132,55 @@ def main():
         ],
         allow_reentry=True,
     )
-    application.add_handler(admin_conversation)
 
-    # -------- CALLBACKS --------
-    application.add_handler(
+    app.add_handler(admin_conv)
+
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("play", start_game))
+    app.add_handler(CommandHandler("stopgame", stop_game))
+    app.add_handler(CommandHandler("leaderboard", leaderboard))
+    app.add_handler(CommandHandler("daily", daily))
+    app.add_handler(CommandHandler("weekly", weekly))
+    app.add_handler(CommandHandler("monthly", monthly))
+    app.add_handler(CommandHandler("profile", profile))
+    app.add_handler(CommandHandler("botstats", bot_stats_command))
+    app.add_handler(CommandHandler("dailyquiz", daily_quiz))
+    app.add_handler(CommandHandler("myid", myid))
+
+    app.add_handler(
         CallbackQueryHandler(
             profile_callback_handler,
-            pattern=r"^lb_(global|group|daily|weekly|monthly)_\d+$|^lb_myrank$",
+            pattern=(
+                r"^(menu_leaderboard|leaderboard_global|leaderboard_group|"
+                r"leaderboard_daily|leaderboard_weekly|leaderboard_monthly|"
+                r"leaderboard_rank|profile|menu_main)$"
+            ),
         )
     )
 
-    application.add_handler(
+    app.add_handler(
         CallbackQueryHandler(
             game_setup_callback_handler,
-            pattern=r"^(quiz_count_|quiz_category_|quiz_difficulty_|quiz_start_confirm)",
+            pattern=r"^(set_count_|set_category_)",
         )
     )
 
-    application.add_handler(
+    app.add_handler(
         CallbackQueryHandler(
             menu_handler,
-            pattern=r"^(menu_|profile$|play_quiz$)",
+            pattern=r"^(menu_|play_quiz|start_game|back_)",
         )
     )
 
-    application.add_handler(
+    app.add_handler(
         CallbackQueryHandler(
             button_handler,
-            pattern=r"^(join_quiz|stop_quiz)$",
         )
     )
 
-    # -------- POLL ANSWERS --------
-    application.add_handler(PollAnswerHandler(receive_poll_answer))
+    app.add_handler(PollAnswerHandler(receive_poll_answer))
 
-    logger.info("Bot is running...")
-    application.run_polling()
+    app.run_polling()
 
 
 if __name__ == "__main__":

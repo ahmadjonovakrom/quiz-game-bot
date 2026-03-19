@@ -5,7 +5,7 @@ from telegram import (
     Update,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
-    BufferedInputFile,
+    InputFile,
 )
 from telegram.ext import ContextTypes, ConversationHandler
 
@@ -316,10 +316,11 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         writer.writerows(rows)
 
         csv_bytes = output.getvalue().encode("utf-8-sig")
-        file = BufferedInputFile(csv_bytes, filename="questions_export.csv")
+        file_obj = io.BytesIO(csv_bytes)
+        file_obj.name = "questions_export.csv"
 
         await query.message.reply_document(
-            document=file,
+            document=InputFile(file_obj),
             caption=f"📤 Exported {len(rows)} questions.",
         )
 

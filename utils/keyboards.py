@@ -66,12 +66,47 @@ def leaderboard_menu_keyboard(chat_type: str) -> InlineKeyboardMarkup:
 
 def admin_main_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
+        [InlineKeyboardButton("📚 Question Management", callback_data="admin_questions")],
+        [InlineKeyboardButton("📊 Bot Stats", callback_data="admin_botstats")],
+        [InlineKeyboardButton("📢 Broadcast", callback_data="admin_broadcast")],
+        [InlineKeyboardButton("❌ Close", callback_data="admin_close")],
+    ])
+
+
+def admin_questions_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
         [InlineKeyboardButton("➕ Add Question", callback_data="admin_add")],
         [InlineKeyboardButton("✏️ Edit Question", callback_data="admin_edit")],
         [InlineKeyboardButton("🗑 Delete Question", callback_data="admin_delete")],
         [InlineKeyboardButton("🔎 Search Questions", callback_data="admin_search")],
         [InlineKeyboardButton("📥 Import Questions", callback_data="import_questions")],
-        [InlineKeyboardButton("📊 Bot Stats", callback_data="admin_botstats")],
-        [InlineKeyboardButton("📢 Broadcast", callback_data="admin_broadcast")],
+        [InlineKeyboardButton("⬅️ Back", callback_data="admin_back_main")],
+        [InlineKeyboardButton("❌ Close", callback_data="admin_close")],
+    ])
+
+
+def admin_confirm_keyboard(
+    yes_callback: str = "admin_confirm_yes",
+    no_callback: str = "admin_confirm_no",
+) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("✅ Confirm", callback_data=yes_callback),
+            InlineKeyboardButton("❌ Cancel", callback_data=no_callback),
+        ]
+    ])
+
+
+def broadcast_confirm_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("✅ Send", callback_data="broadcast_send"),
+            InlineKeyboardButton("❌ Cancel", callback_data="broadcast_cancel"),
+        ]
+    ])
+
+
+def close_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
         [InlineKeyboardButton("❌ Close", callback_data="admin_close")],
     ])

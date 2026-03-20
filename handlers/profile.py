@@ -87,7 +87,6 @@ async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-# Compatibility wrapper for handlers.game import
 async def send_leaderboard_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await leaderboard(update, context)
 

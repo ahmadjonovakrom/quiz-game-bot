@@ -104,7 +104,6 @@ def create_tables():
             )
         """)
 
-        # NEW: points history for daily / weekly / monthly leaderboards
         conn.execute("""
             CREATE TABLE IF NOT EXISTS player_points_history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -344,6 +344,88 @@ def get_player_group_rank_info(chat_id: int, user_id: int):
     return None, me["total_points"]
 
 
+def _get_group_period_rank_info(chat_id: int, user_id: int, where_clause: str):
+    with closing(get_conn()) as conn:
+        me = conn.execute(
+            f"""
+            SELECT
+                gs.user_id,
+                COALESCE(SUM(gph.points), 0) AS period_points
+            FROM group_scores gs
+            LEFT JOIN group_points_history gph
+              ON gs.chat_id = gph.chat_id
+             AND gs.user_id = gph.user_id
+             AND {where_clause}
+            WHERE gs.chat_id = ?
+              AND gs.user_id = ?
+            GROUP BY gs.user_id
+            HAVING period_points > 0
+            """,
+            (chat_id, user_id),
+        ).fetchone()
+
+        if not me:
+            return None, 0
+
+        rows = conn.execute(
+            f"""
+            SELECT
+                gs.user_id,
+                COALESCE(SUM(gph.points), 0) AS period_points,
+                gs.correct_answers,
+                gs.games_won
+            FROM group_scores gs
+            LEFT JOIN group_points_history gph
+              ON gs.chat_id = gph.chat_id
+             AND gs.user_id = gph.user_id
+             AND {where_clause}
+            WHERE gs.chat_id = ?
+            GROUP BY
+                gs.user_id,
+                gs.correct_answers,
+                gs.games_won
+            HAVING period_points > 0
+            ORDER BY
+                period_points DESC,
+                gs.correct_answers DESC,
+                gs.games_won DESC,
+                gs.user_id ASC
+            """,
+            (chat_id,),
+        ).fetchall()
+
+    for index, row in enumerate(rows, start=1):
+        if row["user_id"] == user_id:
+            return index, me["period_points"]
+
+    return None, me["period_points"]
+
+
+def get_player_group_daily_rank_info(chat_id: int, user_id: int):
+    return _get_group_period_rank_info(
+        chat_id,
+        user_id,
+        "DATE(gph.created_at, 'localtime') = DATE('now', 'localtime')",
+    )
+
+
+def get_player_group_weekly_rank_info(chat_id: int, user_id: int):
+    return _get_group_period_rank_info(
+        chat_id,
+        user_id,
+        "DATE(gph.created_at, 'localtime') >= DATE('now', 'localtime', 'weekday 1', '-7 days') "
+        "AND DATE(gph.created_at, 'localtime') <= DATE('now', 'localtime')",
+    )
+
+
+def get_player_group_monthly_rank_info(chat_id: int, user_id: int):
+    return _get_group_period_rank_info(
+        chat_id,
+        user_id,
+        "strftime('%Y-%m', gph.created_at, 'localtime') = strftime('%Y-%m', 'now', 'localtime')",
+    )
+
+
 def create_game(chat_id: int, total_players: int = 0, total_rounds: int = 0, status: str = "running") -> int:
     with closing(get_conn()) as conn, conn:
         cur = conn.execute(

@@ -14,6 +14,9 @@ from database import (
     get_group_weekly_leaderboard,
     get_group_monthly_leaderboard,
     get_player_group_rank_info,
+    get_player_group_daily_rank_info,
+    get_player_group_weekly_rank_info,
+    get_player_group_monthly_rank_info,
     get_player_daily_rank_info,
     get_player_weekly_rank_info,
     get_player_monthly_rank_info,
@@ -347,12 +350,15 @@ async def show_group_daily_leaderboard(update: Update, context: ContextTypes.DEF
             return
 
         rows = get_group_daily_leaderboard(chat.id, limit=10)
+        rank, points = get_player_group_daily_rank_info(chat.id, user.id) if user else (None, 0)
 
         text = format_leaderboard_text(
             "This Group • Daily",
             rows,
             points_key="period_points",
             viewer_user_id=user.id if user else None,
+            viewer_rank=rank,
+            viewer_points=points,
             empty_message="No activity yet today in this group.\nBe the first to play!",
         )
 
@@ -380,12 +386,15 @@ async def show_group_weekly_leaderboard(update: Update, context: ContextTypes.DE
             return
 
         rows = get_group_weekly_leaderboard(chat.id, limit=10)
+        rank, points = get_player_group_weekly_rank_info(chat.id, user.id) if user else (None, 0)
 
         text = format_leaderboard_text(
             "This Group • Weekly",
             rows,
             points_key="period_points",
             viewer_user_id=user.id if user else None,
+            viewer_rank=rank,
+            viewer_points=points,
             empty_message="No activity yet this week in this group.\nStart the competition!",
         )
 
@@ -413,12 +422,15 @@ async def show_group_monthly_leaderboard(update: Update, context: ContextTypes.D
             return
 
         rows = get_group_monthly_leaderboard(chat.id, limit=10)
+        rank, points = get_player_group_monthly_rank_info(chat.id, user.id) if user else (None, 0)
 
         text = format_leaderboard_text(
             "This Group • Monthly",
             rows,
             points_key="period_points",
             viewer_user_id=user.id if user else None,
+            viewer_rank=rank,
+            viewer_points=points,
             empty_message="No activity yet this month in this group.\nBe the first to score!",
         )
 

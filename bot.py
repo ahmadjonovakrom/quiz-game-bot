@@ -145,6 +145,7 @@ def main():
 
     app.add_handler(admin_conv)
 
+    # commands
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("play", start_game))
     app.add_handler(CommandHandler("startgame", start_game))
@@ -165,6 +166,7 @@ def main():
     app.add_handler(CommandHandler("dailyquiz", daily_quiz))
     app.add_handler(CommandHandler("myid", myid))
 
+    # group leaderboard old callbacks
     app.add_handler(
         CallbackQueryHandler(
             group_leaderboard_callback_handler,
@@ -172,6 +174,7 @@ def main():
         )
     )
 
+    # game setup callbacks
     app.add_handler(
         CallbackQueryHandler(
             game_setup_callback_handler,
@@ -179,6 +182,7 @@ def main():
         )
     )
 
+    # menu callbacks
     app.add_handler(
         CallbackQueryHandler(
             menu_handler,
@@ -186,17 +190,15 @@ def main():
         )
     )
 
+    # profile + new leaderboard callbacks
     app.add_handler(
         CallbackQueryHandler(
             profile_callback_handler,
-            pattern=(
-                r"^(leaderboard_global|leaderboard_group|"
-                r"leaderboard_daily|leaderboard_weekly|leaderboard_monthly|"
-                r"leaderboard_rank|profile)$"
-            ),
+            pattern=r"^(profile|leaderboard_.*)$",
         )
     )
 
+    # join button / game button callbacks
     app.add_handler(
         CallbackQueryHandler(
             button_handler,

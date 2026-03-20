@@ -2,11 +2,11 @@ import logging
 
 from telegram.ext import (
     Application,
-    CommandHandler,
     CallbackQueryHandler,
-    PollAnswerHandler,
+    CommandHandler,
     ConversationHandler,
     MessageHandler,
+    PollAnswerHandler,
     filters,
 )
 
@@ -66,7 +66,6 @@ from handlers.admin import (
     search_keyword_step,
     broadcast_message_step,
     broadcast_confirm_step,
-    import_questions_entry,
     import_questions_file_step,
     cancel,
     ADMIN_MENU,
@@ -99,16 +98,11 @@ logging.basicConfig(
 )
 
 
-def main():
-    create_tables()
-
-    app = Application.builder().token(BOT_TOKEN).build()
-
-    admin_conv = ConversationHandler(
+def build_admin_conversation() -> ConversationHandler:
+    return ConversationHandler(
         entry_points=[
             CommandHandler("admin", admin_panel),
             CallbackQueryHandler(admin_button_handler, pattern=r"^admin_"),
-            CallbackQueryHandler(import_questions_entry, pattern=r"^admin_import_questions$"),
         ],
         states={
             QUESTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, question_step)],
@@ -141,46 +135,49 @@ def main():
         allow_reentry=True,
     )
 
-    app.add_handler(admin_conv)
 
+def main():
+    create_tables()
+
+    app = Application.builder().token(BOT_TOKEN).build()
+
+    # Admin conversation first
+    app.add_handler(build_admin_conversation())
+
+    # Commands
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("play", start_game))
     app.add_handler(CommandHandler("startgame", start_game))
     app.add_handler(CommandHandler("stopgame", stop_game))
+
     app.add_handler(CommandHandler("leaderboard", leaderboard))
     app.add_handler(CommandHandler("daily", daily))
     app.add_handler(CommandHandler("weekly", weekly))
     app.add_handler(CommandHandler("monthly", monthly))
+
     app.add_handler(CommandHandler("groupleaderboard", group_leaderboard))
     app.add_handler(CommandHandler("groupdaily", group_daily))
     app.add_handler(CommandHandler("groupweekly", group_weekly))
     app.add_handler(CommandHandler("groupmonthly", group_monthly))
+
     app.add_handler(CommandHandler("profile", profile))
     app.add_handler(CommandHandler("botstats", bot_stats_command))
     app.add_handler(CommandHandler("dailyquiz", daily_quiz))
     app.add_handler(CommandHandler("myid", myid))
 
+    # Callback queries
     app.add_handler(
         CallbackQueryHandler(
             group_leaderboard_callback_handler,
             pattern=r"^group_lb_(all|daily|weekly|monthly)$",
         )
     )
-
     app.add_handler(
         CallbackQueryHandler(
             game_setup_callback_handler,
             pattern=r"^(setup_questions_|setup_category_|setup_difficulty_)",
         )
     )
-
-    app.add_handler(
-        CallbackQueryHandler(
-            menu_handler,
-            pattern=r"^menu_",
-        )
-    )
-
     app.add_handler(
         CallbackQueryHandler(
             profile_callback_handler,
@@ -191,14 +188,10 @@ def main():
             ),
         )
     )
+    app.add_handler(CallbackQueryHandler(menu_handler, pattern=r"^menu_"))
+    app.add_handler(CallbackQueryHandler(button_handler, pattern=r"^join\|"))
 
-    app.add_handler(
-        CallbackQueryHandler(
-            button_handler,
-            pattern=r"^join\|",
-        )
-    )
-
+    # Poll answers
     app.add_handler(PollAnswerHandler(receive_poll_answer))
 
     app.run_polling()

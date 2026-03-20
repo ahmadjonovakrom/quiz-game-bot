@@ -62,3 +62,16 @@ def leaderboard_menu_keyboard(chat_type: str) -> InlineKeyboardMarkup:
             InlineKeyboardButton("⬅️ Back", callback_data="menu_main"),
         ],
     ])
+
+
+def admin_main_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("➕ Add Question", callback_data="admin_add")],
+        [InlineKeyboardButton("✏️ Edit Question", callback_data="admin_edit")],
+        [InlineKeyboardButton("🗑 Delete Question", callback_data="admin_delete")],
+        [InlineKeyboardButton("🔎 Search Questions", callback_data="admin_search")],
+        [InlineKeyboardButton("📥 Import Questions", callback_data="import_questions")],
+        [InlineKeyboardButton("📊 Bot Stats", callback_data="admin_botstats")],
+        [InlineKeyboardButton("📢 Broadcast", callback_data="admin_broadcast")],
+        [InlineKeyboardButton("❌ Close", callback_data="admin_close")],
+    ])

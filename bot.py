@@ -34,6 +34,14 @@ from handlers.profile import (
     profile_callback_handler,
 )
 
+from handlers.group_leaderboard import (
+    group_leaderboard,
+    group_daily,
+    group_weekly,
+    group_monthly,
+    group_leaderboard_callback_handler,
+)
+
 from handlers.admin import (
     admin_panel,
     admin_button_handler,
@@ -100,7 +108,7 @@ def main():
         entry_points=[
             CommandHandler("admin", admin_panel),
             CallbackQueryHandler(admin_button_handler, pattern=r"^admin_"),
-            CallbackQueryHandler(import_questions_entry, pattern=r"^import_questions$"),
+            CallbackQueryHandler(import_questions_entry, pattern=r"^admin_import_questions$"),
         ],
         states={
             QUESTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, question_step)],
@@ -143,10 +151,21 @@ def main():
     app.add_handler(CommandHandler("daily", daily))
     app.add_handler(CommandHandler("weekly", weekly))
     app.add_handler(CommandHandler("monthly", monthly))
+    app.add_handler(CommandHandler("groupleaderboard", group_leaderboard))
+    app.add_handler(CommandHandler("groupdaily", group_daily))
+    app.add_handler(CommandHandler("groupweekly", group_weekly))
+    app.add_handler(CommandHandler("groupmonthly", group_monthly))
     app.add_handler(CommandHandler("profile", profile))
     app.add_handler(CommandHandler("botstats", bot_stats_command))
     app.add_handler(CommandHandler("dailyquiz", daily_quiz))
     app.add_handler(CommandHandler("myid", myid))
+
+    app.add_handler(
+        CallbackQueryHandler(
+            group_leaderboard_callback_handler,
+            pattern=r"^group_lb_(all|daily|weekly|monthly)$",
+        )
+    )
 
     app.add_handler(
         CallbackQueryHandler(

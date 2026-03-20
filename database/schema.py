@@ -85,6 +85,16 @@ def create_tables():
         """)
 
         conn.execute("""
+            CREATE TABLE IF NOT EXISTS group_points_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                chat_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                points INTEGER NOT NULL,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS chats (
                 chat_id INTEGER PRIMARY KEY,
                 chat_type TEXT NOT NULL,
@@ -157,6 +167,26 @@ def create_tables():
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_group_scores_points
             ON group_scores(total_points DESC)
+        """)
+
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_group_points_history_chat
+            ON group_points_history(chat_id)
+        """)
+
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_group_points_history_created
+            ON group_points_history(created_at)
+        """)
+
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_group_points_history_chat_created
+            ON group_points_history(chat_id, created_at)
+        """)
+
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_group_points_history_chat_user_created
+            ON group_points_history(chat_id, user_id, created_at)
         """)
 
         conn.execute("""

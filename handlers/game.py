@@ -26,10 +26,12 @@ from database import (
     get_random_question,
     ensure_player,
     ensure_chat,
+    ensure_group_player,
     add_points,
     add_group_points,
     record_correct_answer,
     record_group_correct_answer,
+    record_group_wrong_answer,
     record_wrong_answer,
     increment_games_played,
     increment_group_games_played,
@@ -836,6 +838,9 @@ async def receive_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
         else:
             record_wrong_answer(user.id)
 
+        if chat_id < 0:
+            record_group_wrong_answer(chat_id, user)
+
             msg = await context.bot.send_message(
                 info["chat_id"],
                 f"📅 Daily Quiz\n❌ {user.full_name} got it wrong.",
@@ -896,6 +901,7 @@ async def receive_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
         record_correct_answer(user.id, answer_time=elapsed)
 
         if chat_id < 0:
+            ensure_group_player(chat_id, user)
             add_group_points(chat_id, user, points_to_add)
             record_group_correct_answer(chat_id, user)
 

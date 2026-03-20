@@ -90,6 +90,11 @@ def add_group_points(chat_id: int, user, points: int):
                 last_played_at = CURRENT_TIMESTAMP
         """, (chat_id, user_id, username, full_name, points))
 
+        conn.execute("""
+            INSERT INTO group_points_history (chat_id, user_id, points)
+            VALUES (?, ?, ?)
+        """, (chat_id, user_id, points))
+
 
 def record_group_correct_answer(chat_id: int, user):
     user_id = user.id
@@ -152,28 +157,98 @@ def increment_group_games_won(chat_id: int, user):
 
 
 def get_group_leaderboard(chat_id: int, limit: int = 10):
-    rows = get_group_leaderboard_page(chat_id=chat_id, limit=limit, offset=0)
-    result = []
-
-    for row in rows:
-        result.append((
-            row["full_name"],
-            row["username"],
-            row["total_points"],
-        ))
-
-    return result
+    return get_group_leaderboard_page(chat_id=chat_id, limit=limit, offset=0)
 
 
 def get_group_leaderboard_page(chat_id: int, limit: int = 15, offset: int = 0):
     with closing(get_conn()) as conn:
         return conn.execute("""
-            SELECT *
+            SELECT
+                chat_id,
+                user_id,
+                username,
+                full_name,
+                total_points,
+                correct_answers,
+                games_played,
+                games_won,
+                last_played_at
             FROM group_scores
             WHERE chat_id = ?
             ORDER BY total_points DESC, correct_answers DESC, games_won DESC, user_id ASC
             LIMIT ? OFFSET ?
         """, (chat_id, limit, offset)).fetchall()
+
+
+def get_group_daily_leaderboard(chat_id: int, limit: int = 10):
+    with closing(get_conn()) as conn:
+        return conn.execute("""
+            SELECT
+                gs.chat_id,
+                gs.user_id,
+                gs.username,
+                gs.full_name,
+                COALESCE(SUM(gph.points), 0) AS period_points,
+                gs.correct_answers,
+                gs.games_won
+            FROM group_scores gs
+            JOIN group_points_history gph
+                ON gs.chat_id = gph.chat_id
+               AND gs.user_id = gph.user_id
+            WHERE gs.chat_id = ?
+              AND DATE(gph.created_at, 'localtime') = DATE('now', 'localtime')
+            GROUP BY gs.chat_id, gs.user_id, gs.username, gs.full_name, gs.correct_answers, gs.games_won
+            ORDER BY period_points DESC, gs.correct_answers DESC, gs.games_won DESC, gs.user_id ASC
+            LIMIT ?
+        """, (chat_id, limit)).fetchall()
+
+
+def get_group_weekly_leaderboard(chat_id: int, limit: int = 10):
+    with closing(get_conn()) as conn:
+        return conn.execute("""
+            SELECT
+                gs.chat_id,
+                gs.user_id,
+                gs.username,
+                gs.full_name,
+                COALESCE(SUM(gph.points), 0) AS period_points,
+                gs.correct_answers,
+                gs.games_won
+            FROM group_scores gs
+            JOIN group_points_history gph
+                ON gs.chat_id = gph.chat_id
+               AND gs.user_id = gph.user_id
+            WHERE gs.chat_id = ?
+              AND DATE(gph.created_at, 'localtime')
+                  BETWEEN DATE('now', 'localtime', 'weekday 1', '-7 days')
+                      AND DATE('now', 'localtime')
+            GROUP BY gs.chat_id, gs.user_id, gs.username, gs.full_name, gs.correct_answers, gs.games_won
+            ORDER BY period_points DESC, gs.correct_answers DESC, gs.games_won DESC, gs.user_id ASC
+            LIMIT ?
+        """, (chat_id, limit)).fetchall()
+
+
+def get_group_monthly_leaderboard(chat_id: int, limit: int = 10):
+    with closing(get_conn()) as conn:
+        return conn.execute("""
+            SELECT
+                gs.chat_id,
+                gs.user_id,
+                gs.username,
+                gs.full_name,
+                COALESCE(SUM(gph.points), 0) AS period_points,
+                gs.correct_answers,
+                gs.games_won
+            FROM group_scores gs
+            JOIN group_points_history gph
+                ON gs.chat_id = gph.chat_id
+               AND gs.user_id = gph.user_id
+            WHERE gs.chat_id = ?
+              AND strftime('%Y-%m', gph.created_at, 'localtime') = strftime('%Y-%m', 'now', 'localtime')
+            GROUP BY gs.chat_id, gs.user_id, gs.username, gs.full_name, gs.correct_answers, gs.games_won
+            ORDER BY period_points DESC, gs.correct_answers DESC, gs.games_won DESC, gs.user_id ASC
+            LIMIT ?
+        """, (chat_id, limit)).fetchall()
 
 
 def get_player_group_rank_info(chat_id: int, user_id: int):

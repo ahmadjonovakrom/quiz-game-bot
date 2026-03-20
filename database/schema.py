@@ -4,7 +4,10 @@ from .connection import get_conn
 
 
 def _get_column_names(conn, table_name: str) -> set[str]:
-    return {row["name"] for row in conn.execute(f"PRAGMA table_info({table_name})").fetchall()}
+    return {
+        row["name"]
+        for row in conn.execute(f"PRAGMA table_info({table_name})").fetchall()
+    }
 
 
 def create_tables():
@@ -131,7 +134,7 @@ def create_tables():
             )
         """)
 
-        # ---- backward-compatible migrations ----
+        # backward-compatible migrations
 
         question_columns = _get_column_names(conn, "questions")
         if "category" not in question_columns:
@@ -159,7 +162,7 @@ def create_tables():
         if "wrong_answers" not in group_score_columns:
             conn.execute("ALTER TABLE group_scores ADD COLUMN wrong_answers INTEGER DEFAULT 0")
 
-        # IMPORTANT: repair old history tables too
+        # important fix for old DBs
         group_points_history_columns = _get_column_names(conn, "group_points_history")
         if "created_at" not in group_points_history_columns:
             conn.execute(
@@ -172,7 +175,7 @@ def create_tables():
                 "ALTER TABLE player_points_history ADD COLUMN created_at TEXT DEFAULT CURRENT_TIMESTAMP"
             )
 
-        # ---- indexes ----
+        # indexes
 
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_players_points

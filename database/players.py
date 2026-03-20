@@ -11,11 +11,25 @@ PERIOD_ORDER_BY = """
 ORDER BY period_points DESC, correct_answers DESC, games_won DESC, p.user_id ASC
 """
 
+DAILY_REWARD_POINTS = 15
+WEEK_STREAK_BONUS_POINTS = 50
+WEEK_STREAK_STEP = 7
+
 
 def _normalize_user_input(user_or_id, username=None, full_name=None):
     if hasattr(user_or_id, "id"):
         return user_or_id.id, user_or_id.username, user_or_id.full_name
     return user_or_id, username, full_name
+
+
+def _get_local_today(conn) -> str:
+    row = conn.execute("SELECT DATE('now', 'localtime') AS d").fetchone()
+    return row["d"]
+
+
+def _get_local_yesterday(conn) -> str:
+    row = conn.execute("SELECT DATE('now', 'localtime', '-1 day') AS d").fetchone()
+    return row["d"]
 
 
 def ensure_player(user_or_id, username: str = None, full_name: str = None):
@@ -48,6 +62,30 @@ def get_player(user_id: int):
     with closing(get_conn()) as conn:
         return conn.execute("""
             SELECT *
+            FROM players
+            WHERE user_id = ?
+        """, (user_id,)).fetchone()
+
+
+def get_player_stats(user_id: int):
+    with closing(get_conn()) as conn:
+        return conn.execute("""
+            SELECT
+                user_id,
+                username,
+                full_name,
+                total_points,
+                games_played,
+                games_won,
+                correct_answers,
+                wrong_answers,
+                current_streak,
+                best_streak,
+                daily_streak,
+                best_daily_streak,
+                fastest_answer_time,
+                last_played_at,
+                created_at
             FROM players
             WHERE user_id = ?
         """, (user_id,)).fetchone()
@@ -208,6 +246,34 @@ def get_player_profile(user_id: int):
     return player, rank
 
 
+def get_player_full_profile(user_id: int):
+    with closing(get_conn()) as conn:
+        player = conn.execute("""
+            SELECT
+                full_name,
+                username,
+                total_points,
+                games_played,
+                games_won,
+                correct_answers,
+                wrong_answers,
+                current_streak,
+                best_streak,
+                daily_streak,
+                best_daily_streak,
+                fastest_answer_time,
+                last_played_at
+            FROM players
+            WHERE user_id = ?
+        """, (user_id,)).fetchone()
+
+    if not player:
+        return None, None
+
+    rank = get_player_rank(user_id)
+    return player, rank
+
+
 def get_player_global_rank_info(user_id: int):
     with closing(get_conn()) as conn:
         rows = conn.execute(f"""
@@ -293,6 +359,210 @@ def get_player_weekly_rank_info(user_id: int):
 def get_player_monthly_rank_info(user_id: int):
     rows = get_monthly_leaderboard_page(limit=100000, offset=0)
     return _get_rank_from_rows(rows, user_id, "period_points")
+
+
+def has_claimed_daily_reward(user_id: int):
+    with closing(get_conn()) as conn:
+        today = _get_local_today(conn)
+        row = conn.execute("""
+            SELECT 1
+            FROM daily_reward_claims
+            WHERE user_id = ? AND reward_date = ?
+        """, (user_id, today)).fetchone()
+        return bool(row)
+
+
+def get_daily_reward_status(user_id: int):
+    with closing(get_conn()) as conn:
+        today = _get_local_today(conn)
+        player = conn.execute("""
+            SELECT daily_streak, best_daily_streak
+            FROM players
+            WHERE user_id = ?
+        """, (user_id,)).fetchone()
+
+        claim = conn.execute("""
+            SELECT reward_date, base_points, bonus_points, streak_after_claim
+            FROM daily_reward_claims
+            WHERE user_id = ? AND reward_date = ?
+        """, (user_id, today)).fetchone()
+
+        return {
+            "claimed_today": bool(claim),
+            "today": today,
+            "daily_streak": player["daily_streak"] if player else 0,
+            "best_daily_streak": player["best_daily_streak"] if player else 0,
+            "base_points": claim["base_points"] if claim else 0,
+            "bonus_points": claim["bonus_points"] if claim else 0,
+            "streak_after_claim": claim["streak_after_claim"] if claim else 0,
+            "next_bonus_at": (
+                ((player["daily_streak"] // WEEK_STREAK_STEP) + 1) * WEEK_STREAK_STEP
+                if player and player["daily_streak"] >= 0 else WEEK_STREAK_STEP
+            ),
+        }
+
+
+def claim_daily_reward(
+    user_id: int,
+    base_points: int = DAILY_REWARD_POINTS,
+    streak_step: int = WEEK_STREAK_STEP,
+    streak_bonus_points: int = WEEK_STREAK_BONUS_POINTS,
+):
+    with closing(get_conn()) as conn, conn:
+        today = _get_local_today(conn)
+        yesterday = _get_local_yesterday(conn)
+
+        already_claimed = conn.execute("""
+            SELECT 1
+            FROM daily_reward_claims
+            WHERE user_id = ? AND reward_date = ?
+        """, (user_id, today)).fetchone()
+
+        if already_claimed:
+            claim = conn.execute("""
+                SELECT base_points, bonus_points, streak_after_claim
+                FROM daily_reward_claims
+                WHERE user_id = ? AND reward_date = ?
+            """, (user_id, today)).fetchone()
+
+            return {
+                "claimed": False,
+                "already_claimed": True,
+                "reward_date": today,
+                "base_points": claim["base_points"],
+                "bonus_points": claim["bonus_points"],
+                "total_points": claim["base_points"] + claim["bonus_points"],
+                "daily_streak": claim["streak_after_claim"],
+                "best_daily_streak": None,
+            }
+
+        ensure_row = conn.execute("""
+            SELECT user_id, daily_streak, best_daily_streak
+            FROM players
+            WHERE user_id = ?
+        """, (user_id,)).fetchone()
+
+        if not ensure_row:
+            conn.execute("""
+                INSERT INTO players (user_id, total_points, daily_streak, best_daily_streak)
+                VALUES (?, 0, 0, 0)
+            """, (user_id,))
+            current_daily_streak = 0
+            best_daily_streak = 0
+        else:
+            current_daily_streak = ensure_row["daily_streak"] or 0
+            best_daily_streak = ensure_row["best_daily_streak"] or 0
+
+        last_claim = conn.execute("""
+            SELECT reward_date
+            FROM daily_reward_claims
+            WHERE user_id = ?
+            ORDER BY reward_date DESC
+            LIMIT 1
+        """, (user_id,)).fetchone()
+
+        if last_claim and last_claim["reward_date"] == yesterday:
+            new_daily_streak = current_daily_streak + 1
+        else:
+            new_daily_streak = 1
+
+        new_best_daily_streak = max(best_daily_streak, new_daily_streak)
+        bonus_points = streak_bonus_points if new_daily_streak % streak_step == 0 else 0
+        total_points = base_points + bonus_points
+
+        conn.execute("""
+            UPDATE players
+            SET total_points = COALESCE(total_points, 0) + ?,
+                daily_streak = ?,
+                best_daily_streak = ?,
+                last_played_at = CURRENT_TIMESTAMP
+            WHERE user_id = ?
+        """, (total_points, new_daily_streak, new_best_daily_streak, user_id))
+
+        conn.execute("""
+            INSERT INTO player_points_history (user_id, points)
+            VALUES (?, ?)
+        """, (user_id, total_points))
+
+        conn.execute("""
+            INSERT INTO daily_reward_claims (
+                user_id,
+                reward_date,
+                base_points,
+                bonus_points,
+                streak_after_claim
+            ) VALUES (?, ?, ?, ?, ?)
+        """, (user_id, today, base_points, bonus_points, new_daily_streak))
+
+        return {
+            "claimed": True,
+            "already_claimed": False,
+            "reward_date": today,
+            "base_points": base_points,
+            "bonus_points": bonus_points,
+            "total_points": total_points,
+            "daily_streak": new_daily_streak,
+            "best_daily_streak": new_best_daily_streak,
+        }
+
+
+def reset_daily_streak_if_missed(user_id: int):
+    with closing(get_conn()) as conn, conn:
+        yesterday = _get_local_yesterday(conn)
+
+        last_claim = conn.execute("""
+            SELECT reward_date
+            FROM daily_reward_claims
+            WHERE user_id = ?
+            ORDER BY reward_date DESC
+            LIMIT 1
+        """, (user_id,)).fetchone()
+
+        if not last_claim:
+            conn.execute("""
+                UPDATE players
+                SET daily_streak = 0
+                WHERE user_id = ?
+            """, (user_id,))
+            return True
+
+        if last_claim["reward_date"] != yesterday:
+            conn.execute("""
+                UPDATE players
+                SET daily_streak = 0
+                WHERE user_id = ?
+            """, (user_id,))
+            return True
+
+        return False
+
+
+def get_player_streak_info(user_id: int):
+    with closing(get_conn()) as conn:
+        row = conn.execute("""
+            SELECT
+                current_streak,
+                best_streak,
+                daily_streak,
+                best_daily_streak
+            FROM players
+            WHERE user_id = ?
+        """, (user_id,)).fetchone()
+
+        if not row:
+            return {
+                "current_streak": 0,
+                "best_streak": 0,
+                "daily_streak": 0,
+                "best_daily_streak": 0,
+            }
+
+        return {
+            "current_streak": row["current_streak"] or 0,
+            "best_streak": row["best_streak"] or 0,
+            "daily_streak": row["daily_streak"] or 0,
+            "best_daily_streak": row["best_daily_streak"] or 0,
+        }
 
 
 def get_all_user_ids():

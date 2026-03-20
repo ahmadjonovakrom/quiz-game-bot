@@ -26,6 +26,8 @@ def create_tables():
                 wrong_answers INTEGER DEFAULT 0,
                 current_streak INTEGER DEFAULT 0,
                 best_streak INTEGER DEFAULT 0,
+                daily_streak INTEGER DEFAULT 0,
+                best_daily_streak INTEGER DEFAULT 0,
                 fastest_answer_time REAL,
                 last_played_at TEXT,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
@@ -134,7 +136,18 @@ def create_tables():
             )
         """)
 
-        # backward-compatible migrations
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS daily_reward_claims (
+                user_id INTEGER NOT NULL,
+                reward_date TEXT NOT NULL,
+                base_points INTEGER NOT NULL DEFAULT 0,
+                bonus_points INTEGER NOT NULL DEFAULT 0,
+                streak_after_claim INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (user_id, reward_date),
+                FOREIGN KEY (user_id) REFERENCES players(user_id) ON DELETE CASCADE
+            )
+        """)
 
         question_columns = _get_column_names(conn, "questions")
         if "category" not in question_columns:
@@ -155,6 +168,10 @@ def create_tables():
             conn.execute("ALTER TABLE players ADD COLUMN current_streak INTEGER DEFAULT 0")
         if "best_streak" not in player_columns:
             conn.execute("ALTER TABLE players ADD COLUMN best_streak INTEGER DEFAULT 0")
+        if "daily_streak" not in player_columns:
+            conn.execute("ALTER TABLE players ADD COLUMN daily_streak INTEGER DEFAULT 0")
+        if "best_daily_streak" not in player_columns:
+            conn.execute("ALTER TABLE players ADD COLUMN best_daily_streak INTEGER DEFAULT 0")
         if "fastest_answer_time" not in player_columns:
             conn.execute("ALTER TABLE players ADD COLUMN fastest_answer_time REAL")
 
@@ -162,7 +179,6 @@ def create_tables():
         if "wrong_answers" not in group_score_columns:
             conn.execute("ALTER TABLE group_scores ADD COLUMN wrong_answers INTEGER DEFAULT 0")
 
-        # IMPORTANT FIX FOR OLD DATABASES
         group_points_history_columns = _get_column_names(conn, "group_points_history")
         if "created_at" not in group_points_history_columns:
             conn.execute(
@@ -175,89 +191,75 @@ def create_tables():
                 "ALTER TABLE player_points_history ADD COLUMN created_at TEXT DEFAULT CURRENT_TIMESTAMP"
             )
 
-        # indexes
-
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_players_points
             ON players(total_points DESC)
         """)
-
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_players_rank_sort
             ON players(total_points DESC, correct_answers DESC, games_won DESC, user_id ASC)
         """)
-
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_questions_category
             ON questions(category)
         """)
-
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_questions_difficulty
             ON questions(difficulty)
         """)
-
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_questions_usage
             ON questions(times_used)
         """)
-
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_games_chat_id
             ON games(chat_id)
         """)
-
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_games_status
             ON games(status)
         """)
-
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_group_scores_points
             ON group_scores(total_points DESC)
         """)
-
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_group_scores_rank
             ON group_scores(chat_id, total_points DESC, correct_answers DESC, games_won DESC, user_id ASC)
         """)
-
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_group_points_history_chat
             ON group_points_history(chat_id)
         """)
-
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_group_points_history_created
             ON group_points_history(created_at)
         """)
-
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_group_points_history_chat_created
             ON group_points_history(chat_id, created_at)
         """)
-
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_group_points_history_chat_user_created
             ON group_points_history(chat_id, user_id, created_at)
         """)
-
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_player_points_history_user
             ON player_points_history(user_id)
         """)
-
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_player_points_history_created
             ON player_points_history(created_at)
         """)
-
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_player_points_history_user_created
             ON player_points_history(user_id, created_at)
         """)
-
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_player_points_history_created_user
             ON player_points_history(created_at, user_id)
+        """)
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_daily_reward_claims_user_date
+            ON daily_reward_claims(user_id, reward_date)
         """)

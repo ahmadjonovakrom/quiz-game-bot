@@ -1,4 +1,5 @@
 import logging
+import sys
 
 from telegram.ext import (
     Application,
@@ -93,8 +94,10 @@ from handlers.admin import (
 )
 
 logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+    handlers=[logging.StreamHandler(sys.stdout)],
+    force=True,
 )
 
 logger = logging.getLogger(__name__)
@@ -155,7 +158,6 @@ def main():
     app = Application.builder().token(BOT_TOKEN).build()
     app.add_error_handler(error_handler)
 
-    # Admin conversation first
     app.add_handler(build_admin_conversation())
 
     # Commands
@@ -179,7 +181,7 @@ def main():
     app.add_handler(CommandHandler("dailyquiz", daily_quiz))
     app.add_handler(CommandHandler("myid", myid))
 
-    # Callback queries
+    # Callback handlers
     app.add_handler(
         CallbackQueryHandler(
             group_leaderboard_callback_handler,
@@ -211,7 +213,6 @@ def main():
     # LAST: catch anything unmatched
     app.add_handler(CallbackQueryHandler(debug_callback))
 
-    # Poll answers
     app.add_handler(PollAnswerHandler(receive_poll_answer))
 
     logger.info("Bot is starting...")

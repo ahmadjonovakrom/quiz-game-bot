@@ -299,17 +299,17 @@ async def profile_callback_handler(update: Update, context: ContextTypes.DEFAULT
         return
 
     if data == "leaderboard_daily":
-        await query.message.reply_text("DEBUG: daily button reached")
+        await query.message.reply_text("✅ DAILY BUTTON WORKING")
         await show_daily_leaderboard(update, context)
         return
 
     if data == "leaderboard_weekly":
-        await query.message.reply_text("DEBUG: weekly button reached")
+        await query.message.reply_text("✅ WEEKLY BUTTON WORKING")
         await show_weekly_leaderboard(update, context)
         return
 
     if data == "leaderboard_monthly":
-        await query.message.reply_text("DEBUG: monthly button reached")
+        await query.message.reply_text("✅ MONTHLY BUTTON WORKING")
         await show_monthly_leaderboard(update, context)
         return
 

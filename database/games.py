@@ -9,7 +9,7 @@ ORDER BY total_points DESC, correct_answers DESC, games_won DESC, user_id ASC
 """
 
 GROUP_PERIOD_ORDER_BY = """
-ORDER BY period_points DESC, correct_answers DESC, games_won DESC, user_id ASC
+ORDER BY period_points DESC, gs.correct_answers DESC, gs.games_won DESC, gs.user_id ASC
 """
 
 
@@ -264,11 +264,11 @@ def _group_period_sql(where_clause: str) -> str:
             gs.correct_answers,
             gs.games_won
         FROM group_scores gs
-        JOIN group_points_history gph
+        LEFT JOIN group_points_history gph
           ON gs.chat_id = gph.chat_id
          AND gs.user_id = gph.user_id
+         AND {where_clause}
         WHERE gs.chat_id = ?
-          AND {where_clause}
         GROUP BY
             gs.chat_id,
             gs.user_id,
@@ -276,6 +276,7 @@ def _group_period_sql(where_clause: str) -> str:
             gs.full_name,
             gs.correct_answers,
             gs.games_won
+        HAVING period_points > 0
         {GROUP_PERIOD_ORDER_BY}
     """
 

@@ -82,7 +82,7 @@ def format_leaderboard_text(
         prefix = _rank_prefix(index)
         name = _extract_name(row)
         points = _safe_get(row, points_key, 0)
-        is_you = viewer_user_id and _safe_get(row, "user_id") == viewer_user_id
+        is_you = bool(viewer_user_id and _safe_get(row, "user_id") == viewer_user_id)
 
         if is_you:
             viewer_in_top = True
@@ -164,7 +164,7 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Lemons: 0 🍋\n"
             "Games Played: 0\n"
             "Correct Answers: 0"
-)
+        )
     else:
         full_name = _safe_get(profile_data, "full_name", user.full_name)
         username = _safe_get(profile_data, "username")
@@ -210,10 +210,13 @@ async def show_global_leaderboard(update: Update, context: ContextTypes.DEFAULT_
         )
 
         await _send_or_edit(update, text, back_keyboard("leaderboard_scope_global"))
-    except Exception as e:
+    except Exception:
         logger.exception("show_global_leaderboard crashed")
-        if update.callback_query:
-            await update.callback_query.message.reply_text(f"❌ Global leaderboard error: {e}")
+        await _send_or_edit(
+            update,
+            "❌ Global leaderboard is temporarily unavailable.",
+            back_keyboard("leaderboard_scope_global"),
+        )
 
 
 async def show_group_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -243,10 +246,13 @@ async def show_group_leaderboard(update: Update, context: ContextTypes.DEFAULT_T
         )
 
         await _send_or_edit(update, text, back_keyboard("leaderboard_scope_group"))
-    except Exception as e:
+    except Exception:
         logger.exception("show_group_leaderboard crashed")
-        if update.callback_query:
-            await update.callback_query.message.reply_text(f"❌ Group leaderboard error: {e}")
+        await _send_or_edit(
+            update,
+            "❌ Group leaderboard is temporarily unavailable.",
+            back_keyboard("leaderboard_scope_group"),
+        )
 
 
 async def show_daily_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -266,10 +272,13 @@ async def show_daily_leaderboard(update: Update, context: ContextTypes.DEFAULT_T
         )
 
         await _send_or_edit(update, text, back_keyboard("leaderboard_scope_global"))
-    except Exception as e:
+    except Exception:
         logger.exception("show_daily_leaderboard crashed")
-        if update.callback_query:
-            await update.callback_query.message.reply_text(f"❌ Daily leaderboard error: {e}")
+        await _send_or_edit(
+            update,
+            "❌ Daily leaderboard is temporarily unavailable.",
+            back_keyboard("leaderboard_scope_global"),
+        )
 
 
 async def show_weekly_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -289,10 +298,13 @@ async def show_weekly_leaderboard(update: Update, context: ContextTypes.DEFAULT_
         )
 
         await _send_or_edit(update, text, back_keyboard("leaderboard_scope_global"))
-    except Exception as e:
+    except Exception:
         logger.exception("show_weekly_leaderboard crashed")
-        if update.callback_query:
-            await update.callback_query.message.reply_text(f"❌ Weekly leaderboard error: {e}")
+        await _send_or_edit(
+            update,
+            "❌ Weekly leaderboard is temporarily unavailable.",
+            back_keyboard("leaderboard_scope_global"),
+        )
 
 
 async def show_monthly_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -312,10 +324,13 @@ async def show_monthly_leaderboard(update: Update, context: ContextTypes.DEFAULT
         )
 
         await _send_or_edit(update, text, back_keyboard("leaderboard_scope_global"))
-    except Exception as e:
+    except Exception:
         logger.exception("show_monthly_leaderboard crashed")
-        if update.callback_query:
-            await update.callback_query.message.reply_text(f"❌ Monthly leaderboard error: {e}")
+        await _send_or_edit(
+            update,
+            "❌ Monthly leaderboard is temporarily unavailable.",
+            back_keyboard("leaderboard_scope_global"),
+        )
 
 
 async def show_group_daily_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -342,11 +357,13 @@ async def show_group_daily_leaderboard(update: Update, context: ContextTypes.DEF
         )
 
         await _send_or_edit(update, text, back_keyboard("leaderboard_scope_group"))
-
-    except Exception as e:
+    except Exception:
         logger.exception("show_group_daily_leaderboard crashed")
-        if update.callback_query:
-            await update.callback_query.message.reply_text(f"❌ Group daily leaderboard error: {e}")
+        await _send_or_edit(
+            update,
+            "❌ Group daily leaderboard is temporarily unavailable.",
+            back_keyboard("leaderboard_scope_group"),
+        )
 
 
 async def show_group_weekly_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -373,11 +390,13 @@ async def show_group_weekly_leaderboard(update: Update, context: ContextTypes.DE
         )
 
         await _send_or_edit(update, text, back_keyboard("leaderboard_scope_group"))
-
-    except Exception as e:
+    except Exception:
         logger.exception("show_group_weekly_leaderboard crashed")
-        if update.callback_query:
-            await update.callback_query.message.reply_text(f"❌ Group weekly leaderboard error: {e}")
+        await _send_or_edit(
+            update,
+            "❌ Group weekly leaderboard is temporarily unavailable.",
+            back_keyboard("leaderboard_scope_group"),
+        )
 
 
 async def show_group_monthly_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -404,11 +423,13 @@ async def show_group_monthly_leaderboard(update: Update, context: ContextTypes.D
         )
 
         await _send_or_edit(update, text, back_keyboard("leaderboard_scope_group"))
-
-    except Exception as e:
+    except Exception:
         logger.exception("show_group_monthly_leaderboard crashed")
-        if update.callback_query:
-            await update.callback_query.message.reply_text(f"❌ Group monthly leaderboard error: {e}")
+        await _send_or_edit(
+            update,
+            "❌ Group monthly leaderboard is temporarily unavailable.",
+            back_keyboard("leaderboard_scope_group"),
+        )
 
 
 async def daily(update: Update, context: ContextTypes.DEFAULT_TYPE):

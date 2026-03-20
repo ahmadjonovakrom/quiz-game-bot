@@ -77,6 +77,7 @@ def create_tables():
                 full_name TEXT,
                 total_points INTEGER DEFAULT 0,
                 correct_answers INTEGER DEFAULT 0,
+                wrong_answers INTEGER DEFAULT 0,
                 games_played INTEGER DEFAULT 0,
                 games_won INTEGER DEFAULT 0,
                 last_played_at TEXT,
@@ -124,25 +125,50 @@ def create_tables():
             )
         """)
 
-        existing_columns = [
+        question_columns = [
             row["name"]
             for row in conn.execute("PRAGMA table_info(questions)").fetchall()
         ]
 
-        if "category" not in existing_columns:
+        if "category" not in question_columns:
             conn.execute("ALTER TABLE questions ADD COLUMN category TEXT DEFAULT 'mixed'")
 
-        if "difficulty" not in existing_columns:
+        if "difficulty" not in question_columns:
             conn.execute("ALTER TABLE questions ADD COLUMN difficulty TEXT DEFAULT 'easy'")
 
-        if "created_by" not in existing_columns:
+        if "created_by" not in question_columns:
             conn.execute("ALTER TABLE questions ADD COLUMN created_by INTEGER")
 
-        if "is_active" not in existing_columns:
+        if "is_active" not in question_columns:
             conn.execute("ALTER TABLE questions ADD COLUMN is_active INTEGER DEFAULT 1")
 
-        if "times_used" not in existing_columns:
+        if "times_used" not in question_columns:
             conn.execute("ALTER TABLE questions ADD COLUMN times_used INTEGER DEFAULT 0")
+
+        player_columns = [
+            row["name"]
+            for row in conn.execute("PRAGMA table_info(players)").fetchall()
+        ]
+
+        if "wrong_answers" not in player_columns:
+            conn.execute("ALTER TABLE players ADD COLUMN wrong_answers INTEGER DEFAULT 0")
+
+        if "current_streak" not in player_columns:
+            conn.execute("ALTER TABLE players ADD COLUMN current_streak INTEGER DEFAULT 0")
+
+        if "best_streak" not in player_columns:
+            conn.execute("ALTER TABLE players ADD COLUMN best_streak INTEGER DEFAULT 0")
+
+        if "fastest_answer_time" not in player_columns:
+            conn.execute("ALTER TABLE players ADD COLUMN fastest_answer_time REAL")
+
+        group_score_columns = [
+            row["name"]
+            for row in conn.execute("PRAGMA table_info(group_scores)").fetchall()
+        ]
+
+        if "wrong_answers" not in group_score_columns:
+            conn.execute("ALTER TABLE group_scores ADD COLUMN wrong_answers INTEGER DEFAULT 0")
 
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_players_points

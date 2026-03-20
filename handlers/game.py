@@ -829,6 +829,11 @@ async def receive_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
             add_points(user.id, CORRECT_POINTS)
             record_correct_answer(user.id)
 
+            if info["chat_id"] < 0:
+                ensure_group_player(info["chat_id"], user)
+                add_group_points(info["chat_id"], user, CORRECT_POINTS)
+                record_group_correct_answer(info["chat_id"], user)
+
             display_name = f"@{user.username}" if user.username else user.full_name
             msg = await context.bot.send_message(
                 info["chat_id"],
@@ -838,14 +843,15 @@ async def receive_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
         else:
             record_wrong_answer(user.id)
 
-        if chat_id < 0:
-            record_group_wrong_answer(chat_id, user)
+            if info["chat_id"] < 0:
+                ensure_group_player(info["chat_id"], user)
+                record_group_wrong_answer(info["chat_id"], user)
 
-            msg = await context.bot.send_message(
-                info["chat_id"],
-                f"📅 Daily Quiz\n❌ {user.full_name} got it wrong.",
-            )
-            safe_task(delete_later(context, info["chat_id"], msg.message_id, 4))
+                msg = await context.bot.send_message(
+                    info["chat_id"],
+                    f"📅 Daily Quiz\n❌ {user.full_name} got it wrong.",
+                )
+                safe_task(delete_later(context, info["chat_id"], msg.message_id, 4))
 
         poll_map.pop(poll_id, None)
         return
@@ -914,6 +920,10 @@ async def receive_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
         safe_task(delete_later(context, chat_id, msg.message_id, 4))
     else:
         record_wrong_answer(user.id)
+
+        if chat_id < 0:
+            ensure_group_player(chat_id, user)
+            record_group_wrong_answer(chat_id, user)
 
 
 async def end_game(chat_id, context):

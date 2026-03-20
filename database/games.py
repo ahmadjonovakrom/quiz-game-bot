@@ -71,6 +71,25 @@ def get_all_chat_ids(include_users: bool = True, include_groups: bool = True) ->
     return list(ids)
 
 
+def ensure_group_player(chat_id: int, user) -> None:
+    user_id = user.id
+    username = user.username or ""
+    full_name = user.full_name or username or f"User {user_id}"
+
+    with closing(get_conn()) as conn, conn:
+        conn.execute("""
+            INSERT INTO group_scores (
+                chat_id, user_id, username, full_name, last_played_at
+            )
+            VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(chat_id, user_id)
+            DO UPDATE SET
+                username = excluded.username,
+                full_name = excluded.full_name,
+                last_played_at = CURRENT_TIMESTAMP
+        """, (chat_id, user_id, username, full_name))
+
+
 def add_group_points(chat_id: int, user, points: int):
     user_id = user.id
     username = user.username or ""
@@ -112,6 +131,26 @@ def record_group_correct_answer(chat_id: int, user):
                 username = excluded.username,
                 full_name = excluded.full_name,
                 correct_answers = group_scores.correct_answers + 1,
+                last_played_at = CURRENT_TIMESTAMP
+        """, (chat_id, user_id, username, full_name))
+
+
+def record_group_wrong_answer(chat_id: int, user) -> None:
+    user_id = user.id
+    username = user.username or ""
+    full_name = user.full_name or username or f"User {user_id}"
+
+    with closing(get_conn()) as conn, conn:
+        conn.execute("""
+            INSERT INTO group_scores (
+                chat_id, user_id, username, full_name, wrong_answers, last_played_at
+            )
+            VALUES (?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
+            ON CONFLICT(chat_id, user_id)
+            DO UPDATE SET
+                username = excluded.username,
+                full_name = excluded.full_name,
+                wrong_answers = group_scores.wrong_answers + 1,
                 last_played_at = CURRENT_TIMESTAMP
         """, (chat_id, user_id, username, full_name))
 
@@ -170,6 +209,7 @@ def get_group_leaderboard_page(chat_id: int, limit: int = 15, offset: int = 0):
                 full_name,
                 total_points,
                 correct_answers,
+                wrong_answers,
                 games_played,
                 games_won,
                 last_played_at

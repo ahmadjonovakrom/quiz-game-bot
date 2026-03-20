@@ -97,6 +97,8 @@ logging.basicConfig(
     level=logging.INFO,
 )
 
+logger = logging.getLogger(__name__)
+
 
 def build_admin_conversation() -> ConversationHandler:
     return ConversationHandler(
@@ -141,6 +143,8 @@ def main():
 
     app = Application.builder().token(BOT_TOKEN).build()
 
+    app.add_error_handler(error_handler)
+
     # Admin conversation first
     app.add_handler(build_admin_conversation())
 
@@ -172,29 +176,37 @@ def main():
             pattern=r"^group_lb_(all|daily|weekly|monthly)$",
         )
     )
+
     app.add_handler(
         CallbackQueryHandler(
             game_setup_callback_handler,
             pattern=r"^(setup_questions_|setup_category_|setup_difficulty_)",
         )
     )
+
     app.add_handler(
         CallbackQueryHandler(
             profile_callback_handler,
             pattern=(
                 r"^(leaderboard_global|leaderboard_group|"
                 r"leaderboard_daily|leaderboard_weekly|leaderboard_monthly|"
-                r"leaderboard_rank|profile)$"
+                r"leaderboard_rank|leaderboard_menu|profile)$"
             ),
         )
     )
+
     app.add_handler(CallbackQueryHandler(menu_handler, pattern=r"^menu_"))
     app.add_handler(CallbackQueryHandler(button_handler, pattern=r"^join\|"))
 
     # Poll answers
     app.add_handler(PollAnswerHandler(receive_poll_answer))
 
+    logger.info("Bot is starting...")
     app.run_polling()
+
+
+async def error_handler(update, context):
+    logger.exception("Unhandled exception while processing update", exc_info=context.error)
 
 
 if __name__ == "__main__":

@@ -30,46 +30,51 @@ def back_cancel_keyboard(
 
 
 def leaderboard_menu_keyboard(chat_type: str) -> InlineKeyboardMarkup:
-    if chat_type == "private":
-        return InlineKeyboardMarkup([
-            [
-                InlineKeyboardButton("🏆 All-Time", callback_data="leaderboard_global"),
-                InlineKeyboardButton("📅 Daily", callback_data="leaderboard_daily"),
-            ],
-            [
-                InlineKeyboardButton("📈 Weekly", callback_data="leaderboard_weekly"),
-                InlineKeyboardButton("🗓️ Monthly", callback_data="leaderboard_monthly"),
-            ],
-            [
-                InlineKeyboardButton("📊 My Rank", callback_data="leaderboard_rank"),
-            ],
-            [
-                InlineKeyboardButton("⬅️ Back", callback_data="menu_main"),
-            ],
+    buttons = []
+
+    if chat_type != "private":
+        buttons.append([
+            InlineKeyboardButton("👥 This Group", callback_data="leaderboard_scope_group"),
+            InlineKeyboardButton("🌍 Global", callback_data="leaderboard_scope_global"),
         ])
+    else:
+        buttons.append([
+            InlineKeyboardButton("🌍 Global", callback_data="leaderboard_scope_global"),
+        ])
+
+    buttons.append([
+        InlineKeyboardButton("⬅️ Back", callback_data="menu_main"),
+    ])
+
+    return InlineKeyboardMarkup(buttons)
+
+
+def leaderboard_period_keyboard(scope: str, chat_type: str) -> InlineKeyboardMarkup:
+    back_target = "leaderboard_menu"
+
+    if scope == "group" and chat_type != "private":
+        title_prefix = "group"
+    else:
+        title_prefix = "global"
 
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("👥 This Group", callback_data="leaderboard_group"),
-            InlineKeyboardButton("🌍 Global", callback_data="leaderboard_global"),
+            InlineKeyboardButton("🏆 All Time", callback_data=f"leaderboard_{title_prefix}_all"),
+            InlineKeyboardButton("📅 Daily", callback_data=f"leaderboard_{title_prefix}_daily"),
         ],
         [
-            InlineKeyboardButton("📅 Daily", callback_data="leaderboard_daily"),
-            InlineKeyboardButton("📈 Weekly", callback_data="leaderboard_weekly"),
+            InlineKeyboardButton("📈 Weekly", callback_data=f"leaderboard_{title_prefix}_weekly"),
+            InlineKeyboardButton("🗓 Monthly", callback_data=f"leaderboard_{title_prefix}_monthly"),
         ],
         [
-            InlineKeyboardButton("🗓️ Monthly", callback_data="leaderboard_monthly"),
-            InlineKeyboardButton("📊 My Rank", callback_data="leaderboard_rank"),
-        ],
-        [
-            InlineKeyboardButton("⬅️ Back", callback_data="menu_main"),
+            InlineKeyboardButton("⬅️ Back", callback_data=back_target),
         ],
     ])
 
 
 def admin_main_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("📚 Question Management", callback_data="admin_questions")],
+        [InlineKeyboardButton("📝 Question Management", callback_data="admin_questions")],
         [InlineKeyboardButton("📊 Bot Stats", callback_data="admin_botstats")],
         [InlineKeyboardButton("📣 Broadcast", callback_data="admin_broadcast")],
         [InlineKeyboardButton("❌ Close", callback_data="admin_close")],
@@ -129,16 +134,18 @@ def questions_pagination_keyboard(
     source: str = "questions",
 ) -> InlineKeyboardMarkup:
     buttons = []
-
     nav_row = []
+
     if page > 1:
         nav_row.append(
             InlineKeyboardButton("⬅️ Prev", callback_data=f"admin_questions_page_{page - 1}")
         )
+
     if page < total_pages:
         nav_row.append(
             InlineKeyboardButton("Next ➡️", callback_data=f"admin_questions_page_{page + 1}")
         )
+
     if nav_row:
         buttons.append(nav_row)
 
@@ -151,16 +158,18 @@ def questions_pagination_keyboard(
 
 def search_results_keyboard(page: int, total_pages: int) -> InlineKeyboardMarkup:
     buttons = []
-
     nav_row = []
+
     if page > 1:
         nav_row.append(
             InlineKeyboardButton("⬅️ Prev", callback_data=f"admin_search_page_{page - 1}")
         )
+
     if page < total_pages:
         nav_row.append(
             InlineKeyboardButton("Next ➡️", callback_data=f"admin_search_page_{page + 1}")
         )
+
     if nav_row:
         buttons.append(nav_row)
 

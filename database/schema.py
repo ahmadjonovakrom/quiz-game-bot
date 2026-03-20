@@ -3,8 +3,14 @@ from contextlib import closing
 from .connection import get_conn
 
 
+def _get_column_names(conn, table_name: str) -> set[str]:
+    return {row["name"] for row in conn.execute(f"PRAGMA table_info({table_name})").fetchall()}
+
+
 def create_tables():
     with closing(get_conn()) as conn, conn:
+        conn.execute("PRAGMA foreign_keys = ON")
+
         conn.execute("""
             CREATE TABLE IF NOT EXISTS players (
                 user_id INTEGER PRIMARY KEY,
@@ -42,6 +48,18 @@ def create_tables():
         """)
 
         conn.execute("""
+            CREATE TABLE IF NOT EXISTS chats (
+                chat_id INTEGER PRIMARY KEY,
+                chat_type TEXT NOT NULL,
+                title TEXT,
+                username TEXT,
+                is_active INTEGER DEFAULT 1,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS games (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 chat_id INTEGER NOT NULL,
@@ -64,8 +82,8 @@ def create_tables():
                 wrong_count INTEGER DEFAULT 0,
                 avg_answer_time REAL,
                 position INTEGER,
-                FOREIGN KEY (game_id) REFERENCES games(id),
-                FOREIGN KEY (user_id) REFERENCES players(user_id)
+                FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE,
+                FOREIGN KEY (user_id) REFERENCES players(user_id) ON DELETE CASCADE
             )
         """)
 
@@ -96,14 +114,12 @@ def create_tables():
         """)
 
         conn.execute("""
-            CREATE TABLE IF NOT EXISTS chats (
-                chat_id INTEGER PRIMARY KEY,
-                chat_type TEXT NOT NULL,
-                title TEXT,
-                username TEXT,
-                is_active INTEGER DEFAULT 1,
+            CREATE TABLE IF NOT EXISTS player_points_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                points INTEGER NOT NULL,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+                FOREIGN KEY (user_id) REFERENCES players(user_id) ON DELETE CASCADE
             )
         """)
 
@@ -115,106 +131,86 @@ def create_tables():
             )
         """)
 
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS player_points_history (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                points INTEGER NOT NULL,
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES players(user_id)
-            )
-        """)
-
-        question_columns = [
-            row["name"]
-            for row in conn.execute("PRAGMA table_info(questions)").fetchall()
-        ]
-
+        # ---- backward-compatible migrations ----
+        question_columns = _get_column_names(conn, "questions")
         if "category" not in question_columns:
             conn.execute("ALTER TABLE questions ADD COLUMN category TEXT DEFAULT 'mixed'")
-
         if "difficulty" not in question_columns:
             conn.execute("ALTER TABLE questions ADD COLUMN difficulty TEXT DEFAULT 'easy'")
-
         if "created_by" not in question_columns:
             conn.execute("ALTER TABLE questions ADD COLUMN created_by INTEGER")
-
         if "is_active" not in question_columns:
             conn.execute("ALTER TABLE questions ADD COLUMN is_active INTEGER DEFAULT 1")
-
         if "times_used" not in question_columns:
             conn.execute("ALTER TABLE questions ADD COLUMN times_used INTEGER DEFAULT 0")
 
-        player_columns = [
-            row["name"]
-            for row in conn.execute("PRAGMA table_info(players)").fetchall()
-        ]
-
+        player_columns = _get_column_names(conn, "players")
         if "wrong_answers" not in player_columns:
             conn.execute("ALTER TABLE players ADD COLUMN wrong_answers INTEGER DEFAULT 0")
-
         if "current_streak" not in player_columns:
             conn.execute("ALTER TABLE players ADD COLUMN current_streak INTEGER DEFAULT 0")
-
         if "best_streak" not in player_columns:
             conn.execute("ALTER TABLE players ADD COLUMN best_streak INTEGER DEFAULT 0")
-
         if "fastest_answer_time" not in player_columns:
             conn.execute("ALTER TABLE players ADD COLUMN fastest_answer_time REAL")
 
-        group_score_columns = [
-            row["name"]
-            for row in conn.execute("PRAGMA table_info(group_scores)").fetchall()
-        ]
-
+        group_score_columns = _get_column_names(conn, "group_scores")
         if "wrong_answers" not in group_score_columns:
             conn.execute("ALTER TABLE group_scores ADD COLUMN wrong_answers INTEGER DEFAULT 0")
 
+        # ---- indexes ----
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_players_points
             ON players(total_points DESC)
+        """)
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_players_rank_sort
+            ON players(total_points DESC, correct_answers DESC, games_won DESC, user_id ASC)
         """)
 
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_questions_category
             ON questions(category)
         """)
-
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_questions_difficulty
             ON questions(difficulty)
         """)
-
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_questions_usage
             ON questions(times_used)
         """)
 
         conn.execute("""
-            CREATE INDEX IF NOT EXISTS idx_group_scores_points
-            ON group_scores(total_points DESC)
+            CREATE INDEX IF NOT EXISTS idx_games_chat_id
+            ON games(chat_id)
+        """)
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_games_status
+            ON games(status)
         """)
 
         conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_group_scores_points
+            ON group_scores(total_points DESC)
+        """)
+        conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_group_scores_rank
-            ON group_scores(chat_id, total_points DESC, correct_answers DESC, games_won DESC)
+            ON group_scores(chat_id, total_points DESC, correct_answers DESC, games_won DESC, user_id ASC)
         """)
 
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_group_points_history_chat
             ON group_points_history(chat_id)
         """)
-
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_group_points_history_created
             ON group_points_history(created_at)
         """)
-
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_group_points_history_chat_created
             ON group_points_history(chat_id, created_at)
         """)
-
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_group_points_history_chat_user_created
             ON group_points_history(chat_id, user_id, created_at)
@@ -224,13 +220,15 @@ def create_tables():
             CREATE INDEX IF NOT EXISTS idx_player_points_history_user
             ON player_points_history(user_id)
         """)
-
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_player_points_history_created
             ON player_points_history(created_at)
         """)
-
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_player_points_history_user_created
             ON player_points_history(user_id, created_at)
+        """)
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_player_points_history_created_user
+            ON player_points_history(created_at, user_id)
         """)

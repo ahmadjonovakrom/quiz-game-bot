@@ -1,5 +1,3 @@
-# handlers/game.py
-
 import math
 import time
 import asyncio
@@ -43,7 +41,7 @@ from database import (
     has_played_daily_quiz,
     record_daily_quiz_attempt,
 )
-from handlers.profile import profile, send_leaderboard_menu
+from handlers.profile import profile, leaderboard
 from utils.helpers import (
     safe_task,
     safe_delete_message,
@@ -241,7 +239,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if data == "menu_leaderboard":
-        await send_leaderboard_menu(query)
+        await leaderboard(update, context)
         return
 
     if data == "menu_profile":
@@ -256,9 +254,10 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "/stopgame - stop the current game\n"
             "/dailyquiz - play one daily quiz\n"
             "/leaderboard - leaderboard\n"
-            "/global - global leaderboard\n"
-            "/profile - your profile\n"
-            "/questions - view saved questions",
+            "/daily - today's leaderboard\n"
+            "/weekly - this week's leaderboard\n"
+            "/monthly - this month's leaderboard\n"
+            "/profile - your profile",
             reply_markup=InlineKeyboardMarkup(back_keyboard),
         )
         return

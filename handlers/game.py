@@ -80,11 +80,22 @@ def format_difficulty_name(value: str) -> str:
     return mapping.get(value, value.title())
 
 
-def clear_setup_game(chat_id: int):
+async def clear_game(context: ContextTypes.DEFAULT_TYPE, chat_id: int):
     game = active_games.get(chat_id)
-    if game and game.get("status") == "setup":
-        active_games.pop(chat_id, None)
+    if not game:
         cleanup_game_lock(chat_id)
+        return
+
+    current_poll_id = game.get("current_poll_id")
+    if current_poll_id:
+        poll_map.pop(current_poll_id, None)
+
+    join_message_id = game.get("join_message_id")
+    if join_message_id:
+        await safe_delete_message(context.bot, chat_id, join_message_id)
+
+    active_games.pop(chat_id, None)
+    cleanup_game_lock(chat_id)
 
 
 def get_main_menu_keyboard():
@@ -264,7 +275,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if data in ("menu_back", "menu_main"):
         chat_id = query.message.chat.id
-        clear_setup_game(chat_id)
+        await clear_game(context, chat_id)
 
         await query.edit_message_text(
             "Welcome to English Lemon 🍋!\n\n"
@@ -461,6 +472,15 @@ async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFA
     user = query.from_user
     chat_id = query.message.chat.id
     data = query.data
+
+    if data in ("menu_back", "menu_main"):
+        await clear_game(context, chat_id)
+        await query.edit_message_text(
+            "Welcome to English Lemon 🍋!\n\n"
+            "Practice vocabulary, play quiz games, and climb the leaderboard.",
+            reply_markup=get_main_menu_keyboard(),
+        )
+        return
 
     if not is_admin(user.id):
         await query.answer("Admin only.", show_alert=True)
@@ -677,8 +697,9 @@ async def send_question(chat_id, context):
 
         game["round"] += 1
         current_round = game["round"]
+        questions_per_game = game["questions_per_game"]
 
-        should_end = current_round > game["questions_per_game"]
+        should_end = current_round > questions_per_game
 
     if should_end:
         await end_game(chat_id, context)
@@ -716,7 +737,7 @@ async def send_question(chat_id, context):
     try:
         msg = await context.bot.send_poll(
             chat_id=chat_id,
-            question=f"[{current_round}/{active_games[chat_id]['questions_per_game']}] {q_text}",
+            question=f"[{current_round}/{questions_per_game}] {q_text}",
             options=options,
             type="quiz",
             correct_option_id=correct_index,

@@ -16,7 +16,6 @@ from database.stats import (
 from utils.keyboards import (
     leaderboard_menu_keyboard,
     back_keyboard,
-    main_menu_keyboard,
 )
 
 
@@ -223,11 +222,8 @@ async def monthly(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def profile_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
+    await query.answer()
     data = query.data
-
-    if data == "menu_leaderboard":
-        await leaderboard(update, context)
-        return
 
     if data == "leaderboard_global":
         await show_global_leaderboard(update, context)
@@ -255,12 +251,4 @@ async def profile_callback_handler(update: Update, context: ContextTypes.DEFAULT
 
     if data == "profile":
         await profile(update, context)
-        return
-
-    if data == "menu_main":
-        await query.answer()
-        await query.edit_message_text(
-            text="Main menu",
-            reply_markup=main_menu_keyboard(update.effective_chat.type),
-        )
         return

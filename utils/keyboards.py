@@ -5,7 +5,7 @@ LEADERBOARD_PAGE_SIZE = 15
 
 def main_menu_keyboard(chat_type: str = "private") -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("🎮 Play Quiz", callback_data="play_quiz")],
+        [InlineKeyboardButton("🎮 Play Quiz", callback_data="menu_play")],
         [InlineKeyboardButton("🏆 Leaderboard", callback_data="menu_leaderboard")],
         [InlineKeyboardButton("👤 My Profile", callback_data="profile")],
         [InlineKeyboardButton("❓ Help", callback_data="menu_help")],

@@ -158,7 +158,7 @@ def main():
     app.add_handler(
         CallbackQueryHandler(
             menu_handler,
-            pattern=r"^(menu_|play_quiz|start_game|back_)",
+            pattern=r"^menu_",
         )
     )
 
@@ -166,14 +166,20 @@ def main():
         CallbackQueryHandler(
             profile_callback_handler,
             pattern=(
-                r"^(menu_leaderboard|leaderboard_global|leaderboard_group|"
+                r"^(leaderboard_global|leaderboard_group|"
                 r"leaderboard_daily|leaderboard_weekly|leaderboard_monthly|"
                 r"leaderboard_rank|profile)$"
             ),
         )
     )
 
-    app.add_handler(CallbackQueryHandler(button_handler))
+    app.add_handler(
+        CallbackQueryHandler(
+            button_handler,
+            pattern=r"^join\|",
+        )
+    )
+
     app.add_handler(PollAnswerHandler(receive_poll_answer))
 
     app.run_polling()

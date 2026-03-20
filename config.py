@@ -1,6 +1,9 @@
+# config.py
 import os
 
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
+
+DB_PATH = os.getenv("DB_PATH", "quiz_bot.db")
 
 MIN_PLAYERS = 1
 JOIN_SECONDS = 20

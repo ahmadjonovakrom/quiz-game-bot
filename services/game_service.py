@@ -29,11 +29,12 @@ def cleanup_game_lock(chat_id: int) -> None:
 
 def format_difficulty_name(value: str) -> str:
     mapping = {
-        "easy": "🟢 Easy",
-        "medium": "🟡 Medium",
-        "hard": "🔴 Hard",
+        "easy": "Easy",
+        "medium": "Medium",
+        "hard": "Hard",
+        "mixed": "Mixed",
     }
-    return mapping.get(value, value.title())
+    return mapping.get(str(value).lower(), str(value).replace("_", " ").title())
 
 
 def create_new_game_data(
@@ -202,36 +203,38 @@ def apply_poll_answer(
     }
 
 
-def build_final_results(game: dict) -> dict:
+def build_final_results(game: dict) -> list[dict]:
     ranking = sorted(
         game["scores"].items(),
-        key=lambda x: x[1],
-        reverse=True,
+        key=lambda x: (-x[1], x[0]),
     )
 
-    winner_user_id = ranking[0][0] if ranking else None
+    final_results = []
 
-    return {
-        "ranking": ranking,
-        "winner_user_id": winner_user_id,
-        "players": dict(game["players"]),
-        "player_objects": dict(game["player_objects"]),
-        "scores": dict(game["scores"]),
-        "correct_counts": dict(game["correct_counts"]),
-        "wrong_counts": dict(game["wrong_counts"]),
-        "answer_times_map": dict(game["answer_times"]),
-        "db_game_id": game.get("db_game_id"),
-        "total_rounds": min(game["round"], game["questions_per_game"]),
-    }
+    for position, (user_id, score) in enumerate(ranking, start=1):
+        times = game["answer_times"].get(user_id, [])
+        avg_time = round(sum(times) / len(times), 2) if times else None
+
+        final_results.append({
+            "position": position,
+            "user_id": user_id,
+            "name": game["players"].get(user_id, f"User {user_id}"),
+            "score": score,
+            "correct": game["correct_counts"].get(user_id, 0),
+            "wrong": game["wrong_counts"].get(user_id, 0),
+            "avg_time": avg_time,
+        })
+
+    return final_results
 
 
-def build_results_text(ranking: list, players: dict) -> str:
+def build_results_text(final_results: list[dict]) -> str:
     text = "🏆 Game Results\n\n"
 
-    if not ranking:
+    if not final_results:
         return text + "No players scored any points."
 
-    for i, (uid, pts) in enumerate(ranking, start=1):
-        text += f"{i}. {players[uid]} — {pts} 🍋\n"
+    for row in final_results:
+        text += f"{row['position']}. {row['name']} — {row['score']} 🍋\n"
 
     return text

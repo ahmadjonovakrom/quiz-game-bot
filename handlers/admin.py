@@ -339,6 +339,34 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             reply_markup=nav_keyboard("admin_questions"),
         )
         return EDIT_QUESTION
+    
+    if data.startswith("admin_delete_direct_"):
+        qid_text = data.replace("admin_delete_direct_", "").strip()
+        if not qid_text.isdigit():
+            await query.edit_message_text(
+                "Invalid question ID.",
+                reply_markup=nav_keyboard("admin_questions"),
+            )
+            return ADMIN_MENU
+
+        qid = int(qid_text)
+        q = get_question_by_id(qid)
+        if not q:
+            await query.edit_message_text(
+                "Question not found.",
+                reply_markup=nav_keyboard("admin_questions"),
+            )
+            return ADMIN_MENU
+
+        context.user_data["delete_qid"] = qid
+
+        await query.edit_message_text(
+            "🗑 Delete Question\n\n"
+            f"{format_question_preview(q)}\n\n"
+            "Are you sure you want to delete this question?",
+            reply_markup=delete_confirm_keyboard(),
+        )
+        return DELETE_CONFIRM
 
     if data.startswith("admin_open_"):
         qid_text = data.replace("admin_open_", "").strip()

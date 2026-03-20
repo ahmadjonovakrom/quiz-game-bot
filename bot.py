@@ -150,17 +150,6 @@ def main():
 
     app.add_handler(
         CallbackQueryHandler(
-            profile_callback_handler,
-            pattern=(
-                r"^(menu_leaderboard|leaderboard_global|leaderboard_group|"
-                r"leaderboard_daily|leaderboard_weekly|leaderboard_monthly|"
-                r"leaderboard_rank|profile|menu_main)$"
-            ),
-        )
-    )
-
-    app.add_handler(
-        CallbackQueryHandler(
             game_setup_callback_handler,
             pattern=r"^(setup_questions_|setup_category_|setup_difficulty_)",
         )
@@ -170,6 +159,17 @@ def main():
         CallbackQueryHandler(
             menu_handler,
             pattern=r"^(menu_|play_quiz|start_game|back_)",
+        )
+    )
+
+    app.add_handler(
+        CallbackQueryHandler(
+            profile_callback_handler,
+            pattern=(
+                r"^(menu_leaderboard|leaderboard_global|leaderboard_group|"
+                r"leaderboard_daily|leaderboard_weekly|leaderboard_monthly|"
+                r"leaderboard_rank|profile)$"
+            ),
         )
     )
 

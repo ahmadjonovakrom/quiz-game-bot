@@ -1,22 +1,17 @@
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from database.players import (
-    get_top_players,
+from database import (
     get_player_profile,
+    get_top_players,
     get_player_global_rank_info,
     get_daily_leaderboard_page,
     get_weekly_leaderboard_page,
     get_monthly_leaderboard_page,
+    get_group_leaderboard,
+    get_player_group_rank_info,
 )
-from database.stats import (
-    get_group_top_players,
-    get_group_user_rank,
-)
-from utils.keyboards import (
-    leaderboard_menu_keyboard,
-    back_keyboard,
-)
+from utils.keyboards import leaderboard_menu_keyboard, back_keyboard
 
 
 def _safe_get(row, key, default=None):
@@ -40,25 +35,25 @@ def _extract_name(row) -> str:
     )
 
 
-def format_leaderboard_text(title: str, rows, points_key: str) -> str:
+def format_leaderboard_text(
+    title: str,
+    rows,
+    points_key: str,
+    viewer_user_id: int | None = None,
+) -> str:
     if not rows:
-        return f"🏆 {title}\n\nNo players yet."
+        return f"🏆 {title}\n\nNo activity yet.\nPlay a game to get on the leaderboard 🚀"
 
+    medals = ["🥇", "🥈", "🥉"]
     lines = [f"🏆 {title}", ""]
 
     for index, row in enumerate(rows, start=1):
-        if index == 1:
-            prefix = "🥇"
-        elif index == 2:
-            prefix = "🥈"
-        elif index == 3:
-            prefix = "🥉"
-        else:
-            prefix = f"{index}."
-
+        medal = medals[index - 1] if index <= 3 else "🏅"
         name = _extract_name(row)
         points = _safe_get(row, points_key, 0)
-        lines.append(f"{prefix} {name} — {points} pts")
+        you = " 👈 YOU" if viewer_user_id and _safe_get(row, "user_id") == viewer_user_id else ""
+
+        lines.append(f"{medal} {index}. {name} — {points} pts{you}")
 
     return "\n".join(lines)
 
@@ -132,13 +127,22 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def show_global_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
     rows = get_top_players(limit=10)
-    text = format_leaderboard_text("All-Time Leaderboard", rows, points_key="total_points")
+
+    text = format_leaderboard_text(
+        "All-Time Leaderboard",
+        rows,
+        points_key="total_points",
+        viewer_user_id=user.id if user else None,
+    )
+
     await _send_or_edit(update, text, back_keyboard("menu_leaderboard"))
 
 
 async def show_group_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
+    user = update.effective_user
 
     if chat.type == "private":
         await _send_or_edit(
@@ -148,26 +152,56 @@ async def show_group_leaderboard(update: Update, context: ContextTypes.DEFAULT_T
         )
         return
 
-    rows = get_group_top_players(chat.id, limit=10)
-    text = format_leaderboard_text("This Group Leaderboard", rows, points_key="points")
+    rows = get_group_leaderboard(chat.id, limit=10)
+    text = format_leaderboard_text(
+        "This Group Leaderboard",
+        rows,
+        points_key="total_points",
+        viewer_user_id=user.id if user else None,
+    )
+
     await _send_or_edit(update, text, back_keyboard("menu_leaderboard"))
 
 
 async def show_daily_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
     rows = get_daily_leaderboard_page(limit=10, offset=0)
-    text = format_leaderboard_text("Daily Leaderboard", rows, points_key="period_points")
+
+    text = format_leaderboard_text(
+        "Daily Leaderboard",
+        rows,
+        points_key="period_points",
+        viewer_user_id=user.id if user else None,
+    )
+
     await _send_or_edit(update, text, back_keyboard("menu_leaderboard"))
 
 
 async def show_weekly_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
     rows = get_weekly_leaderboard_page(limit=10, offset=0)
-    text = format_leaderboard_text("Weekly Leaderboard", rows, points_key="period_points")
+
+    text = format_leaderboard_text(
+        "Weekly Leaderboard",
+        rows,
+        points_key="period_points",
+        viewer_user_id=user.id if user else None,
+    )
+
     await _send_or_edit(update, text, back_keyboard("menu_leaderboard"))
 
 
 async def show_monthly_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
     rows = get_monthly_leaderboard_page(limit=10, offset=0)
-    text = format_leaderboard_text("Monthly Leaderboard", rows, points_key="period_points")
+
+    text = format_leaderboard_text(
+        "Monthly Leaderboard",
+        rows,
+        points_key="period_points",
+        viewer_user_id=user.id if user else None,
+    )
+
     await _send_or_edit(update, text, back_keyboard("menu_leaderboard"))
 
 
@@ -192,17 +226,17 @@ async def show_my_rank(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await _send_or_edit(update, text, back_keyboard("menu_leaderboard"))
         return
 
-    rank_data = get_group_user_rank(chat.id, user.id)
+    rank, points = get_player_group_rank_info(chat.id, user.id)
     title = "My Rank in This Group"
 
-    if not rank_data:
+    if not rank:
         text = f"🪪 {title}\n\nYou are not ranked yet."
     else:
         text = (
             f"🪪 {title}\n\n"
             f"Name: {user.full_name}\n"
-            f"Rank: #{rank_data['rank']}\n"
-            f"Points: {rank_data['points']}"
+            f"Rank: #{rank}\n"
+            f"Points: {points}"
         )
 
     await _send_or_edit(update, text, back_keyboard("menu_leaderboard"))
@@ -223,6 +257,7 @@ async def monthly(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def profile_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
+
     data = query.data
 
     if data == "leaderboard_global":

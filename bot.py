@@ -23,7 +23,6 @@ from handlers.game import (
     receive_poll_answer,
     menu_handler,
     daily_quiz,
-    game_setup_callback_handler,
     myid,
 )
 
@@ -168,19 +167,11 @@ def main():
     app.add_handler(CommandHandler("dailyquiz", daily_quiz))
     app.add_handler(CommandHandler("myid", myid))
 
-    # group leaderboard old callbacks
+    # old group leaderboard callbacks
     app.add_handler(
         CallbackQueryHandler(
             group_leaderboard_callback_handler,
             pattern=r"^group_lb_(all|daily|weekly|monthly)$",
-        )
-    )
-
-    # game setup callbacks
-    app.add_handler(
-        CallbackQueryHandler(
-            game_setup_callback_handler,
-            pattern=r"^(setup_questions_|setup_category_|setup_difficulty_)",
         )
     )
 
@@ -192,7 +183,7 @@ def main():
         )
     )
 
-    # profile + new leaderboard callbacks
+    # profile + leaderboard callbacks
     app.add_handler(
         CallbackQueryHandler(
             profile_callback_handler,
@@ -200,11 +191,11 @@ def main():
         )
     )
 
-    # join button / game button callbacks
+    # game setup + join callbacks
     app.add_handler(
         CallbackQueryHandler(
             button_handler,
-            pattern=r"^join\|",
+            pattern=r"^(setup_|join\|)",
         )
     )
 

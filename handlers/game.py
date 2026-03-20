@@ -20,6 +20,7 @@ from config import (
     ALLOWED_CATEGORIES,
     DEFAULT_DIFFICULTY,
     ALLOWED_DIFFICULTIES,
+    POINTS,
 )
 from database import (
     get_random_question,
@@ -48,7 +49,12 @@ from utils.helpers import (
     safe_delete_message,
     build_join_text,
     is_admin,
-    format_category_name,
+)
+from utils.keyboards import (
+    main_menu_keyboard,
+    game_setup_questions_keyboard,
+    game_setup_categories_keyboard,
+    game_setup_confirm_keyboard,
 )
 from services.game_service import (
     active_games,
@@ -56,7 +62,6 @@ from services.game_service import (
     daily_quiz_players,
     get_game_lock,
     cleanup_game_lock,
-    format_difficulty_name,
     clear_game,
     create_new_game_data,
     get_existing_game_message,
@@ -73,73 +78,92 @@ from services.game_service import (
 
 logger = logging.getLogger(__name__)
 
+CATEGORY_LABELS = {
+    "mixed": "Mixed",
+    "vocabulary": "Vocabulary",
+    "grammar": "Grammar",
+    "idioms_phrases": "Idioms & Phrases",
+    "synonyms": "Synonyms",
+    "collocations": "Collocations",
+}
+
+DIFFICULTY_LABELS = {
+    "easy": "Easy",
+    "medium": "Medium",
+    "hard": "Hard",
+    "mixed": "Mixed",
+}
+
+
+def format_category_name(category: str) -> str:
+    return CATEGORY_LABELS.get(str(category).lower(), str(category).replace("_", " ").title())
+
+
+def format_difficulty_name(difficulty: str) -> str:
+    return DIFFICULTY_LABELS.get(str(difficulty).lower(), str(difficulty).title())
+
 
 def get_main_menu_keyboard():
-    keyboard = [
-        [InlineKeyboardButton("🎮 Play Quiz", callback_data="menu_play")],
-        [InlineKeyboardButton("🏆 Leaderboard", callback_data="menu_leaderboard")],
-        [InlineKeyboardButton("👤 My Profile", callback_data="menu_profile")],
-        [InlineKeyboardButton("❓ Help", callback_data="menu_help")],
-    ]
-    return InlineKeyboardMarkup(keyboard)
+    return main_menu_keyboard()
 
 
 def get_question_count_keyboard():
-    rows = []
-    row = []
-
-    for count in ALLOWED_QUESTION_COUNTS:
-        row.append(
-            InlineKeyboardButton(
-                f"{count} Questions",
-                callback_data=f"setup_questions_{count}",
-            )
-        )
-        if len(row) == 2:
-            rows.append(row)
-            row = []
-
-    if row:
-        rows.append(row)
-
-    rows.append([InlineKeyboardButton("⬅️ Back", callback_data="menu_main")])
-    return InlineKeyboardMarkup(rows)
+    return game_setup_questions_keyboard()
 
 
 def get_category_keyboard():
-    rows = []
-
-    for category in ALLOWED_CATEGORIES:
-        rows.append([
-            InlineKeyboardButton(
-                format_category_name(category),
-                callback_data=f"setup_category_{category}",
-            )
-        ])
-
-    rows.append([InlineKeyboardButton("⬅️ Back", callback_data="menu_main")])
-    return InlineKeyboardMarkup(rows)
+    return game_setup_categories_keyboard()
 
 
-def get_difficulty_keyboard():
-    rows = []
-
-    for difficulty in ALLOWED_DIFFICULTIES:
-        rows.append([
-            InlineKeyboardButton(
-                format_difficulty_name(difficulty),
-                callback_data=f"setup_difficulty_{difficulty}",
-            )
-        ])
-
-    rows.append([InlineKeyboardButton("⬅️ Back", callback_data="menu_main")])
-    return InlineKeyboardMarkup(rows)
+def get_setup_confirmation_keyboard():
+    return game_setup_confirm_keyboard()
 
 
 def get_join_keyboard(chat_id: int):
     return InlineKeyboardMarkup(
-        [[InlineKeyboardButton("Join", callback_data=f"join|{chat_id}")]]
+        [[InlineKeyboardButton("✅ Join", callback_data=f"join|{chat_id}")]]
     )
+
+
+def format_setup_step_1_text() -> str:
+    return (
+        "🎮 Game Setup\n\n"
+        "Step 1 of 2 — Choose number of questions"
+    )
+
+
+def format_setup_step_2_text(selected_count: int) -> str:
+    return (
+        "🎮 Game Setup\n\n"
+        "Step 2 of 2 — Choose category\n\n"
+        f"✅ Questions: {selected_count}"
+    )
+
+
+def format_setup_summary(question_count: int, category: str) -> str:
+    return (
+        "🎮 Game Setup\n\n"
+        "✅ Ready to Start\n\n"
+        "📋 Setup:\n"
+        f"• Questions: {question_count}\n"
+        f"• Category: {format_category_name(category)}\n"
+        "• Difficulty: Mixed\n\n"
+        "🍋 Rewards:\n"
+        f"• Easy: +{POINTS['easy']}\n"
+        f"• Medium: +{POINTS['medium']}\n"
+        f"• Hard: +{POINTS['hard']}\n\n"
+        "🚀 Press Start when you're ready"
+    )
+
+
+def get_question_points(difficulty: str) -> int:
+    if not difficulty:
+        return POINTS["easy"]
+    return POINTS.get(str(difficulty).lower(), POINTS["easy"])
+
+
+def format_question_text(question: str, points: int) -> str:
+    return f"{question}\n🍋 +{points}"
 
 
 async def refresh_join_message(context: ContextTypes.DEFAULT_TYPE, chat_id: int):
@@ -172,12 +196,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if user:
         ensure_player(user)
-
     if chat:
         ensure_chat(chat)
 
     await message.reply_text(
-        "Welcome to English Lemon 🍋!\n\n"
+        "Welcome to English Lemon !\n\n"
         "Practice vocabulary, play quiz games, and climb the leaderboard.",
         reply_markup=get_main_menu_keyboard(),
     )
@@ -188,25 +211,26 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
 
     data = query.data
-    back_keyboard = [[InlineKeyboardButton("⬅️ Back", callback_data="menu_back")]]
+    back_kb = InlineKeyboardMarkup(
+        [[InlineKeyboardButton("⬅️ Back", callback_data="menu_back")]]
+    )
 
     if data == "menu_play":
         if query.message.chat.type in ("group", "supergroup"):
             if not is_admin(query.from_user.id):
                 await query.edit_message_text(
                     "❌ Admin only.\n\nOnly a group admin can start a quiz game.",
-                    reply_markup=InlineKeyboardMarkup(back_keyboard),
+                    reply_markup=back_kb,
                 )
                 return
-
             await start_game(update, context)
+            return
         else:
             await query.edit_message_text(
-                "To start a quiz game, add me to a group and use:\n\n"
-                "/startgame",
-                reply_markup=InlineKeyboardMarkup(back_keyboard),
+                "To start a quiz game, add me to a group and use:\n\n/startgame",
+                reply_markup=back_kb,
             )
-        return
+            return
 
     if data == "menu_leaderboard":
         await leaderboard(update, context)
@@ -218,7 +242,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if data == "menu_help":
         await query.edit_message_text(
-            "English Lemon 🍋 Commands:\n\n"
+            "English Lemon Commands:\n\n"
             "/start - open the main menu\n"
             "/startgame - start a new game in a group\n"
             "/stopgame - stop the current game\n"
@@ -228,16 +252,15 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "/weekly - this week's leaderboard\n"
             "/monthly - this month's leaderboard\n"
             "/profile - your profile",
-            reply_markup=InlineKeyboardMarkup(back_keyboard),
+            reply_markup=back_kb,
         )
         return
 
     if data in ("menu_back", "menu_main"):
         chat_id = query.message.chat.id
         await clear_game(context, chat_id)
-
         await query.edit_message_text(
-            "Welcome to English Lemon 🍋!\n\n"
+            "Welcome to English Lemon !\n\n"
             "Practice vocabulary, play quiz games, and climb the leaderboard.",
             reply_markup=get_main_menu_keyboard(),
         )
@@ -269,6 +292,9 @@ async def daily_quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     q_id = question["id"]
     q_text = question["question_text"]
+    difficulty = question.get("difficulty", "easy")
+    points = get_question_points(difficulty)
+
     options, correct_index = shuffle_question(question)
 
     if correct_index not in (0, 1, 2, 3):
@@ -278,7 +304,7 @@ async def daily_quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         msg = await context.bot.send_poll(
             chat_id=chat.id,
-            question=f"📅 Daily Quiz\n\n{q_text}",
+            question=format_question_text(q_text, points),
             options=options,
             type="quiz",
             correct_option_id=correct_index,
@@ -287,7 +313,7 @@ async def daily_quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     except Exception:
         logger.exception("Failed to send daily quiz poll for user %s", user.id)
-        await update.message.reply_text("Failed to send the daily quiz. Please try again.")
+        await update.message.reply_text("Failed to send the daily quiz.\nPlease try again.")
         return
 
     poll_map[msg.poll.id] = {
@@ -297,6 +323,8 @@ async def daily_quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "daily_date": today,
         "correct_index": correct_index,
         "question_id": q_id,
+        "difficulty": difficulty,
+        "points": points,
     }
 
     record_daily_quiz_attempt(user.id, today)
@@ -330,7 +358,6 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
         game = active_games.get(chat.id)
         if game:
             text = get_existing_game_message(game)
-
             if query:
                 await query.answer(text, show_alert=True)
             else:
@@ -341,19 +368,16 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
             started_by=user.id,
             questions_per_game=DEFAULT_QUESTIONS_PER_GAME,
             category=DEFAULT_CATEGORY,
-            difficulty=DEFAULT_DIFFICULTY,
+            difficulty="mixed",
         )
 
+    text = format_setup_step_1_text()
+    keyboard = get_question_count_keyboard()
+
     if query:
-        await query.edit_message_text(
-            "🎮 Game Setup\n\nChoose number of questions:",
-            reply_markup=get_question_count_keyboard(),
-        )
+        await query.edit_message_text(text, reply_markup=keyboard)
     else:
-        await message.reply_text(
-            "🎮 Game Setup\n\nChoose number of questions:",
-            reply_markup=get_question_count_keyboard(),
-        )
+        await message.reply_text(text, reply_markup=keyboard)
 
 
 async def stop_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -411,101 +435,109 @@ async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFA
     if data in ("menu_back", "menu_main"):
         await clear_game(context, chat_id)
         await query.edit_message_text(
-            "Welcome to English Lemon 🍋!\n\n"
+            "Welcome to English Lemon !\n\n"
             "Practice vocabulary, play quiz games, and climb the leaderboard.",
             reply_markup=get_main_menu_keyboard(),
         )
-        return
+        return True
 
     if not is_admin(user.id):
         await query.answer("Admin only.", show_alert=True)
-        return
+        return True
 
     lock = get_game_lock(chat_id)
     async with lock:
         game = active_games.get(chat_id)
         if not game:
             await query.edit_message_text("No active game setup found.")
-            return
+            return True
 
         if game["status"] != "setup":
             await query.answer("Setup is closed.", show_alert=True)
-            return
+            return True
 
         if data.startswith("setup_questions_"):
             try:
                 count = int(data.split("_")[-1])
             except ValueError:
                 await query.answer("Invalid question count.", show_alert=True)
-                return
+                return True
 
             if count not in ALLOWED_QUESTION_COUNTS:
                 await query.answer("Invalid question count.", show_alert=True)
-                return
+                return True
 
             game["questions_per_game"] = count
 
             await query.edit_message_text(
-                f"🎮 Game Setup\n\n"
-                f"✅ Questions: {count}\n\n"
-                f"Now choose category:",
+                format_setup_step_2_text(count),
                 reply_markup=get_category_keyboard(),
             )
-            return
+            return True
+
+        if data == "setup_back_to_questions":
+            await query.edit_message_text(
+                format_setup_step_1_text(),
+                reply_markup=get_question_count_keyboard(),
+            )
+            return True
 
         if data.startswith("setup_category_"):
             category = data.replace("setup_category_", "", 1)
 
             if category not in ALLOWED_CATEGORIES:
                 await query.answer("Invalid category.", show_alert=True)
-                return
+                return True
 
             game["category"] = category
+            game["difficulty"] = "mixed"
 
             await query.edit_message_text(
-                f"🎮 Game Setup\n\n"
-                f"✅ Questions: {game['questions_per_game']}\n"
-                f"✅ Category: {format_category_name(category)}\n\n"
-                f"Now choose difficulty:",
-                reply_markup=get_difficulty_keyboard(),
+                format_setup_summary(
+                    question_count=game["questions_per_game"],
+                    category=game["category"],
+                ),
+                reply_markup=get_setup_confirmation_keyboard(),
             )
-            return
+            return True
 
-        if data.startswith("setup_difficulty_"):
-            difficulty = data.replace("setup_difficulty_", "", 1)
+        if data == "setup_back_to_categories":
+            await query.edit_message_text(
+                format_setup_step_2_text(game["questions_per_game"]),
+                reply_markup=get_category_keyboard(),
+            )
+            return True
 
-            if difficulty not in ALLOWED_DIFFICULTIES:
-                await query.answer("Invalid difficulty.", show_alert=True)
-                return
-
-            game["difficulty"] = difficulty
+        if data == "setup_start_game":
             mark_game_joining(game, JOIN_SECONDS)
 
-    msg = await context.bot.send_message(
-        chat_id=chat_id,
-        text=build_join_text(active_games[chat_id], JOIN_SECONDS),
-        reply_markup=get_join_keyboard(chat_id),
-        parse_mode="HTML",
-    )
+            msg = await context.bot.send_message(
+                chat_id=chat_id,
+                text=build_join_text(active_games[chat_id], JOIN_SECONDS),
+                reply_markup=get_join_keyboard(chat_id),
+                parse_mode="HTML",
+            )
 
-    lock = get_game_lock(chat_id)
-    async with lock:
-        game = active_games.get(chat_id)
-        if not game or game.get("status") != "joining":
-            await safe_delete_message(context.bot, chat_id, msg.message_id)
-            return
+            lock2 = get_game_lock(chat_id)
+            async with lock2:
+                g2 = active_games.get(chat_id)
+                if not g2 or g2.get("status") != "joining":
+                    await safe_delete_message(context.bot, chat_id, msg.message_id)
+                    return True
 
-        game["join_message_id"] = msg.message_id
+                g2["join_message_id"] = msg.message_id
 
-    await query.edit_message_text(
-        "✅ Game created.\n\n"
-        f"📚 Questions: {active_games[chat_id]['questions_per_game']}\n"
-        f"🗂 Category: {format_category_name(active_games[chat_id]['category'])}\n"
-        f"🎯 Difficulty: {format_difficulty_name(active_games[chat_id]['difficulty'])}\n\n"
-        "Players can join now."
-    )
+            await query.edit_message_text(
+                format_setup_summary(
+                    question_count=active_games[chat_id]["questions_per_game"],
+                    category=active_games[chat_id]["category"],
+                )
+            )
 
-    safe_task(begin_game_after_join(chat_id, context))
+            safe_task(begin_game_after_join(chat_id, context))
+            return True
+
+    return False
 
 
 async def begin_game_after_join(chat_id, context):
@@ -567,15 +599,18 @@ async def begin_game_after_join(chat_id, context):
 
         await context.bot.send_message(chat_id, "Game started! Get ready for the first question.")
         await send_question(chat_id, context)
-
     except Exception:
         logger.exception("Error in begin_game_after_join for chat %s", chat_id)
 
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    data = query.data.split("|")
 
+    handled = await game_setup_callback_handler(update, context)
+    if handled:
+        return
+
+    data = query.data.split("|")
     if data[0] != "join":
         await query.answer()
         return
@@ -592,7 +627,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lock = get_game_lock(chat_id)
     async with lock:
         game = active_games.get(chat_id)
-
         if not game:
             await query.answer("No active game")
             return
@@ -602,16 +636,14 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         user = query.from_user
-
         added = add_player_to_game(game, user)
         if not added:
             await query.answer("Already joined")
             return
 
-        ensure_player(user)
-
-        if chat_id < 0:
-            ensure_group_player(chat_id, user)
+    ensure_player(user)
+    if chat_id < 0:
+        ensure_group_player(chat_id, user)
 
     await refresh_join_message(context, chat_id)
     await query.answer("Joined!")
@@ -625,10 +657,9 @@ async def send_question(chat_id, context):
             return
 
         current_round, questions_per_game, should_end = start_next_round(game)
-
-    if should_end:
-        await end_game(chat_id, context)
-        return
+        if should_end:
+            await end_game(chat_id, context)
+            return
 
     lock = get_game_lock(chat_id)
     async with lock:
@@ -642,13 +673,16 @@ async def send_question(chat_id, context):
     if no_question:
         await context.bot.send_message(
             chat_id,
-            "No more unused questions available for this category/difficulty. Ending game.",
+            "No more unused questions available for this category/difficulty.\nEnding game.",
         )
         await end_game(chat_id, context)
         return
 
     q_id = question["id"]
     q_text = question["question_text"]
+    difficulty = question.get("difficulty", "easy")
+    points = get_question_points(difficulty)
+
     options, correct_index = shuffle_question(question)
 
     if correct_index not in (0, 1, 2, 3):
@@ -659,10 +693,12 @@ async def send_question(chat_id, context):
         await end_game(chat_id, context)
         return
 
+    poll_question = format_question_text(q_text, points)
+
     try:
         msg = await context.bot.send_poll(
             chat_id=chat_id,
-            question=f"[{current_round}/{questions_per_game}] {q_text}",
+            question=poll_question,
             options=options,
             type="quiz",
             correct_option_id=correct_index,
@@ -671,7 +707,7 @@ async def send_question(chat_id, context):
         )
     except Exception:
         logger.exception("Failed to send poll in chat %s round %s", chat_id, current_round)
-        await context.bot.send_message(chat_id, "Failed to send the next question. Ending game.")
+        await context.bot.send_message(chat_id, "Failed to send the next question.\nEnding game.")
         await end_game(chat_id, context)
         return
 
@@ -684,55 +720,41 @@ async def send_question(chat_id, context):
 
         prepare_round_state(game, msg.poll.id, q_id, correct_index)
 
-    poll_map[msg.poll.id] = {"chat_id": chat_id, "round": current_round}
+    poll_map[msg.poll.id] = {
+        "chat_id": chat_id,
+        "round": current_round,
+        "question_id": q_id,
+        "difficulty": difficulty,
+        "points": points,
+    }
 
     logger.info("Sent poll %s in chat %s for round %s", msg.poll.id, chat_id, current_round)
     safe_task(wait_and_continue(chat_id, context, msg.poll.id, current_round))
 
 
 async def wait_and_continue(chat_id, context, poll_id, round_number):
-    try:
-        logger.info(
-            "wait_and_continue started: chat_id=%s poll_id=%s round=%s",
-            chat_id, poll_id, round_number,
-        )
+    await asyncio.sleep(QUESTION_SECONDS + 1)
 
-        await asyncio.sleep(QUESTION_SECONDS + 2)
-
-        lock = get_game_lock(chat_id)
-        async with lock:
-            game = active_games.get(chat_id)
-            if not game or game["status"] != "running":
-                poll_map.pop(poll_id, None)
-                return
-
-            if game.get("current_poll_id") != poll_id:
-                poll_map.pop(poll_id, None)
-                return
-
-            if game.get("round") != round_number:
-                poll_map.pop(poll_id, None)
-                return
-
+    lock = get_game_lock(chat_id)
+    async with lock:
+        game = active_games.get(chat_id)
+        if not game or game["status"] != "running":
             poll_map.pop(poll_id, None)
+            return
 
-        await asyncio.sleep(1)
-        await send_question(chat_id, context)
+        if game.get("current_poll_id") != poll_id:
+            poll_map.pop(poll_id, None)
+            return
 
-    except Exception:
-        logger.exception("Error in wait_and_continue for chat %s", chat_id)
-
-
-async def delete_later(context, chat_id, message_id, delay):
-    await asyncio.sleep(delay)
-    await safe_delete_message(context.bot, chat_id, message_id)
+    poll_map.pop(poll_id, None)
+    await send_question(chat_id, context)
 
 
 async def receive_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     answer = update.poll_answer
     poll_id = answer.poll_id
-
     info = poll_map.get(poll_id)
+
     if not info:
         return
 
@@ -743,19 +765,21 @@ async def receive_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
         if user.id != info.get("daily_user_id"):
             return
 
+        points = info.get("points", CORRECT_POINTS)
+
         if answer.option_ids and answer.option_ids[0] == info["correct_index"]:
-            add_points(user.id, CORRECT_POINTS)
+            add_points(user.id, points)
             record_correct_answer(user.id)
 
             if info["chat_id"] < 0:
                 ensure_group_player(info["chat_id"], user)
-                add_group_points(info["chat_id"], user, CORRECT_POINTS)
+                add_group_points(info["chat_id"], user, points)
                 record_group_correct_answer(info["chat_id"], user)
 
             display_name = f"@{user.username}" if user.username else user.full_name
             msg = await context.bot.send_message(
                 info["chat_id"],
-                f"✅ {display_name} +{CORRECT_POINTS} 🍋",
+                f"✅ {display_name} +{points} 🍋",
             )
             safe_task(delete_later(context, info["chat_id"], msg.message_id, 4))
         else:
@@ -765,18 +789,18 @@ async def receive_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
                 ensure_group_player(info["chat_id"], user)
                 record_group_wrong_answer(info["chat_id"], user)
 
-                msg = await context.bot.send_message(
-                    info["chat_id"],
-                    f"📅 Daily Quiz\n❌ {user.full_name} got it wrong.",
-                )
-                safe_task(delete_later(context, info["chat_id"], msg.message_id, 4))
+            msg = await context.bot.send_message(
+                info["chat_id"],
+                f"🎯 Daily Quiz\n❌ {user.full_name} got it wrong.",
+            )
+            safe_task(delete_later(context, info["chat_id"], msg.message_id, 4))
 
         poll_map.pop(poll_id, None)
         return
 
     chat_id = info["chat_id"]
-    lock = get_game_lock(chat_id)
 
+    lock = get_game_lock(chat_id)
     async with lock:
         game = active_games.get(chat_id)
         if not game:
@@ -785,11 +809,13 @@ async def receive_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
         user = answer.user
         ensure_player(user)
 
+        base_points = info.get("points", POINTS["easy"])
+
         result = apply_poll_answer(
             game=game,
             user_id=user.id,
             option_ids=answer.option_ids,
-            correct_points=CORRECT_POINTS,
+            correct_points=base_points,
             speed_bonus_seconds=SPEED_BONUS_SECONDS,
             speed_bonus_points=SPEED_BONUS_POINTS,
         )
@@ -812,9 +838,10 @@ async def receive_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
             record_group_correct_answer(chat_id, user)
 
         display_name = f"@{user.username}" if user.username else user.full_name
-        reward_text = f"✅ {display_name} +{CORRECT_POINTS} 🍋"
+
+        reward_text = f"✅ {display_name} +{base_points} 🍋"
         if got_speed_bonus:
-            reward_text += f"\n⚡ Speed bonus +{SPEED_BONUS_POINTS} 🍋‍🟩"
+            reward_text += f"\n⚡ Speed bonus +{SPEED_BONUS_POINTS}"
 
         msg = await context.bot.send_message(chat_id, reward_text)
         safe_task(delete_later(context, chat_id, msg.message_id, 4))
@@ -826,6 +853,11 @@ async def receive_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
             record_group_wrong_answer(chat_id, user)
 
 
+async def delete_later(context: ContextTypes.DEFAULT_TYPE, chat_id: int, message_id: int, delay: int = 4):
+    await asyncio.sleep(delay)
+    await safe_delete_message(context.bot, chat_id, message_id)
+
+
 async def end_game(chat_id, context):
     lock = get_game_lock(chat_id)
     async with lock:
@@ -833,78 +865,26 @@ async def end_game(chat_id, context):
         if not game:
             return
 
-        game["status"] = "ending"
+        poll_id = game.get("current_poll_id")
+        db_game_id = game.get("db_game_id")
+        players = game.get("players", {})
+        total_rounds = game.get("round", 0)
 
-        current_poll_id = game.get("current_poll_id")
-        if current_poll_id:
-            poll_map.pop(current_poll_id, None)
+        if poll_id:
+            poll_map.pop(poll_id, None)
 
-        result = build_final_results(game)
+        final_results = build_final_results(game)
+        results_text = build_results_text(final_results)
 
-        ranking = result["ranking"]
-        winner_user_id = result["winner_user_id"]
-        players = result["players"]
-        player_objects = result["player_objects"]
-        scores = result["scores"]
-        correct_counts = result["correct_counts"]
-        wrong_counts = result["wrong_counts"]
-        answer_times_map = result["answer_times_map"]
-        db_game_id = result["db_game_id"]
-        total_rounds = result["total_rounds"]
+        winner_user_id = None
+        if final_results:
+            winner_user_id = final_results[0].get("user_id")
 
         active_games.pop(chat_id, None)
         cleanup_game_lock(chat_id)
 
-    for uid in players.keys():
-        try:
-            increment_games_played(uid)
-        except Exception:
-            logger.exception("Failed to increment games_played for %s", uid)
-
-        try:
-            if chat_id < 0:
-                player_user = player_objects.get(uid)
-                if player_user:
-                    increment_group_games_played(chat_id, player_user)
-        except Exception:
-            logger.exception("Failed to increment group games_played for %s", uid)
-
-    if winner_user_id is not None:
-        try:
-            increment_games_won(winner_user_id)
-        except Exception:
-            logger.exception("Failed to increment games_won for %s", winner_user_id)
-
-        try:
-            if chat_id < 0:
-                winner_user = player_objects.get(winner_user_id)
-                if winner_user:
-                    increment_group_games_won(chat_id, winner_user)
-        except Exception:
-            logger.exception("Failed to increment group games_won for %s", winner_user_id)
-
-    if db_game_id:
-        try:
-            position_map = {}
-            for i, (uid, _) in enumerate(ranking, start=1):
-                position_map[uid] = i
-
-            for uid in players.keys():
-                answer_times = answer_times_map.get(uid, [])
-                avg_answer_time = (
-                    sum(answer_times) / len(answer_times) if answer_times else None
-                )
-
-                record_game_result(
-                    game_id=db_game_id,
-                    user_id=uid,
-                    score=scores.get(uid, 0),
-                    correct_count=correct_counts.get(uid, 0),
-                    wrong_count=wrong_counts.get(uid, 0),
-                    avg_answer_time=avg_answer_time,
-                    position=position_map.get(uid),
-                )
-
+    try:
+        if db_game_id:
             finish_game(
                 game_id=db_game_id,
                 winner_user_id=winner_user_id,
@@ -912,8 +892,36 @@ async def end_game(chat_id, context):
                 total_rounds=total_rounds,
                 status="finished",
             )
-        except Exception:
-            logger.exception("Failed to save game results for chat %s", chat_id)
+    except Exception:
+        logger.exception("Failed to finish game for chat %s", chat_id)
 
-    text = build_results_text(ranking, players)
-    await context.bot.send_message(chat_id, text, parse_mode="HTML")
+    try:
+        for user_id, player_data in players.items():
+            increment_games_played(user_id)
+            if chat_id < 0:
+                increment_group_games_played(chat_id, user_id)
+
+            score = player_data.get("score", 0)
+            correct = player_data.get("correct", 0)
+            wrong = player_data.get("wrong", 0)
+
+            record_game_result(
+                user_id=user_id,
+                chat_id=chat_id,
+                score=score,
+                correct_answers=correct,
+                wrong_answers=wrong,
+                is_winner=(user_id == winner_user_id),
+            )
+
+        if winner_user_id:
+            increment_games_won(winner_user_id)
+            if chat_id < 0:
+                increment_group_games_won(chat_id, winner_user_id)
+    except Exception:
+        logger.exception("Failed to save final game stats for chat %s", chat_id)
+
+    await context.bot.send_message(
+        chat_id,
+        results_text if results_text else "🏁 Game finished.",
+    )

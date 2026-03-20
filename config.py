@@ -1,31 +1,33 @@
-# config.py
-
 import os
-import logging
 
-logging.basicConfig(level=logging.INFO)
+BOT_TOKEN = os.getenv("BOT_TOKEN", "")
 
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-DB_PATH = os.getenv("DB_PATH", "/data/quiz.db")
-
-ADMIN_ID = int(os.getenv("ADMIN_ID", "8368997991"))
-
-MIN_PLAYERS = 3
-JOIN_SECONDS = 60
+MIN_PLAYERS = 1
+JOIN_SECONDS = 20
 QUESTION_SECONDS = 15
 
-DEFAULT_QUESTIONS_PER_GAME = 5
+CORRECT_POINTS = 10
+SPEED_BONUS_SECONDS = 5
+SPEED_BONUS_POINTS = 5
+
+DEFAULT_QUESTIONS_PER_GAME = 10
 ALLOWED_QUESTION_COUNTS = [5, 10, 15, 20]
 
 DEFAULT_CATEGORY = "mixed"
-ALLOWED_CATEGORIES = ["mixed", "vocabulary", "grammar", "idioms", "synonyms"]
+ALLOWED_CATEGORIES = [
+    "mixed",
+    "vocabulary",
+    "grammar",
+    "idioms_phrases",
+    "synonyms",
+    "collocations",
+]
 
-DEFAULT_DIFFICULTY = "easy"
-ALLOWED_DIFFICULTIES = ["easy", "medium", "hard"]
+DEFAULT_DIFFICULTY = "mixed"
+ALLOWED_DIFFICULTIES = ["easy", "medium", "hard", "mixed"]
 
-SPEED_BONUS_SECONDS = 5
-CORRECT_POINTS = 25
-SPEED_BONUS_POINTS = 10
-
-if not BOT_TOKEN:
-    raise ValueError("BOT_TOKEN is missing! Add it to Railway variables or environment variables.")
+POINTS = {
+    "easy": 15,
+    "medium": 25,
+    "hard": 35,
+}

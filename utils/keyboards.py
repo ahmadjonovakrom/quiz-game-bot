@@ -67,6 +67,8 @@ def leaderboard_menu_keyboard(chat_type: str) -> InlineKeyboardMarkup:
     ])
 
 
+# ================= ADMIN =================
+
 def admin_main_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("📚 Question Management", callback_data="admin_questions")],

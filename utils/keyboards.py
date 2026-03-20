@@ -19,6 +19,16 @@ def back_keyboard(callback_data: str) -> InlineKeyboardMarkup:
     ])
 
 
+def back_cancel_keyboard(
+    back_callback: str,
+    cancel_callback: str = "admin_close",
+) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("⬅️ Back", callback_data=back_callback)],
+        [InlineKeyboardButton("❌ Cancel", callback_data=cancel_callback)],
+    ])
+
+
 def leaderboard_menu_keyboard(chat_type: str) -> InlineKeyboardMarkup:
     if chat_type == "private":
         return InlineKeyboardMarkup([
@@ -143,3 +153,104 @@ def game_setup_confirm_keyboard() -> InlineKeyboardMarkup:
         [InlineKeyboardButton("▶️ Start Game", callback_data="setup_start_game")],
         [InlineKeyboardButton("⬅️ Back", callback_data="setup_back_to_categories")],
     ])
+
+
+def admin_main_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("➕ Add Question", callback_data="admin_add_question")],
+        [InlineKeyboardButton("📚 Manage Questions", callback_data="admin_questions_menu")],
+        [InlineKeyboardButton("📢 Broadcast", callback_data="admin_broadcast")],
+        [InlineKeyboardButton("📥 Import Questions", callback_data="admin_import_questions")],
+        [InlineKeyboardButton("📊 Bot Stats", callback_data="admin_bot_stats")],
+        [InlineKeyboardButton("❌ Close", callback_data="admin_close")],
+    ])
+
+
+def admin_questions_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("📋 Latest Questions", callback_data="admin_list_questions")],
+        [InlineKeyboardButton("🔍 Search Questions", callback_data="admin_search_questions")],
+        [InlineKeyboardButton("✏️ Edit Question", callback_data="admin_edit_question")],
+        [InlineKeyboardButton("🗑 Delete Question", callback_data="admin_delete_question")],
+        [InlineKeyboardButton("⬅️ Back", callback_data="admin_back_main")],
+    ])
+
+
+def delete_confirm_keyboard(question_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("✅ Yes, Delete", callback_data=f"admin_delete_confirm_{question_id}"),
+            InlineKeyboardButton("❌ Cancel", callback_data="admin_questions_menu"),
+        ]
+    ])
+
+
+def broadcast_confirm_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("✅ Send", callback_data="admin_broadcast_confirm"),
+            InlineKeyboardButton("❌ Cancel", callback_data="admin_close"),
+        ]
+    ])
+
+
+def question_action_keyboard(question_id: int, is_active: bool = True) -> InlineKeyboardMarkup:
+    toggle_text = "🚫 Deactivate" if is_active else "✅ Activate"
+    toggle_callback = (
+        f"admin_deactivate_{question_id}" if is_active else f"admin_activate_{question_id}"
+    )
+
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("✏️ Edit", callback_data=f"admin_edit_{question_id}"),
+            InlineKeyboardButton("🗑 Delete", callback_data=f"admin_delete_{question_id}"),
+        ],
+        [InlineKeyboardButton(toggle_text, callback_data=toggle_callback)],
+        [InlineKeyboardButton("⬅️ Back", callback_data="admin_questions_menu")],
+    ])
+
+
+def questions_pagination_keyboard(
+    page: int,
+    has_next: bool,
+    prefix: str = "admin_questions_page",
+) -> InlineKeyboardMarkup:
+    row = []
+
+    if page > 1:
+        row.append(
+            InlineKeyboardButton(
+                "⬅️ Prev",
+                callback_data=f"{prefix}:{page - 1}",
+            )
+        )
+
+    if has_next:
+        row.append(
+            InlineKeyboardButton(
+                "Next ➡️",
+                callback_data=f"{prefix}:{page + 1}",
+            )
+        )
+
+    rows = []
+    if row:
+        rows.append(row)
+
+    rows.append([InlineKeyboardButton("⬅️ Back", callback_data="admin_questions_menu")])
+    return InlineKeyboardMarkup(rows)
+
+
+def search_results_keyboard(question_ids: list[int]) -> InlineKeyboardMarkup:
+    rows = []
+
+    for question_id in question_ids[:10]:
+        rows.append([
+            InlineKeyboardButton(
+                f"Question #{question_id}",
+                callback_data=f"admin_question_{question_id}",
+            )
+        ])
+
+    rows.append([InlineKeyboardButton("⬅️ Back", callback_data="admin_questions_menu")])
+    return InlineKeyboardMarkup(rows)

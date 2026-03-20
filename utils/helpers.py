@@ -26,10 +26,11 @@ def format_category_name(category: str) -> str:
         "mixed": "Mixed",
         "vocabulary": "Vocabulary",
         "grammar": "Grammar",
-        "idioms": "Idioms",
+        "idioms_phrases": "Idioms & Phrases",
         "synonyms": "Synonyms",
+        "collocations": "Collocations",
     }
-    return mapping.get(category, category.capitalize())
+    return mapping.get(str(category).lower(), str(category).replace("_", " ").title())
 
 
 def build_join_text(game, remaining: int) -> str:

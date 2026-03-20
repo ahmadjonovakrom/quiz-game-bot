@@ -48,7 +48,7 @@ def leaderboard_menu_keyboard(chat_type: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("👥 This Group", callback_data="leaderboard_group"),
-            InlineKeyboardButton("🌍 All-Time", callback_data="leaderboard_global"),
+            InlineKeyboardButton("🌍 Global", callback_data="leaderboard_global"),
         ],
         [
             InlineKeyboardButton("📅 Daily", callback_data="leaderboard_daily"),

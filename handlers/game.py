@@ -686,6 +686,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         ensure_player(user)
 
+        if chat_id < 0:
+            ensure_group_player(chat_id, user)
+
     await refresh_join_message(context, chat_id)
     await query.answer("Joined!")
 

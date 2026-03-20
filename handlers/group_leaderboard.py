@@ -19,24 +19,34 @@ def group_leaderboard_keyboard() -> InlineKeyboardMarkup:
             InlineKeyboardButton("📈 Weekly", callback_data="group_lb_weekly"),
             InlineKeyboardButton("🗓 Monthly", callback_data="group_lb_monthly"),
         ],
+        [
+            InlineKeyboardButton("🌍 Global Board", callback_data="leaderboard_global"),
+        ],
     ])
 
 
-def _format_group_leaderboard_text(rows, title: str, group_name: str) -> str:
+def _format_group_leaderboard_text(
+    rows,
+    title: str,
+    group_name: str,
+    viewer_user_id: int | None = None,
+) -> str:
     text = f"🏆 {title}\n"
     text += f"📍 Group: {group_name}\n\n"
 
     if not rows:
-        text += "No data yet."
+        text += "No activity yet.\nPlay a game to get on the leaderboard 🚀"
         return text
 
     medals = ["🥇", "🥈", "🥉"]
 
     for i, row in enumerate(rows, start=1):
-        icon = medals[i - 1] if i <= 3 else f"{i}."
+        medal = medals[i - 1] if i <= 3 else "🏅"
         name = row["full_name"] or row["username"] or f"User {row['user_id']}"
         points = row["period_points"] if "period_points" in row.keys() else row["total_points"]
-        text += f"{icon} {name} — {points} pts\n"
+        you = " 👈 YOU" if viewer_user_id and row["user_id"] == viewer_user_id else ""
+
+        text += f"{medal} {i}. {name} — {points} pts{you}\n"
 
     return text
 
@@ -63,6 +73,7 @@ def _get_group_title(period: str) -> str:
 
 async def _send_group_leaderboard(update: Update, period: str):
     chat = update.effective_chat
+    user = update.effective_user
 
     if chat.type == "private":
         await update.effective_message.reply_text("This command only works in groups.")
@@ -73,6 +84,7 @@ async def _send_group_leaderboard(update: Update, period: str):
         rows,
         _get_group_title(period),
         chat.title or "This Group",
+        viewer_user_id=user.id if user else None,
     )
 
     await update.effective_message.reply_text(
@@ -102,6 +114,7 @@ async def group_leaderboard_callback_handler(update: Update, context: ContextTyp
     await query.answer()
 
     chat = update.effective_chat
+    user = update.effective_user
 
     if chat.type == "private":
         await query.edit_message_text("This menu only works in groups.")
@@ -123,6 +136,7 @@ async def group_leaderboard_callback_handler(update: Update, context: ContextTyp
         rows,
         _get_group_title(period),
         chat.title or "This Group",
+        viewer_user_id=user.id if user else None,
     )
 
     await query.edit_message_text(

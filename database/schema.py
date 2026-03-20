@@ -196,6 +196,11 @@ def create_tables():
         """)
 
         conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_group_scores_rank
+            ON group_scores(chat_id, total_points DESC, correct_answers DESC, games_won DESC)
+        """)
+
+        conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_group_points_history_chat
             ON group_points_history(chat_id)
         """)

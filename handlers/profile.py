@@ -10,6 +10,9 @@ from database import (
     get_weekly_leaderboard_page,
     get_monthly_leaderboard_page,
     get_group_leaderboard,
+    get_group_daily_leaderboard,
+    get_group_weekly_leaderboard,
+    get_group_monthly_leaderboard,
     get_player_group_rank_info,
     get_player_daily_rank_info,
     get_player_weekly_rank_info,
@@ -316,27 +319,96 @@ async def show_monthly_leaderboard(update: Update, context: ContextTypes.DEFAULT
 
 
 async def show_group_daily_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await _send_or_edit(
-        update,
-        "👥 Group daily leaderboard is not connected yet.",
-        back_keyboard("leaderboard_scope_group"),
-    )
+    try:
+        chat = update.effective_chat
+        user = update.effective_user
+
+        if chat.type == "private":
+            await _send_or_edit(
+                update,
+                "👥 This Group leaderboard is only available in groups.",
+                back_keyboard("leaderboard_menu"),
+            )
+            return
+
+        rows = get_group_daily_leaderboard(chat.id, limit=10)
+
+        text = format_leaderboard_text(
+            "This Group • Daily",
+            rows,
+            points_key="period_points",
+            viewer_user_id=user.id if user else None,
+            empty_message="No activity yet today in this group.\nBe the first to play!",
+        )
+
+        await _send_or_edit(update, text, back_keyboard("leaderboard_scope_group"))
+
+    except Exception as e:
+        logger.exception("show_group_daily_leaderboard crashed")
+        if update.callback_query:
+            await update.callback_query.message.reply_text(f"❌ Group daily leaderboard error: {e}")
 
 
 async def show_group_weekly_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await _send_or_edit(
-        update,
-        "👥 Group weekly leaderboard is not connected yet.",
-        back_keyboard("leaderboard_scope_group"),
-    )
+    try:
+        chat = update.effective_chat
+        user = update.effective_user
+
+        if chat.type == "private":
+            await _send_or_edit(
+                update,
+                "👥 This Group leaderboard is only available in groups.",
+                back_keyboard("leaderboard_menu"),
+            )
+            return
+
+        rows = get_group_weekly_leaderboard(chat.id, limit=10)
+
+        text = format_leaderboard_text(
+            "This Group • Weekly",
+            rows,
+            points_key="period_points",
+            viewer_user_id=user.id if user else None,
+            empty_message="No activity yet this week in this group.\nStart the competition!",
+        )
+
+        await _send_or_edit(update, text, back_keyboard("leaderboard_scope_group"))
+
+    except Exception as e:
+        logger.exception("show_group_weekly_leaderboard crashed")
+        if update.callback_query:
+            await update.callback_query.message.reply_text(f"❌ Group weekly leaderboard error: {e}")
 
 
 async def show_group_monthly_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await _send_or_edit(
-        update,
-        "👥 Group monthly leaderboard is not connected yet.",
-        back_keyboard("leaderboard_scope_group"),
-    )
+    try:
+        chat = update.effective_chat
+        user = update.effective_user
+
+        if chat.type == "private":
+            await _send_or_edit(
+                update,
+                "👥 This Group leaderboard is only available in groups.",
+                back_keyboard("leaderboard_menu"),
+            )
+            return
+
+        rows = get_group_monthly_leaderboard(chat.id, limit=10)
+
+        text = format_leaderboard_text(
+            "This Group • Monthly",
+            rows,
+            points_key="period_points",
+            viewer_user_id=user.id if user else None,
+            empty_message="No activity yet this month in this group.\nBe the first to score!",
+        )
+
+        await _send_or_edit(update, text, back_keyboard("leaderboard_scope_group"))
+
+    except Exception as e:
+        logger.exception("show_group_monthly_leaderboard crashed")
+        if update.callback_query:
+            await update.callback_query.message.reply_text(f"❌ Group monthly leaderboard error: {e}")
 
 
 async def daily(update: Update, context: ContextTypes.DEFAULT_TYPE):

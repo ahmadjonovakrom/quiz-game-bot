@@ -33,6 +33,7 @@ from handlers.profile import (
     daily,
     weekly,
     monthly,
+    global_leaderboard,
     profile_callback_handler,
 )
 
@@ -152,6 +153,7 @@ def main():
     app.add_handler(CommandHandler("stopgame", stop_game))
 
     app.add_handler(CommandHandler("leaderboard", leaderboard))
+    app.add_handler(CommandHandler("global", global_leaderboard))
     app.add_handler(CommandHandler("daily", daily))
     app.add_handler(CommandHandler("weekly", weekly))
     app.add_handler(CommandHandler("monthly", monthly))

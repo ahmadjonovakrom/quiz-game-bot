@@ -26,8 +26,6 @@ from .players import (
     get_all_user_ids,
     get_total_players,
     get_total_users_count,
-
-    # 🔥 NEW FEATURES (YOU ASKED THIS)
     get_player_stats,
     get_player_full_profile,
     has_claimed_daily_reward,
@@ -54,8 +52,15 @@ from .questions import (
     export_questions_to_rows,
 )
 
-# groups
-from .groups import (
+# games
+from .games import (
+    create_game,
+    finish_game,
+    record_game_result,
+)
+
+# stats / group leaderboard
+from .stats import (
     add_group_points,
     get_group_leaderboard,
     get_player_group_rank_info,
@@ -64,20 +69,6 @@ from .groups import (
     record_group_correct_answer,
     record_group_wrong_answer,
 )
-
-# games
-from .games import (
-    create_game,
-    finish_game,
-    record_game_result,
-)
-
-# daily quiz
-from .daily import (
-    has_played_daily_quiz,
-    record_daily_quiz_attempt,
-)
-
 
 __all__ = [
     # connection
@@ -108,8 +99,6 @@ __all__ = [
     "get_all_user_ids",
     "get_total_players",
     "get_total_users_count",
-
-    # 🔥 NEW FEATURES
     "get_player_stats",
     "get_player_full_profile",
     "has_claimed_daily_reward",
@@ -134,7 +123,12 @@ __all__ = [
     "search_questions_by_keyword",
     "export_questions_to_rows",
 
-    # groups
+    # games
+    "create_game",
+    "finish_game",
+    "record_game_result",
+
+    # stats / groups
     "add_group_points",
     "get_group_leaderboard",
     "get_player_group_rank_info",
@@ -142,13 +136,4 @@ __all__ = [
     "increment_group_games_won",
     "record_group_correct_answer",
     "record_group_wrong_answer",
-
-    # games
-    "create_game",
-    "finish_game",
-    "record_game_result",
-
-    # daily quiz
-    "has_played_daily_quiz",
-    "record_daily_quiz_attempt",
 ]

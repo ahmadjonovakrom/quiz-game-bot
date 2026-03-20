@@ -34,6 +34,25 @@ logger = logging.getLogger(__name__)
 
 LEADERBOARD_PAGE_SIZE = 10
 
+def format_number(n: int) -> str:
+    if n < 1000:
+        return str(n)
+
+    for unit, value in [
+        ("T", 1_000_000_000_000),
+        ("B", 1_000_000_000),
+        ("M", 1_000_000),
+        ("K", 1_000),
+    ]:
+        if n >= value:
+            formatted = n / value
+
+            if formatted.is_integer():
+                return f"{int(formatted)}{unit}"
+
+            return f"{formatted:.1f}{unit}"
+
+    return str(n)
 
 def _safe_get(row, key, default=None):
     if row is None:
@@ -100,7 +119,7 @@ def format_leaderboard_text(
     for index, row in enumerate(rows, start=1):
         prefix = _rank_prefix(index)
         name = _extract_name(row)
-        points = _safe_get(row, points_key, 0)
+        points = format_number(_safe_get(row, points_key, 0))
         is_you = bool(viewer_user_id and _safe_get(row, "user_id") == viewer_user_id)
 
         if is_you:
@@ -237,7 +256,7 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         lines.extend([
             f"Global Rank: #{rank}" if rank else "Global Rank: Not ranked yet",
-            f"Lemons: {total_points} 🍋",
+            f"🍋 Lemons: {format_number(total_points)}",
             f"Games Played: {games_played}",
             f"Correct Answers: {correct_answers}",
         ])

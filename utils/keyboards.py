@@ -1,5 +1,6 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
+
 LEADERBOARD_PAGE_SIZE = 15
 
 
@@ -32,13 +33,15 @@ def leaderboard_menu_keyboard(chat_type: str) -> InlineKeyboardMarkup:
     if chat_type == "private":
         return InlineKeyboardMarkup([
             [
-                InlineKeyboardButton("🌍 All-Time", callback_data="leaderboard_global"),
+                InlineKeyboardButton("🏆 All-Time", callback_data="leaderboard_global"),
                 InlineKeyboardButton("📅 Daily", callback_data="leaderboard_daily"),
-                InlineKeyboardButton("📊 Weekly", callback_data="leaderboard_weekly"),
             ],
             [
-                InlineKeyboardButton("🗓 Monthly", callback_data="leaderboard_monthly"),
-                InlineKeyboardButton("🪪 My Rank", callback_data="leaderboard_rank"),
+                InlineKeyboardButton("📈 Weekly", callback_data="leaderboard_weekly"),
+                InlineKeyboardButton("🗓️ Monthly", callback_data="leaderboard_monthly"),
+            ],
+            [
+                InlineKeyboardButton("📊 My Rank", callback_data="leaderboard_rank"),
             ],
             [
                 InlineKeyboardButton("⬅️ Back", callback_data="menu_main"),
@@ -52,11 +55,11 @@ def leaderboard_menu_keyboard(chat_type: str) -> InlineKeyboardMarkup:
         ],
         [
             InlineKeyboardButton("📅 Daily", callback_data="leaderboard_daily"),
-            InlineKeyboardButton("📊 Weekly", callback_data="leaderboard_weekly"),
+            InlineKeyboardButton("📈 Weekly", callback_data="leaderboard_weekly"),
         ],
         [
-            InlineKeyboardButton("🗓 Monthly", callback_data="leaderboard_monthly"),
-            InlineKeyboardButton("🪪 My Rank", callback_data="leaderboard_rank"),
+            InlineKeyboardButton("🗓️ Monthly", callback_data="leaderboard_monthly"),
+            InlineKeyboardButton("📊 My Rank", callback_data="leaderboard_rank"),
         ],
         [
             InlineKeyboardButton("⬅️ Back", callback_data="menu_main"),
@@ -68,7 +71,7 @@ def admin_main_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("📚 Question Management", callback_data="admin_questions")],
         [InlineKeyboardButton("📊 Bot Stats", callback_data="admin_botstats")],
-        [InlineKeyboardButton("📢 Broadcast", callback_data="admin_broadcast")],
+        [InlineKeyboardButton("📣 Broadcast", callback_data="admin_broadcast")],
         [InlineKeyboardButton("❌ Close", callback_data="admin_close")],
     ])
 
@@ -77,9 +80,9 @@ def admin_questions_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("➕ Add Question", callback_data="admin_add_question")],
         [InlineKeyboardButton("✏️ Edit Question", callback_data="admin_edit_question")],
-        [InlineKeyboardButton("🗑 Delete Question", callback_data="admin_delete_question")],
+        [InlineKeyboardButton("🗑️ Delete Question", callback_data="admin_delete_question")],
         [InlineKeyboardButton("🔎 Search Questions", callback_data="admin_search_questions")],
-        [InlineKeyboardButton("📋 List Questions", callback_data="admin_list_questions")],
+        [InlineKeyboardButton("📄 List Questions", callback_data="admin_list_questions")],
         [InlineKeyboardButton("📤 Export Questions", callback_data="admin_export_questions")],
         [InlineKeyboardButton("📥 Import Questions", callback_data="admin_import_questions")],
         [InlineKeyboardButton("⬅️ Back", callback_data="admin_back")],
@@ -106,7 +109,7 @@ def delete_confirm_keyboard() -> InlineKeyboardMarkup:
 
 
 def question_action_keyboard(qid: int, is_active: int, source: str = "questions") -> InlineKeyboardMarkup:
-    toggle_text = "🚫 Deactivate" if is_active else "✅ Activate"
+    toggle_text = "⏸️ Deactivate" if is_active else "✅ Activate"
     toggle_action = "deactivate" if is_active else "activate"
 
     return InlineKeyboardMarkup([
@@ -117,50 +120,4 @@ def question_action_keyboard(qid: int, is_active: int, source: str = "questions"
         [
             InlineKeyboardButton("⬅️ Back", callback_data=f"admin_return_{source}"),
         ],
-        [
-            InlineKeyboardButton("❌ Close", callback_data="admin_close"),
-        ],
     ])
-
-
-def questions_pagination_keyboard(offset: int, total: int, limit: int) -> InlineKeyboardMarkup:
-    prev_offset = max(0, offset - limit)
-    next_offset = offset + limit
-
-    current_page = (offset // limit) + 1
-    total_pages = max(1, (total + limit - 1) // limit)
-
-    row = []
-
-    if offset > 0:
-        row.append(InlineKeyboardButton("⬅️ Prev", callback_data=f"admin_list_{prev_offset}"))
-
-    row.append(InlineKeyboardButton(f"{current_page}/{total_pages}", callback_data="admin_page_info"))
-
-    if next_offset < total:
-        row.append(InlineKeyboardButton("Next ➡️", callback_data=f"admin_list_{next_offset}"))
-
-    keyboard = [row] if row else []
-
-    keyboard.append([InlineKeyboardButton("⬅️ Back", callback_data="admin_questions")])
-    keyboard.append([InlineKeyboardButton("❌ Close", callback_data="admin_close")])
-
-    return InlineKeyboardMarkup(keyboard)
-
-
-def search_results_keyboard(results) -> InlineKeyboardMarkup:
-    keyboard = []
-
-    for q in results[:15]:
-        qid = q[0] if not isinstance(q, dict) else q.get("id")
-        question_text = q[1] if not isinstance(q, dict) else q.get("question_text", "")
-        short_text = question_text[:45] + "..." if len(question_text) > 45 else question_text
-
-        keyboard.append([
-            InlineKeyboardButton(short_text or f"Question {qid}", callback_data=f"admin_open_{qid}")
-        ])
-
-    keyboard.append([InlineKeyboardButton("⬅️ Back", callback_data="admin_questions")])
-    keyboard.append([InlineKeyboardButton("❌ Close", callback_data="admin_close")])
-
-    return InlineKeyboardMarkup(keyboard)

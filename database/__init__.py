@@ -57,17 +57,16 @@ from .games import (
     create_game,
     finish_game,
     record_game_result,
+    get_total_games,
+    get_total_groups,
 )
 
-# stats / group leaderboard
+# stats
 from .stats import (
-    add_group_points,
-    get_group_leaderboard,
-    get_player_group_rank_info,
-    increment_group_games_played,
-    increment_group_games_won,
-    record_group_correct_answer,
-    record_group_wrong_answer,
+    get_question_count,
+    get_total_questions_count,
+    get_group_top_players,
+    get_group_user_rank,
 )
 
 __all__ = [
@@ -127,13 +126,12 @@ __all__ = [
     "create_game",
     "finish_game",
     "record_game_result",
+    "get_total_games",
+    "get_total_groups",
 
-    # stats / groups
-    "add_group_points",
-    "get_group_leaderboard",
-    "get_player_group_rank_info",
-    "increment_group_games_played",
-    "increment_group_games_won",
-    "record_group_correct_answer",
-    "record_group_wrong_answer",
+    # stats
+    "get_question_count",
+    "get_total_questions_count",
+    "get_group_top_players",
+    "get_group_user_rank",
 ]

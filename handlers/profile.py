@@ -227,41 +227,74 @@ async def show_group_period_menu(update: Update, context: ContextTypes.DEFAULT_T
 
 async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
+    chat = update.effective_chat
+
     profile_data, rank = get_player_profile(user.id)
 
     if not profile_data:
         text = (
             "👤 My Profile\n\n"
             f"Name: {user.full_name}\n"
-            "Global Rank: Not ranked yet\n"
-            "Lemons: 0 🍋\n"
-            "Games Played: 0\n"
-            "Correct Answers: 0"
+            "🏆 Global Rank: Not ranked yet\n"
+            "🍋 Lemons: 0\n"
+            "🎮 Games Played: 0\n"
+            "🏆 Wins: 0\n"
+            "✅ Correct: 0\n"
+            "❌ Wrong: 0\n"
+            "🎯 Accuracy: 0%"
         )
-    else:
-        full_name = _safe_get(profile_data, "full_name", user.full_name)
-        username = _safe_get(profile_data, "username")
-        total_points = _safe_get(profile_data, "total_points", 0)
-        games_played = _safe_get(profile_data, "games_played", 0)
-        correct_answers = _safe_get(profile_data, "correct_answers", 0)
+        await _send_or_edit(update, text, back_keyboard("menu_main"))
+        return
 
-        lines = [
-            "👤 My Profile",
-            "",
-            f"Name: {full_name}",
-        ]
+    # --- basic fields ---
+    full_name = _safe_get(profile_data, "full_name", user.full_name)
+    username = _safe_get(profile_data, "username")
 
-        if username:
-            lines.append(f"Username: @{username}")
+    total_points = _safe_get(profile_data, "total_points", 0)
+    games_played = _safe_get(profile_data, "games_played", 0)
+    games_won = _safe_get(profile_data, "games_won", 0)
+    correct_answers = _safe_get(profile_data, "correct_answers", 0)
+    wrong_answers = _safe_get(profile_data, "wrong_answers", 0)
 
-        lines.extend([
-            f"Global Rank: #{rank}" if rank else "Global Rank: Not ranked yet",
-            f"🍋 Lemons: {format_number(total_points)}",
-            f"Games Played: {games_played}",
-            f"Correct Answers: {correct_answers}",
-        ])
+    # --- accuracy ---
+    total_answers = correct_answers + wrong_answers
+    accuracy = int((correct_answers / total_answers) * 100) if total_answers > 0 else 0
 
-        text = "\n".join(lines)
+    # --- group rank (only if in group) ---
+    group_rank = None
+    if chat.type != "private":
+        group_rank, _ = get_player_group_rank_info(chat.id, user.id)
+
+    # --- build text ---
+    lines = [
+        "👤 My Profile",
+        "",
+        f"Name: {full_name}",
+    ]
+
+    if username:
+        lines.append(f"Username: @{username}")
+
+    # Global rank
+    lines.append(f"🏆 Global Rank: #{rank}" if rank else "🏆 Global Rank: Not ranked yet")
+
+    # Group rank (only in group)
+    if chat.type != "private":
+        lines.append(f"👥 Group Rank: #{group_rank}" if group_rank else "👥 Group Rank: Not ranked yet")
+
+    # Stats
+    lines.extend([
+        "",
+        f"🍋 Lemons: {format_number(total_points)}",
+        f"🎮 Games Played: {games_played}",
+        f"🏆 Wins: {games_won}",
+        "",
+        f"✅ Correct: {correct_answers}",
+        f"❌ Wrong: {wrong_answers}",
+        f"🎯 Accuracy: {accuracy}%",
+    ])
+
+    text = "\n".join(lines)
 
     await _send_or_edit(update, text, back_keyboard("menu_main"))
 

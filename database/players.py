@@ -176,9 +176,10 @@ def increment_games_won(user_id: int):
         """, (user_id,))
 
 
-def get_top_players(limit: int = 10):
+def get_top_players(limit: int = 10, offset: int = 0):
     with closing(get_conn()) as conn:
-        return conn.execute(f"""
+        return conn.execute(
+            """
             SELECT
                 user_id,
                 username,
@@ -187,9 +188,11 @@ def get_top_players(limit: int = 10):
                 correct_answers,
                 games_won
             FROM players
-            {GLOBAL_ORDER_BY}
-            LIMIT ?
-        """, (limit,)).fetchall()
+            ORDER BY total_points DESC, correct_answers DESC, games_won DESC, user_id ASC
+            LIMIT ? OFFSET ?
+            """,
+            (limit, offset),
+        ).fetchall()
 
 
 def get_global_leaderboard(limit: int = 10):

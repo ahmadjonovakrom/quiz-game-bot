@@ -10,6 +10,7 @@ from database import (
     get_weekly_leaderboard_page,
     get_monthly_leaderboard_page,
     get_group_leaderboard,
+    get_group_leaderboard_page,
     get_group_daily_leaderboard,
     get_group_weekly_leaderboard,
     get_group_monthly_leaderboard,
@@ -25,10 +26,13 @@ from database import (
 from utils.keyboards import (
     leaderboard_menu_keyboard,
     leaderboard_period_keyboard,
+    leaderboard_pagination_keyboard,
     back_keyboard,
 )
 
 logger = logging.getLogger(__name__)
+
+LEADERBOARD_PAGE_SIZE = 10
 
 
 def _safe_get(row, key, default=None):
@@ -61,6 +65,18 @@ def _rank_prefix(index: int) -> str:
     if index == 3:
         return "🥉"
     return f"{index}."
+
+
+def _parse_page(value: str | None) -> int:
+    try:
+        page = int(value or "1")
+        return page if page > 0 else 1
+    except Exception:
+        return 1
+
+
+def _offset_for_page(page: int) -> int:
+    return (page - 1) * LEADERBOARD_PAGE_SIZE
 
 
 def format_leaderboard_text(
@@ -101,6 +117,41 @@ def format_leaderboard_text(
         ])
 
     return "\n".join(lines)
+
+
+def _build_paginated_text_and_markup(
+    title: str,
+    rows,
+    points_key: str,
+    scope: str,
+    period: str,
+    page: int,
+    viewer_user_id: int | None = None,
+    viewer_rank: int | None = None,
+    viewer_points: int | None = None,
+    empty_message: str | None = None,
+):
+    visible_rows = rows[:LEADERBOARD_PAGE_SIZE]
+    has_next = len(rows) > LEADERBOARD_PAGE_SIZE
+
+    text = format_leaderboard_text(
+        title=title,
+        rows=visible_rows,
+        points_key=points_key,
+        viewer_user_id=viewer_user_id,
+        viewer_rank=viewer_rank,
+        viewer_points=viewer_points,
+        empty_message=empty_message,
+    )
+
+    markup = leaderboard_pagination_keyboard(
+        scope=scope,
+        period=period,
+        page=page,
+        has_next=has_next,
+    )
+
+    return text, markup
 
 
 async def _send_or_edit(update: Update, text: str, reply_markup=None) -> None:
@@ -196,23 +247,28 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await _send_or_edit(update, text, back_keyboard("menu_main"))
 
 
-async def show_global_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def show_global_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE, page: int = 1):
     try:
         user = update.effective_user
-        rows = get_top_players(limit=10)
+        offset = _offset_for_page(page)
+
+        rows = get_top_players(limit=LEADERBOARD_PAGE_SIZE + 1, offset=offset)
         rank, points = get_player_global_rank_info(user.id) if user else (None, 0)
 
-        text = format_leaderboard_text(
-            "Global • All Time",
-            rows,
+        text, markup = _build_paginated_text_and_markup(
+            title="Global • All Time",
+            rows=rows,
             points_key="total_points",
+            scope="global",
+            period="all",
+            page=page,
             viewer_user_id=user.id if user else None,
             viewer_rank=rank,
             viewer_points=points,
             empty_message="No activity yet.\nPlay a game to become the first ranked player!",
         )
 
-        await _send_or_edit(update, text, back_keyboard("leaderboard_scope_global"))
+        await _send_or_edit(update, text, markup)
     except Exception:
         logger.exception("show_global_leaderboard crashed")
         await _send_or_edit(
@@ -222,7 +278,7 @@ async def show_global_leaderboard(update: Update, context: ContextTypes.DEFAULT_
         )
 
 
-async def show_group_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def show_group_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE, page: int = 1):
     try:
         chat = update.effective_chat
         user = update.effective_user
@@ -235,20 +291,24 @@ async def show_group_leaderboard(update: Update, context: ContextTypes.DEFAULT_T
             )
             return
 
-        rows = get_group_leaderboard(chat.id, limit=10)
+        offset = _offset_for_page(page)
+        rows = get_group_leaderboard_page(chat.id, limit=LEADERBOARD_PAGE_SIZE + 1, offset=offset)
         rank, points = get_player_group_rank_info(chat.id, user.id)
 
-        text = format_leaderboard_text(
-            "This Group • All Time",
-            rows,
+        text, markup = _build_paginated_text_and_markup(
+            title="This Group • All Time",
+            rows=rows,
             points_key="total_points",
+            scope="group",
+            period="all",
+            page=page,
             viewer_user_id=user.id if user else None,
             viewer_rank=rank,
             viewer_points=points,
             empty_message="No one has scored in this group yet.\nBe the first to play!",
         )
 
-        await _send_or_edit(update, text, back_keyboard("leaderboard_scope_group"))
+        await _send_or_edit(update, text, markup)
     except Exception:
         logger.exception("show_group_leaderboard crashed")
         await _send_or_edit(
@@ -258,23 +318,28 @@ async def show_group_leaderboard(update: Update, context: ContextTypes.DEFAULT_T
         )
 
 
-async def show_daily_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def show_daily_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE, page: int = 1):
     try:
         user = update.effective_user
-        rows = get_daily_leaderboard_page(limit=10, offset=0)
+        offset = _offset_for_page(page)
+
+        rows = get_daily_leaderboard_page(limit=LEADERBOARD_PAGE_SIZE + 1, offset=offset)
         rank, points = get_player_daily_rank_info(user.id) if user else (None, 0)
 
-        text = format_leaderboard_text(
-            "Global • Daily",
-            rows,
+        text, markup = _build_paginated_text_and_markup(
+            title="Global • Daily",
+            rows=rows,
             points_key="period_points",
+            scope="global",
+            period="daily",
+            page=page,
             viewer_user_id=user.id if user else None,
             viewer_rank=rank,
             viewer_points=points,
             empty_message="No activity yet today.\nBe the first to play!",
         )
 
-        await _send_or_edit(update, text, back_keyboard("leaderboard_scope_global"))
+        await _send_or_edit(update, text, markup)
     except Exception:
         logger.exception("show_daily_leaderboard crashed")
         await _send_or_edit(
@@ -284,23 +349,28 @@ async def show_daily_leaderboard(update: Update, context: ContextTypes.DEFAULT_T
         )
 
 
-async def show_weekly_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def show_weekly_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE, page: int = 1):
     try:
         user = update.effective_user
-        rows = get_weekly_leaderboard_page(limit=10, offset=0)
+        offset = _offset_for_page(page)
+
+        rows = get_weekly_leaderboard_page(limit=LEADERBOARD_PAGE_SIZE + 1, offset=offset)
         rank, points = get_player_weekly_rank_info(user.id) if user else (None, 0)
 
-        text = format_leaderboard_text(
-            "Global • Weekly",
-            rows,
+        text, markup = _build_paginated_text_and_markup(
+            title="Global • Weekly",
+            rows=rows,
             points_key="period_points",
+            scope="global",
+            period="weekly",
+            page=page,
             viewer_user_id=user.id if user else None,
             viewer_rank=rank,
             viewer_points=points,
             empty_message="No activity yet this week.\nStart the competition!",
         )
 
-        await _send_or_edit(update, text, back_keyboard("leaderboard_scope_global"))
+        await _send_or_edit(update, text, markup)
     except Exception:
         logger.exception("show_weekly_leaderboard crashed")
         await _send_or_edit(
@@ -310,23 +380,28 @@ async def show_weekly_leaderboard(update: Update, context: ContextTypes.DEFAULT_
         )
 
 
-async def show_monthly_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def show_monthly_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE, page: int = 1):
     try:
         user = update.effective_user
-        rows = get_monthly_leaderboard_page(limit=10, offset=0)
+        offset = _offset_for_page(page)
+
+        rows = get_monthly_leaderboard_page(limit=LEADERBOARD_PAGE_SIZE + 1, offset=offset)
         rank, points = get_player_monthly_rank_info(user.id) if user else (None, 0)
 
-        text = format_leaderboard_text(
-            "Global • Monthly",
-            rows,
+        text, markup = _build_paginated_text_and_markup(
+            title="Global • Monthly",
+            rows=rows,
             points_key="period_points",
+            scope="global",
+            period="monthly",
+            page=page,
             viewer_user_id=user.id if user else None,
             viewer_rank=rank,
             viewer_points=points,
             empty_message="No activity yet this month.\nBe the first to score!",
         )
 
-        await _send_or_edit(update, text, back_keyboard("leaderboard_scope_global"))
+        await _send_or_edit(update, text, markup)
     except Exception:
         logger.exception("show_monthly_leaderboard crashed")
         await _send_or_edit(
@@ -336,7 +411,7 @@ async def show_monthly_leaderboard(update: Update, context: ContextTypes.DEFAULT
         )
 
 
-async def show_group_daily_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def show_group_daily_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE, page: int = 1):
     try:
         chat = update.effective_chat
         user = update.effective_user
@@ -349,20 +424,26 @@ async def show_group_daily_leaderboard(update: Update, context: ContextTypes.DEF
             )
             return
 
-        rows = get_group_daily_leaderboard(chat.id, limit=10)
+        all_rows = get_group_daily_leaderboard(chat.id, limit=1000)
         rank, points = get_player_group_daily_rank_info(chat.id, user.id) if user else (None, 0)
 
-        text = format_leaderboard_text(
-            "This Group • Daily",
-            rows,
+        start = _offset_for_page(page)
+        rows = all_rows[start:start + LEADERBOARD_PAGE_SIZE + 1]
+
+        text, markup = _build_paginated_text_and_markup(
+            title="This Group • Daily",
+            rows=rows,
             points_key="period_points",
+            scope="group",
+            period="daily",
+            page=page,
             viewer_user_id=user.id if user else None,
             viewer_rank=rank,
             viewer_points=points,
             empty_message="No activity yet today in this group.\nBe the first to play!",
         )
 
-        await _send_or_edit(update, text, back_keyboard("leaderboard_scope_group"))
+        await _send_or_edit(update, text, markup)
     except Exception:
         logger.exception("show_group_daily_leaderboard crashed")
         await _send_or_edit(
@@ -372,7 +453,7 @@ async def show_group_daily_leaderboard(update: Update, context: ContextTypes.DEF
         )
 
 
-async def show_group_weekly_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def show_group_weekly_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE, page: int = 1):
     try:
         chat = update.effective_chat
         user = update.effective_user
@@ -385,20 +466,26 @@ async def show_group_weekly_leaderboard(update: Update, context: ContextTypes.DE
             )
             return
 
-        rows = get_group_weekly_leaderboard(chat.id, limit=10)
+        all_rows = get_group_weekly_leaderboard(chat.id, limit=1000)
         rank, points = get_player_group_weekly_rank_info(chat.id, user.id) if user else (None, 0)
 
-        text = format_leaderboard_text(
-            "This Group • Weekly",
-            rows,
+        start = _offset_for_page(page)
+        rows = all_rows[start:start + LEADERBOARD_PAGE_SIZE + 1]
+
+        text, markup = _build_paginated_text_and_markup(
+            title="This Group • Weekly",
+            rows=rows,
             points_key="period_points",
+            scope="group",
+            period="weekly",
+            page=page,
             viewer_user_id=user.id if user else None,
             viewer_rank=rank,
             viewer_points=points,
             empty_message="No activity yet this week in this group.\nStart the competition!",
         )
 
-        await _send_or_edit(update, text, back_keyboard("leaderboard_scope_group"))
+        await _send_or_edit(update, text, markup)
     except Exception:
         logger.exception("show_group_weekly_leaderboard crashed")
         await _send_or_edit(
@@ -408,7 +495,7 @@ async def show_group_weekly_leaderboard(update: Update, context: ContextTypes.DE
         )
 
 
-async def show_group_monthly_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def show_group_monthly_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE, page: int = 1):
     try:
         chat = update.effective_chat
         user = update.effective_user
@@ -421,20 +508,26 @@ async def show_group_monthly_leaderboard(update: Update, context: ContextTypes.D
             )
             return
 
-        rows = get_group_monthly_leaderboard(chat.id, limit=10)
+        all_rows = get_group_monthly_leaderboard(chat.id, limit=1000)
         rank, points = get_player_group_monthly_rank_info(chat.id, user.id) if user else (None, 0)
 
-        text = format_leaderboard_text(
-            "This Group • Monthly",
-            rows,
+        start = _offset_for_page(page)
+        rows = all_rows[start:start + LEADERBOARD_PAGE_SIZE + 1]
+
+        text, markup = _build_paginated_text_and_markup(
+            title="This Group • Monthly",
+            rows=rows,
             points_key="period_points",
+            scope="group",
+            period="monthly",
+            page=page,
             viewer_user_id=user.id if user else None,
             viewer_rank=rank,
             viewer_points=points,
             empty_message="No activity yet this month in this group.\nBe the first to score!",
         )
 
-        await _send_or_edit(update, text, back_keyboard("leaderboard_scope_group"))
+        await _send_or_edit(update, text, markup)
     except Exception:
         logger.exception("show_group_monthly_leaderboard crashed")
         await _send_or_edit(
@@ -480,36 +573,82 @@ async def profile_callback_handler(update: Update, context: ContextTypes.DEFAULT
         return
 
     if data == "leaderboard_global_all":
-        await show_global_leaderboard(update, context)
+        await show_global_leaderboard(update, context, page=1)
         return
 
     if data == "leaderboard_global_daily":
-        await show_daily_leaderboard(update, context)
+        await show_daily_leaderboard(update, context, page=1)
         return
 
     if data == "leaderboard_global_weekly":
-        await show_weekly_leaderboard(update, context)
+        await show_weekly_leaderboard(update, context, page=1)
         return
 
     if data == "leaderboard_global_monthly":
-        await show_monthly_leaderboard(update, context)
+        await show_monthly_leaderboard(update, context, page=1)
         return
 
     if data == "leaderboard_group_all":
-        await show_group_leaderboard(update, context)
+        await show_group_leaderboard(update, context, page=1)
         return
 
     if data == "leaderboard_group_daily":
-        await show_group_daily_leaderboard(update, context)
+        await show_group_daily_leaderboard(update, context, page=1)
         return
 
     if data == "leaderboard_group_weekly":
-        await show_group_weekly_leaderboard(update, context)
+        await show_group_weekly_leaderboard(update, context, page=1)
         return
 
     if data == "leaderboard_group_monthly":
-        await show_group_monthly_leaderboard(update, context)
+        await show_group_monthly_leaderboard(update, context, page=1)
         return
+
+    if data.startswith("leaderboard_page:"):
+        try:
+            _, scope, period, page_str = data.split(":")
+            page = _parse_page(page_str)
+
+            if scope == "global" and period == "all":
+                await show_global_leaderboard(update, context, page=page)
+                return
+
+            if scope == "global" and period == "daily":
+                await show_daily_leaderboard(update, context, page=page)
+                return
+
+            if scope == "global" and period == "weekly":
+                await show_weekly_leaderboard(update, context, page=page)
+                return
+
+            if scope == "global" and period == "monthly":
+                await show_monthly_leaderboard(update, context, page=page)
+                return
+
+            if scope == "group" and period == "all":
+                await show_group_leaderboard(update, context, page=page)
+                return
+
+            if scope == "group" and period == "daily":
+                await show_group_daily_leaderboard(update, context, page=page)
+                return
+
+            if scope == "group" and period == "weekly":
+                await show_group_weekly_leaderboard(update, context, page=page)
+                return
+
+            if scope == "group" and period == "monthly":
+                await show_group_monthly_leaderboard(update, context, page=page)
+                return
+
+        except Exception:
+            logger.exception("Failed to handle leaderboard pagination callback")
+            await _send_or_edit(
+                update,
+                "❌ Could not open that leaderboard page.",
+                back_keyboard("leaderboard_menu"),
+            )
+            return
 
     if data == "profile":
         await profile(update, context)

@@ -72,6 +72,44 @@ def leaderboard_period_keyboard(scope: str, chat_type: str) -> InlineKeyboardMar
     ])
 
 
+def leaderboard_pagination_keyboard(
+    scope: str,
+    period: str,
+    page: int,
+    has_next: bool,
+) -> InlineKeyboardMarkup:
+    buttons = []
+    nav_row = []
+
+    if page > 1:
+        nav_row.append(
+            InlineKeyboardButton(
+                "⬅️ Prev",
+                callback_data=f"leaderboard_page:{scope}:{period}:{page - 1}",
+            )
+        )
+
+    if has_next:
+        nav_row.append(
+            InlineKeyboardButton(
+                "Next ➡️",
+                callback_data=f"leaderboard_page:{scope}:{period}:{page + 1}",
+            )
+        )
+
+    if nav_row:
+        buttons.append(nav_row)
+
+    buttons.append([
+        InlineKeyboardButton(
+            "⬅️ Back",
+            callback_data="leaderboard_scope_global" if scope == "global" else "leaderboard_scope_group",
+        )
+    ])
+
+    return InlineKeyboardMarkup(buttons)
+
+
 def admin_main_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("📝 Question Management", callback_data="admin_questions")],

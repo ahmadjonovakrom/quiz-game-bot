@@ -157,7 +157,7 @@ async def show_global_leaderboard(update: Update, context: ContextTypes.DEFAULT_
         points_key="total_points",
         viewer_user_id=user.id if user else None,
     )
-    await _send_or_edit(update, text, back_keyboard("menu_leaderboard"))
+    await _send_or_edit(update, text, back_keyboard("leaderboard_menu"))
 
 
 async def show_group_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -187,6 +187,7 @@ async def show_daily_leaderboard(update: Update, context: ContextTypes.DEFAULT_T
     logger.info("Opening daily leaderboard for user_id=%s", user.id if user else None)
 
     rows = get_daily_leaderboard_page(limit=10, offset=0)
+    logger.info("Daily leaderboard rows count: %s", len(rows) if rows is not None else "None")
 
     text = format_leaderboard_text(
         "Daily Leaderboard",
@@ -202,6 +203,7 @@ async def show_weekly_leaderboard(update: Update, context: ContextTypes.DEFAULT_
     logger.info("Opening weekly leaderboard for user_id=%s", user.id if user else None)
 
     rows = get_weekly_leaderboard_page(limit=10, offset=0)
+    logger.info("Weekly leaderboard rows count: %s", len(rows) if rows is not None else "None")
 
     text = format_leaderboard_text(
         "Weekly Leaderboard",
@@ -217,6 +219,7 @@ async def show_monthly_leaderboard(update: Update, context: ContextTypes.DEFAULT
     logger.info("Opening monthly leaderboard for user_id=%s", user.id if user else None)
 
     rows = get_monthly_leaderboard_page(limit=10, offset=0)
+    logger.info("Monthly leaderboard rows count: %s", len(rows) if rows is not None else "None")
 
     text = format_leaderboard_text(
         "Monthly Leaderboard",
@@ -281,44 +284,41 @@ async def profile_callback_handler(update: Update, context: ContextTypes.DEFAULT
     data = query.data
 
     logger.info("PROFILE CALLBACK DATA: %s", data)
+    await query.answer()
 
-    try:
-        await query.answer()
+    if data == "leaderboard_menu":
+        await send_leaderboard_menu(update, context)
+        return
 
-        if data == "leaderboard_menu":
-            await send_leaderboard_menu(update, context)
-            return
+    if data == "leaderboard_global":
+        await show_global_leaderboard(update, context)
+        return
 
-        if data == "leaderboard_global":
-            await show_global_leaderboard(update, context)
-            return
+    if data == "leaderboard_group":
+        await show_group_leaderboard(update, context)
+        return
 
-        if data == "leaderboard_group":
-            await show_group_leaderboard(update, context)
-            return
+    if data == "leaderboard_daily":
+        await query.message.reply_text("DEBUG: daily button reached")
+        await show_daily_leaderboard(update, context)
+        return
 
-        if data == "leaderboard_daily":
-            await show_daily_leaderboard(update, context)
-            return
+    if data == "leaderboard_weekly":
+        await query.message.reply_text("DEBUG: weekly button reached")
+        await show_weekly_leaderboard(update, context)
+        return
 
-        if data == "leaderboard_weekly":
-            await show_weekly_leaderboard(update, context)
-            return
+    if data == "leaderboard_monthly":
+        await query.message.reply_text("DEBUG: monthly button reached")
+        await show_monthly_leaderboard(update, context)
+        return
 
-        if data == "leaderboard_monthly":
-            await show_monthly_leaderboard(update, context)
-            return
+    if data == "leaderboard_rank":
+        await show_my_rank(update, context)
+        return
 
-        if data == "leaderboard_rank":
-            await show_my_rank(update, context)
-            return
+    if data == "profile":
+        await profile(update, context)
+        return
 
-        if data == "profile":
-            await profile(update, context)
-            return
-
-        logger.warning("Unhandled profile callback data: %s", data)
-
-    except Exception:
-        logger.exception("profile_callback_handler crashed")
-        raise
+    logger.warning("Unhandled profile callback data: %s", data)

@@ -100,6 +100,17 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+async def error_handler(update, context):
+    logger.exception("Unhandled exception while processing update", exc_info=context.error)
+
+
+async def debug_callback(update, context):
+    query = update.callback_query
+    if query:
+        logger.info("UNMATCHED CALLBACK DATA: %s", query.data)
+        await query.answer()
+
+
 def build_admin_conversation() -> ConversationHandler:
     return ConversationHandler(
         entry_points=[
@@ -142,7 +153,6 @@ def main():
     create_tables()
 
     app = Application.builder().token(BOT_TOKEN).build()
-
     app.add_error_handler(error_handler)
 
     # Admin conversation first
@@ -198,15 +208,14 @@ def main():
     app.add_handler(CallbackQueryHandler(menu_handler, pattern=r"^menu_"))
     app.add_handler(CallbackQueryHandler(button_handler, pattern=r"^join\|"))
 
+    # LAST: catch anything unmatched
+    app.add_handler(CallbackQueryHandler(debug_callback))
+
     # Poll answers
     app.add_handler(PollAnswerHandler(receive_poll_answer))
 
     logger.info("Bot is starting...")
     app.run_polling()
-
-
-async def error_handler(update, context):
-    logger.exception("Unhandled exception while processing update", exc_info=context.error)
 
 
 if __name__ == "__main__":

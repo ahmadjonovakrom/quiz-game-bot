@@ -148,95 +148,132 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def show_global_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    rows = get_top_players(limit=10)
+    try:
+        user = update.effective_user
+        rows = get_top_players(limit=10)
 
-    text = format_leaderboard_text(
-        "All-Time Leaderboard",
-        rows,
-        points_key="total_points",
-        viewer_user_id=user.id if user else None,
-    )
-    await _send_or_edit(update, text, back_keyboard("leaderboard_menu"))
+        text = format_leaderboard_text(
+            "All-Time Leaderboard",
+            rows,
+            points_key="total_points",
+            viewer_user_id=user.id if user else None,
+        )
+        await _send_or_edit(update, text, back_keyboard("leaderboard_menu"))
+    except Exception as e:
+        logger.exception("show_global_leaderboard crashed")
+        await update.callback_query.message.reply_text(f"❌ Global leaderboard error: {e}")
 
 
 async def show_group_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat = update.effective_chat
-    user = update.effective_user
+    try:
+        chat = update.effective_chat
+        user = update.effective_user
 
-    if chat.type == "private":
-        await _send_or_edit(
-            update,
-            "👥 This Group leaderboard is only available in groups.",
-            back_keyboard("leaderboard_menu"),
+        if chat.type == "private":
+            await _send_or_edit(
+                update,
+                "👥 This Group leaderboard is only available in groups.",
+                back_keyboard("leaderboard_menu"),
+            )
+            return
+
+        rows = get_group_leaderboard(chat.id, limit=10)
+        text = format_leaderboard_text(
+            "This Group Leaderboard",
+            rows,
+            points_key="total_points",
+            viewer_user_id=user.id if user else None,
         )
-        return
-
-    rows = get_group_leaderboard(chat.id, limit=10)
-    text = format_leaderboard_text(
-        "This Group Leaderboard",
-        rows,
-        points_key="total_points",
-        viewer_user_id=user.id if user else None,
-    )
-    await _send_or_edit(update, text, back_keyboard("leaderboard_menu"))
+        await _send_or_edit(update, text, back_keyboard("leaderboard_menu"))
+    except Exception as e:
+        logger.exception("show_group_leaderboard crashed")
+        await update.callback_query.message.reply_text(f"❌ Group leaderboard error: {e}")
 
 
 async def show_daily_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    logger.info("Opening daily leaderboard for user_id=%s", user.id if user else None)
+    try:
+        user = update.effective_user
+        logger.info("Opening daily leaderboard for user_id=%s", user.id if user else None)
 
-    rows = get_daily_leaderboard_page(limit=10, offset=0)
-    logger.info("Daily leaderboard rows count: %s", len(rows) if rows is not None else "None")
+        rows = get_daily_leaderboard_page(limit=10, offset=0)
+        logger.info("Daily leaderboard rows count: %s", len(rows) if rows is not None else "None")
 
-    text = format_leaderboard_text(
-        "Daily Leaderboard",
-        rows,
-        points_key="period_points",
-        viewer_user_id=user.id if user else None,
-    )
-    await _send_or_edit(update, text, back_keyboard("leaderboard_menu"))
+        text = format_leaderboard_text(
+            "Daily Leaderboard",
+            rows,
+            points_key="period_points",
+            viewer_user_id=user.id if user else None,
+        )
+        await _send_or_edit(update, text, back_keyboard("leaderboard_menu"))
+    except Exception as e:
+        logger.exception("show_daily_leaderboard crashed")
+        await update.callback_query.message.reply_text(f"❌ Daily leaderboard error: {e}")
 
 
 async def show_weekly_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    logger.info("Opening weekly leaderboard for user_id=%s", user.id if user else None)
+    try:
+        user = update.effective_user
+        logger.info("Opening weekly leaderboard for user_id=%s", user.id if user else None)
 
-    rows = get_weekly_leaderboard_page(limit=10, offset=0)
-    logger.info("Weekly leaderboard rows count: %s", len(rows) if rows is not None else "None")
+        rows = get_weekly_leaderboard_page(limit=10, offset=0)
+        logger.info("Weekly leaderboard rows count: %s", len(rows) if rows is not None else "None")
 
-    text = format_leaderboard_text(
-        "Weekly Leaderboard",
-        rows,
-        points_key="period_points",
-        viewer_user_id=user.id if user else None,
-    )
-    await _send_or_edit(update, text, back_keyboard("leaderboard_menu"))
+        text = format_leaderboard_text(
+            "Weekly Leaderboard",
+            rows,
+            points_key="period_points",
+            viewer_user_id=user.id if user else None,
+        )
+        await _send_or_edit(update, text, back_keyboard("leaderboard_menu"))
+    except Exception as e:
+        logger.exception("show_weekly_leaderboard crashed")
+        await update.callback_query.message.reply_text(f"❌ Weekly leaderboard error: {e}")
 
 
 async def show_monthly_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    logger.info("Opening monthly leaderboard for user_id=%s", user.id if user else None)
+    try:
+        user = update.effective_user
+        logger.info("Opening monthly leaderboard for user_id=%s", user.id if user else None)
 
-    rows = get_monthly_leaderboard_page(limit=10, offset=0)
-    logger.info("Monthly leaderboard rows count: %s", len(rows) if rows is not None else "None")
+        rows = get_monthly_leaderboard_page(limit=10, offset=0)
+        logger.info("Monthly leaderboard rows count: %s", len(rows) if rows is not None else "None")
 
-    text = format_leaderboard_text(
-        "Monthly Leaderboard",
-        rows,
-        points_key="period_points",
-        viewer_user_id=user.id if user else None,
-    )
-    await _send_or_edit(update, text, back_keyboard("leaderboard_menu"))
+        text = format_leaderboard_text(
+            "Monthly Leaderboard",
+            rows,
+            points_key="period_points",
+            viewer_user_id=user.id if user else None,
+        )
+        await _send_or_edit(update, text, back_keyboard("leaderboard_menu"))
+    except Exception as e:
+        logger.exception("show_monthly_leaderboard crashed")
+        await update.callback_query.message.reply_text(f"❌ Monthly leaderboard error: {e}")
 
 
 async def show_my_rank(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    chat = update.effective_chat
+    try:
+        user = update.effective_user
+        chat = update.effective_chat
 
-    if chat.type == "private":
-        rank, points = get_player_global_rank_info(user.id)
-        title = "My Global Rank"
+        if chat.type == "private":
+            rank, points = get_player_global_rank_info(user.id)
+            title = "My Global Rank"
+
+            if not rank:
+                text = f"📊 {title}\n\nYou are not ranked yet."
+            else:
+                text = (
+                    f"📊 {title}\n\n"
+                    f"Name: {user.full_name}\n"
+                    f"Rank: #{rank}\n"
+                    f"Points: {points}"
+                )
+
+            await _send_or_edit(update, text, back_keyboard("leaderboard_menu"))
+            return
+
+        rank, points = get_player_group_rank_info(chat.id, user.id)
+        title = "My Rank in This Group"
 
         if not rank:
             text = f"📊 {title}\n\nYou are not ranked yet."
@@ -249,22 +286,9 @@ async def show_my_rank(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
 
         await _send_or_edit(update, text, back_keyboard("leaderboard_menu"))
-        return
-
-    rank, points = get_player_group_rank_info(chat.id, user.id)
-    title = "My Rank in This Group"
-
-    if not rank:
-        text = f"📊 {title}\n\nYou are not ranked yet."
-    else:
-        text = (
-            f"📊 {title}\n\n"
-            f"Name: {user.full_name}\n"
-            f"Rank: #{rank}\n"
-            f"Points: {points}"
-        )
-
-    await _send_or_edit(update, text, back_keyboard("leaderboard_menu"))
+    except Exception as e:
+        logger.exception("show_my_rank crashed")
+        await update.callback_query.message.reply_text(f"❌ Rank error: {e}")
 
 
 async def daily(update: Update, context: ContextTypes.DEFAULT_TYPE):

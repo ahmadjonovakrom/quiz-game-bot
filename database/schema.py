@@ -134,8 +134,6 @@ def create_tables():
             )
         """)
 
-        # backward-compatible migrations
-
         question_columns = _get_column_names(conn, "questions")
         if "category" not in question_columns:
             conn.execute("ALTER TABLE questions ADD COLUMN category TEXT DEFAULT 'mixed'")
@@ -162,7 +160,6 @@ def create_tables():
         if "wrong_answers" not in group_score_columns:
             conn.execute("ALTER TABLE group_scores ADD COLUMN wrong_answers INTEGER DEFAULT 0")
 
-        # important fix for old DBs
         group_points_history_columns = _get_column_names(conn, "group_points_history")
         if "created_at" not in group_points_history_columns:
             conn.execute(
@@ -174,8 +171,6 @@ def create_tables():
             conn.execute(
                 "ALTER TABLE player_points_history ADD COLUMN created_at TEXT DEFAULT CURRENT_TIMESTAMP"
             )
-
-        # indexes
 
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_players_points

@@ -5,6 +5,8 @@ BOT_TOKEN = os.getenv("BOT_TOKEN", "")
 
 DB_PATH = os.getenv("DB_PATH", "quiz_bot.db")
 
+ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
+
 MIN_PLAYERS = 1
 JOIN_SECONDS = 20
 QUESTION_SECONDS = 15

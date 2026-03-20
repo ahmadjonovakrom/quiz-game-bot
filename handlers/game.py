@@ -896,14 +896,18 @@ async def end_game(chat_id, context):
         logger.exception("Failed to finish game for chat %s", chat_id)
 
     try:
-        for user_id, player_data in players.items():
+        scores = game.get("scores", {})
+        correct_counts = game.get("correct_counts", {})
+        wrong_counts = game.get("wrong_counts", {})
+
+        for user_id in players.keys():
             increment_games_played(user_id)
             if chat_id < 0:
                 increment_group_games_played(chat_id, user_id)
 
-            score = player_data.get("score", 0)
-            correct = player_data.get("correct", 0)
-            wrong = player_data.get("wrong", 0)
+            score = scores.get(user_id, 0)
+            correct = correct_counts.get(user_id, 0)
+            wrong = wrong_counts.get(user_id, 0)
 
             record_game_result(
                 user_id=user_id,

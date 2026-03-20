@@ -132,8 +132,8 @@ def format_leaderboard_text(
         lines.extend([
             "",
             "──────────",
-            f"👤 YOU — #{viewer_rank} — {viewer_points or 0} 🍋",
-        ])
+            f"👤 YOU — #{viewer_rank} — {format_number(viewer_points or 0)} 🍋",
+    ])
 
     return "\n".join(lines)
 

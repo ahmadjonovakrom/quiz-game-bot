@@ -67,7 +67,6 @@ __all__ = [
     "get_conn",
     "create_tables",
 
-    # players
     "ensure_player",
     "get_player",
     "add_points",
@@ -92,7 +91,6 @@ __all__ = [
     "get_total_users_count",
     "get_total_players",
 
-    # questions
     "add_question",
     "question_exists",
     "get_all_questions",
@@ -106,7 +104,6 @@ __all__ = [
     "get_question_count",
     "get_total_questions_count",
 
-    # group/chat/game functions
     "ensure_chat",
     "deactivate_chat",
     "get_all_chat_ids",

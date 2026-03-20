@@ -3,7 +3,15 @@ from contextlib import closing
 from .connection import get_conn
 
 
-def ensure_player(user_id: int, username: str = None, full_name: str = None):
+def _normalize_user_input(user_or_id, username=None, full_name=None):
+    if hasattr(user_or_id, "id"):
+        return user_or_id.id, user_or_id.username, user_or_id.full_name
+    return user_or_id, username, full_name
+
+
+def ensure_player(user_or_id, username: str = None, full_name: str = None):
+    user_id, username, full_name = _normalize_user_input(user_or_id, username, full_name)
+
     with closing(get_conn()) as conn, conn:
         existing = conn.execute(
             "SELECT user_id FROM players WHERE user_id = ?",
@@ -28,6 +36,15 @@ def ensure_player(user_id: int, username: str = None, full_name: str = None):
         """, (user_id, username, full_name))
 
 
+def get_player(user_id: int):
+    with closing(get_conn()) as conn:
+        return conn.execute("""
+            SELECT *
+            FROM players
+            WHERE user_id = ?
+        """, (user_id,)).fetchone()
+
+
 def add_points(user_id: int, points: int):
     with closing(get_conn()) as conn, conn:
         conn.execute("""
@@ -41,6 +58,76 @@ def add_points(user_id: int, points: int):
             INSERT INTO player_points_history (user_id, points)
             VALUES (?, ?)
         """, (user_id, points))
+
+
+def add_manual_points(user_id: int, points: int):
+    add_points(user_id, points)
+
+
+def record_correct_answer(user_id: int, answer_time=None):
+    with closing(get_conn()) as conn, conn:
+        if answer_time is None:
+            conn.execute("""
+                UPDATE players
+                SET correct_answers = COALESCE(correct_answers, 0) + 1,
+                    current_streak = COALESCE(current_streak, 0) + 1,
+                    best_streak = CASE
+                        WHEN COALESCE(current_streak, 0) + 1 > COALESCE(best_streak, 0)
+                        THEN COALESCE(current_streak, 0) + 1
+                        ELSE COALESCE(best_streak, 0)
+                    END,
+                    last_played_at = CURRENT_TIMESTAMP
+                WHERE user_id = ?
+            """, (user_id,))
+        else:
+            conn.execute("""
+                UPDATE players
+                SET correct_answers = COALESCE(correct_answers, 0) + 1,
+                    current_streak = COALESCE(current_streak, 0) + 1,
+                    best_streak = CASE
+                        WHEN COALESCE(current_streak, 0) + 1 > COALESCE(best_streak, 0)
+                        THEN COALESCE(current_streak, 0) + 1
+                        ELSE COALESCE(best_streak, 0)
+                    END,
+                    fastest_answer_time = CASE
+                        WHEN fastest_answer_time IS NULL OR ? < fastest_answer_time
+                        THEN ?
+                        ELSE fastest_answer_time
+                    END,
+                    last_played_at = CURRENT_TIMESTAMP
+                WHERE user_id = ?
+            """, (answer_time, answer_time, user_id))
+
+
+def record_wrong_answer(user_id: int):
+    with closing(get_conn()) as conn, conn:
+        conn.execute("""
+            UPDATE players
+            SET wrong_answers = COALESCE(wrong_answers, 0) + 1,
+                current_streak = 0,
+                last_played_at = CURRENT_TIMESTAMP
+            WHERE user_id = ?
+        """, (user_id,))
+
+
+def increment_games_played(user_id: int):
+    with closing(get_conn()) as conn, conn:
+        conn.execute("""
+            UPDATE players
+            SET games_played = COALESCE(games_played, 0) + 1,
+                last_played_at = CURRENT_TIMESTAMP
+            WHERE user_id = ?
+        """, (user_id,))
+
+
+def increment_games_won(user_id: int):
+    with closing(get_conn()) as conn, conn:
+        conn.execute("""
+            UPDATE players
+            SET games_won = COALESCE(games_won, 0) + 1,
+                last_played_at = CURRENT_TIMESTAMP
+            WHERE user_id = ?
+        """, (user_id,))
 
 
 def get_top_players(limit: int = 10):
@@ -59,6 +146,40 @@ def get_top_players(limit: int = 10):
         """, (limit,)).fetchall()
 
 
+def get_global_leaderboard(limit: int = 10):
+    return get_top_players(limit=limit)
+
+
+def get_global_leaderboard_page(limit: int = 10, offset: int = 0):
+    with closing(get_conn()) as conn:
+        return conn.execute("""
+            SELECT
+                user_id,
+                username,
+                full_name,
+                total_points,
+                correct_answers,
+                games_won
+            FROM players
+            ORDER BY total_points DESC, correct_answers DESC, games_won DESC, user_id ASC
+            LIMIT ? OFFSET ?
+        """, (limit, offset)).fetchall()
+
+
+def get_player_rank(user_id: int):
+    with closing(get_conn()) as conn:
+        rows = conn.execute("""
+            SELECT user_id
+            FROM players
+            ORDER BY total_points DESC, correct_answers DESC, games_won DESC, user_id ASC
+        """).fetchall()
+
+        for index, row in enumerate(rows, start=1):
+            if row["user_id"] == user_id:
+                return index
+        return None
+
+
 def get_player_profile(user_id: int):
     with closing(get_conn()) as conn:
         player = conn.execute("""
@@ -75,31 +196,12 @@ def get_player_profile(user_id: int):
         if not player:
             return None, None
 
-        rank_row = conn.execute("""
-            SELECT COUNT(*) + 1 AS rank
-            FROM players
-            WHERE total_points > (
-                SELECT total_points
-                FROM players
-                WHERE user_id = ?
-            )
-        """, (user_id,)).fetchone()
-
-        rank = rank_row["rank"] if rank_row else None
+        rank = get_player_rank(user_id)
         return player, rank
 
 
 def get_player_global_rank_info(user_id: int):
     with closing(get_conn()) as conn:
-        me = conn.execute("""
-            SELECT user_id, total_points
-            FROM players
-            WHERE user_id = ?
-        """, (user_id,)).fetchone()
-
-        if not me:
-            return None, 0
-
         rows = conn.execute("""
             SELECT user_id, total_points
             FROM players
@@ -167,51 +269,35 @@ def get_monthly_leaderboard_page(limit: int = 10, offset: int = 0):
         """, (limit, offset)).fetchall()
 
 
-def increment_games_played(user_id: int):
-    with closing(get_conn()) as conn, conn:
-        conn.execute("""
-            UPDATE players
-            SET games_played = COALESCE(games_played, 0) + 1,
-                last_played_at = CURRENT_TIMESTAMP
-            WHERE user_id = ?
-        """, (user_id,))
+def _get_rank_from_rows(rows, user_id: int, points_key: str):
+    for index, row in enumerate(rows, start=1):
+        if row["user_id"] == user_id:
+            return index, row[points_key]
+    return None, 0
 
 
-def increment_games_won(user_id: int):
-    with closing(get_conn()) as conn, conn:
-        conn.execute("""
-            UPDATE players
-            SET games_won = COALESCE(games_won, 0) + 1,
-                last_played_at = CURRENT_TIMESTAMP
-            WHERE user_id = ?
-        """, (user_id,))
+def get_player_daily_rank_info(user_id: int):
+    rows = get_daily_leaderboard_page(limit=100000, offset=0)
+    return _get_rank_from_rows(rows, user_id, "period_points")
 
 
-def record_correct_answer(user_id: int):
-    with closing(get_conn()) as conn, conn:
-        conn.execute("""
-            UPDATE players
-            SET correct_answers = COALESCE(correct_answers, 0) + 1,
-                current_streak = COALESCE(current_streak, 0) + 1,
-                best_streak = CASE
-                    WHEN COALESCE(current_streak, 0) + 1 > COALESCE(best_streak, 0)
-                    THEN COALESCE(current_streak, 0) + 1
-                    ELSE COALESCE(best_streak, 0)
-                END,
-                last_played_at = CURRENT_TIMESTAMP
-            WHERE user_id = ?
-        """, (user_id,))
+def get_player_weekly_rank_info(user_id: int):
+    rows = get_weekly_leaderboard_page(limit=100000, offset=0)
+    return _get_rank_from_rows(rows, user_id, "period_points")
 
 
-def record_wrong_answer(user_id: int):
-    with closing(get_conn()) as conn, conn:
-        conn.execute("""
-            UPDATE players
-            SET wrong_answers = COALESCE(wrong_answers, 0) + 1,
-                current_streak = 0,
-                last_played_at = CURRENT_TIMESTAMP
-            WHERE user_id = ?
-        """, (user_id,))
+def get_player_monthly_rank_info(user_id: int):
+    rows = get_monthly_leaderboard_page(limit=100000, offset=0)
+    return _get_rank_from_rows(rows, user_id, "period_points")
+
+
+def get_all_user_ids():
+    with closing(get_conn()) as conn:
+        rows = conn.execute("""
+            SELECT user_id
+            FROM players
+        """).fetchall()
+        return [row["user_id"] for row in rows]
 
 
 def get_total_players():

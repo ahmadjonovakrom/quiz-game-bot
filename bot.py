@@ -137,6 +137,7 @@ def main():
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("play", start_game))
+    app.add_handler(CommandHandler("startgame", start_game))
     app.add_handler(CommandHandler("stopgame", stop_game))
     app.add_handler(CommandHandler("leaderboard", leaderboard))
     app.add_handler(CommandHandler("daily", daily))
@@ -161,7 +162,7 @@ def main():
     app.add_handler(
         CallbackQueryHandler(
             game_setup_callback_handler,
-            pattern=r"^(set_count_|set_category_)",
+            pattern=r"^(setup_questions_|setup_category_|setup_difficulty_)",
         )
     )
 
@@ -172,12 +173,7 @@ def main():
         )
     )
 
-    app.add_handler(
-        CallbackQueryHandler(
-            button_handler,
-        )
-    )
-
+    app.add_handler(CallbackQueryHandler(button_handler))
     app.add_handler(PollAnswerHandler(receive_poll_answer))
 
     app.run_polling()

@@ -678,10 +678,7 @@ async def send_question(chat_id, context):
         game["round"] += 1
         current_round = game["round"]
 
-        if current_round > game["questions_per_game"]:
-            should_end = True
-        else:
-            should_end = False
+        should_end = current_round > game["questions_per_game"]
 
     if should_end:
         await end_game(chat_id, context)
@@ -694,10 +691,7 @@ async def send_question(chat_id, context):
             return
 
         question = get_unused_question(game)
-        if not question:
-            no_question = True
-        else:
-            no_question = False
+        no_question = not question
 
     if no_question:
         await context.bot.send_message(

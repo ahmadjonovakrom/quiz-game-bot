@@ -114,7 +114,10 @@ def create_tables():
             )
         """)
 
-        existing_columns = [row["name"] for row in conn.execute("PRAGMA table_info(questions)").fetchall()]
+        existing_columns = [
+            row["name"]
+            for row in conn.execute("PRAGMA table_info(questions)").fetchall()
+        ]
 
         if "category" not in existing_columns:
             conn.execute("ALTER TABLE questions ADD COLUMN category TEXT DEFAULT 'mixed'")
@@ -164,4 +167,9 @@ def create_tables():
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_player_points_history_created
             ON player_points_history(created_at)
+        """)
+
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_player_points_history_user_created
+            ON player_points_history(user_id, created_at)
         """)

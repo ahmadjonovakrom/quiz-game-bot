@@ -244,7 +244,9 @@ def get_weekly_leaderboard_page(limit: int = 10, offset: int = 0):
             FROM players p
             JOIN player_points_history h
                 ON p.user_id = h.user_id
-            WHERE DATE(h.created_at, 'localtime') >= DATE('now', 'localtime', '-6 days')
+            WHERE DATE(h.created_at, 'localtime')
+                  BETWEEN DATE('now', 'localtime', 'weekday 1', '-7 days')
+                      AND DATE('now', 'localtime')
             GROUP BY p.user_id, p.username, p.full_name
             ORDER BY period_points DESC, p.correct_answers DESC, p.games_won DESC, p.user_id ASC
             LIMIT ? OFFSET ?

@@ -1,4 +1,3 @@
-import math
 import time
 import asyncio
 import logging
@@ -48,56 +47,31 @@ from utils.helpers import (
     safe_task,
     safe_delete_message,
     build_join_text,
-    clickable_name,
     is_admin,
     format_category_name,
 )
+from services.game_service import (
+    active_games,
+    poll_map,
+    daily_quiz_players,
+    get_game_lock,
+    cleanup_game_lock,
+    format_difficulty_name,
+    clear_game,
+    create_new_game_data,
+    get_existing_game_message,
+    get_unused_question,
+    get_join_remaining_seconds,
+    add_player_to_game,
+    mark_game_joining,
+    start_next_round,
+    prepare_round_state,
+    apply_poll_answer,
+    build_final_results,
+    build_results_text,
+)
 
 logger = logging.getLogger(__name__)
-
-active_games = {}
-poll_map = {}
-daily_quiz_players = {}
-_game_locks = {}
-
-
-def get_game_lock(chat_id: int) -> asyncio.Lock:
-    lock = _game_locks.get(chat_id)
-    if lock is None:
-        lock = asyncio.Lock()
-        _game_locks[chat_id] = lock
-    return lock
-
-
-def cleanup_game_lock(chat_id: int) -> None:
-    _game_locks.pop(chat_id, None)
-
-
-def format_difficulty_name(value: str) -> str:
-    mapping = {
-        "easy": "🟢 Easy",
-        "medium": "🟡 Medium",
-        "hard": "🔴 Hard",
-    }
-    return mapping.get(value, value.title())
-
-
-async def clear_game(context: ContextTypes.DEFAULT_TYPE, chat_id: int):
-    game = active_games.get(chat_id)
-    if not game:
-        cleanup_game_lock(chat_id)
-        return
-
-    current_poll_id = game.get("current_poll_id")
-    if current_poll_id:
-        poll_map.pop(current_poll_id, None)
-
-    join_message_id = game.get("join_message_id")
-    if join_message_id:
-        await safe_delete_message(context.bot, chat_id, join_message_id)
-
-    active_games.pop(chat_id, None)
-    cleanup_game_lock(chat_id)
 
 
 def get_main_menu_keyboard():
@@ -166,23 +140,6 @@ def get_join_keyboard(chat_id: int):
     return InlineKeyboardMarkup(
         [[InlineKeyboardButton("Join", callback_data=f"join|{chat_id}")]]
     )
-
-
-def get_unused_question(game):
-    exclude_ids = list(game["used_question_ids"])
-    return get_random_question(
-        exclude_ids=exclude_ids,
-        category=game.get("category"),
-        difficulty=game.get("difficulty"),
-    )
-
-
-def get_join_remaining_seconds(game) -> int:
-    deadline = game.get("join_deadline")
-    if deadline is None:
-        return 0
-    remaining = math.ceil(deadline - time.monotonic())
-    return max(0, remaining)
 
 
 async def refresh_join_message(context: ContextTypes.DEFAULT_TYPE, chat_id: int):
@@ -372,14 +329,7 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     async with lock:
         game = active_games.get(chat.id)
         if game:
-            if game["status"] == "setup":
-                text = "Game setup is already in progress."
-            elif game["status"] == "joining":
-                text = "A game is already waiting for players."
-            elif game["status"] == "running":
-                text = "A game is already running."
-            else:
-                text = "A game already exists in this group."
+            text = get_existing_game_message(game)
 
             if query:
                 await query.answer(text, show_alert=True)
@@ -387,29 +337,12 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await message.reply_text(text)
             return
 
-        active_games[chat.id] = {
-            "status": "setup",
-            "started_by": user.id,
-            "players": {},
-            "player_objects": {},
-            "scores": {},
-            "round": 0,
-            "answered": set(),
-            "current_poll_id": None,
-            "correct": None,
-            "join_message_id": None,
-            "join_deadline": None,
-            "used_question_ids": set(),
-            "question_started_at": None,
-            "speed_bonus_awarded": {},
-            "correct_counts": {},
-            "wrong_counts": {},
-            "answer_times": {},
-            "db_game_id": None,
-            "questions_per_game": DEFAULT_QUESTIONS_PER_GAME,
-            "category": DEFAULT_CATEGORY,
-            "difficulty": DEFAULT_DIFFICULTY,
-        }
+        active_games[chat.id] = create_new_game_data(
+            started_by=user.id,
+            questions_per_game=DEFAULT_QUESTIONS_PER_GAME,
+            category=DEFAULT_CATEGORY,
+            difficulty=DEFAULT_DIFFICULTY,
+        )
 
     if query:
         await query.edit_message_text(
@@ -546,8 +479,7 @@ async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFA
                 return
 
             game["difficulty"] = difficulty
-            game["status"] = "joining"
-            game["join_deadline"] = time.monotonic() + JOIN_SECONDS
+            mark_game_joining(game, JOIN_SECONDS)
 
     msg = await context.bot.send_message(
         chat_id=chat_id,
@@ -671,18 +603,10 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         user = query.from_user
 
-        if user.id in game["players"]:
+        added = add_player_to_game(game, user)
+        if not added:
             await query.answer("Already joined")
             return
-
-        name = clickable_name(user)
-
-        game["players"][user.id] = name
-        game["player_objects"][user.id] = user
-        game["scores"][user.id] = 0
-        game["correct_counts"][user.id] = 0
-        game["wrong_counts"][user.id] = 0
-        game["answer_times"][user.id] = []
 
         ensure_player(user)
 
@@ -700,11 +624,7 @@ async def send_question(chat_id, context):
         if not game or game["status"] != "running":
             return
 
-        game["round"] += 1
-        current_round = game["round"]
-        questions_per_game = game["questions_per_game"]
-
-        should_end = current_round > questions_per_game
+        current_round, questions_per_game, should_end = start_next_round(game)
 
     if should_end:
         await end_game(chat_id, context)
@@ -762,12 +682,7 @@ async def send_question(chat_id, context):
             poll_map.pop(msg.poll.id, None)
             return
 
-        game["used_question_ids"].add(q_id)
-        game["correct"] = correct_index
-        game["answered"] = set()
-        game["speed_bonus_awarded"] = {}
-        game["question_started_at"] = time.monotonic()
-        game["current_poll_id"] = msg.poll.id
+        prepare_round_state(game, msg.poll.id, q_id, correct_index)
 
     poll_map[msg.poll.id] = {"chat_id": chat_id, "round": current_round}
 
@@ -870,40 +785,22 @@ async def receive_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
         user = answer.user
         ensure_player(user)
 
-        if user.id not in game["players"]:
+        result = apply_poll_answer(
+            game=game,
+            user_id=user.id,
+            option_ids=answer.option_ids,
+            correct_points=CORRECT_POINTS,
+            speed_bonus_seconds=SPEED_BONUS_SECONDS,
+            speed_bonus_points=SPEED_BONUS_POINTS,
+        )
+
+        if result is None:
             return
 
-        if user.id in game["answered"]:
-            return
-
-        game["answered"].add(user.id)
-
-        is_correct = bool(answer.option_ids) and answer.option_ids[0] == game["correct"]
-
-        if is_correct:
-            points_to_add = CORRECT_POINTS
-            got_speed_bonus = False
-            elapsed = None
-
-            started_at = game.get("question_started_at")
-            if started_at is not None:
-                elapsed = time.monotonic() - started_at
-                game["answer_times"][user.id].append(elapsed)
-
-                if elapsed <= SPEED_BONUS_SECONDS:
-                    points_to_add += SPEED_BONUS_POINTS
-                    got_speed_bonus = True
-                    game["speed_bonus_awarded"][user.id] = True
-                else:
-                    game["speed_bonus_awarded"][user.id] = False
-
-            game["scores"][user.id] += points_to_add
-            game["correct_counts"][user.id] += 1
-        else:
-            game["wrong_counts"][user.id] += 1
-            points_to_add = 0
-            got_speed_bonus = False
-            elapsed = None
+        is_correct = result["is_correct"]
+        points_to_add = result["points_to_add"]
+        got_speed_bonus = result["got_speed_bonus"]
+        elapsed = result["elapsed"]
 
     if is_correct:
         add_points(user.id, points_to_add)
@@ -942,22 +839,18 @@ async def end_game(chat_id, context):
         if current_poll_id:
             poll_map.pop(current_poll_id, None)
 
-        ranking = sorted(
-            game["scores"].items(),
-            key=lambda x: x[1],
-            reverse=True,
-        )
+        result = build_final_results(game)
 
-        winner_user_id = ranking[0][0] if ranking else None
-
-        players = dict(game["players"])
-        player_objects = dict(game["player_objects"])
-        scores = dict(game["scores"])
-        correct_counts = dict(game["correct_counts"])
-        wrong_counts = dict(game["wrong_counts"])
-        answer_times_map = dict(game["answer_times"])
-        db_game_id = game.get("db_game_id")
-        total_rounds = min(game["round"], game["questions_per_game"])
+        ranking = result["ranking"]
+        winner_user_id = result["winner_user_id"]
+        players = result["players"]
+        player_objects = result["player_objects"]
+        scores = result["scores"]
+        correct_counts = result["correct_counts"]
+        wrong_counts = result["wrong_counts"]
+        answer_times_map = result["answer_times_map"]
+        db_game_id = result["db_game_id"]
+        total_rounds = result["total_rounds"]
 
         active_games.pop(chat_id, None)
         cleanup_game_lock(chat_id)
@@ -1022,13 +915,5 @@ async def end_game(chat_id, context):
         except Exception:
             logger.exception("Failed to save game results for chat %s", chat_id)
 
-    text = "🏆 Game Results\n\n"
-
-    if not ranking:
-        text += "No players scored any points."
-    else:
-        for i, (uid, pts) in enumerate(ranking, start=1):
-            name = players[uid]
-            text += f"{i}. {name} — {pts} 🍋\n"
-
+    text = build_results_text(ranking, players)
     await context.bot.send_message(chat_id, text, parse_mode="HTML")

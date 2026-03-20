@@ -1,13 +1,14 @@
+# bot.py
+
 import logging
-import sys
 
 from telegram.ext import (
     Application,
-    CallbackQueryHandler,
     CommandHandler,
+    CallbackQueryHandler,
+    PollAnswerHandler,
     ConversationHandler,
     MessageHandler,
-    PollAnswerHandler,
     filters,
 )
 
@@ -67,6 +68,7 @@ from handlers.admin import (
     search_keyword_step,
     broadcast_message_step,
     broadcast_confirm_step,
+    import_questions_entry,
     import_questions_file_step,
     cancel,
     ADMIN_MENU,
@@ -94,31 +96,21 @@ from handlers.admin import (
 )
 
 logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO,
-    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
-    handlers=[logging.StreamHandler(sys.stdout)],
-    force=True,
 )
 
-logger = logging.getLogger(__name__)
 
+def main():
+    create_tables()
 
-async def error_handler(update, context):
-    logger.exception("Unhandled exception while processing update", exc_info=context.error)
+    app = Application.builder().token(BOT_TOKEN).build()
 
-
-async def debug_callback(update, context):
-    query = update.callback_query
-    if query:
-        logger.info("UNMATCHED CALLBACK DATA: %s", query.data)
-        await query.answer()
-
-
-def build_admin_conversation() -> ConversationHandler:
-    return ConversationHandler(
+    admin_conv = ConversationHandler(
         entry_points=[
             CommandHandler("admin", admin_panel),
             CallbackQueryHandler(admin_button_handler, pattern=r"^admin_"),
+            CallbackQueryHandler(import_questions_entry, pattern=r"^admin_import_questions$"),
         ],
         states={
             QUESTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, question_step)],
@@ -151,16 +143,8 @@ def build_admin_conversation() -> ConversationHandler:
         allow_reentry=True,
     )
 
+    app.add_handler(admin_conv)
 
-def main():
-    create_tables()
-
-    app = Application.builder().token(BOT_TOKEN).build()
-    app.add_error_handler(error_handler)
-
-    app.add_handler(build_admin_conversation())
-
-    # Commands
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("play", start_game))
     app.add_handler(CommandHandler("startgame", start_game))
@@ -181,7 +165,6 @@ def main():
     app.add_handler(CommandHandler("dailyquiz", daily_quiz))
     app.add_handler(CommandHandler("myid", myid))
 
-    # Callback handlers
     app.add_handler(
         CallbackQueryHandler(
             group_leaderboard_callback_handler,
@@ -198,24 +181,31 @@ def main():
 
     app.add_handler(
         CallbackQueryHandler(
+            menu_handler,
+            pattern=r"^menu_",
+        )
+    )
+
+    app.add_handler(
+        CallbackQueryHandler(
             profile_callback_handler,
             pattern=(
                 r"^(leaderboard_global|leaderboard_group|"
                 r"leaderboard_daily|leaderboard_weekly|leaderboard_monthly|"
-                r"leaderboard_rank|leaderboard_menu|profile)$"
+                r"leaderboard_rank|profile)$"
             ),
         )
     )
 
-    app.add_handler(CallbackQueryHandler(menu_handler, pattern=r"^menu_"))
-    app.add_handler(CallbackQueryHandler(button_handler, pattern=r"^join\|"))
-
-    # LAST: catch anything unmatched
-    app.add_handler(CallbackQueryHandler(debug_callback))
+    app.add_handler(
+        CallbackQueryHandler(
+            button_handler,
+            pattern=r"^join\|",
+        )
+    )
 
     app.add_handler(PollAnswerHandler(receive_poll_answer))
 
-    logger.info("Bot is starting...")
     app.run_polling()
 
 

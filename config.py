@@ -1,3 +1,5 @@
+# config.py
+
 import os
 import logging
 
@@ -6,7 +8,7 @@ logging.basicConfig(level=logging.INFO)
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 DB_PATH = os.getenv("DB_PATH", "/data/quiz.db")
 
-ADMIN_ID = 8368997991
+ADMIN_ID = int(os.getenv("ADMIN_ID", "8368997991"))
 
 MIN_PLAYERS = 3
 JOIN_SECONDS = 60

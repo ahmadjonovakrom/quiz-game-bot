@@ -53,13 +53,28 @@ from .questions import (
     export_questions_to_rows,
 )
 
-# games
+# games / group scores / daily quiz
 from .games import (
     create_game,
     finish_game,
     record_game_result,
     get_total_games,
     get_total_groups,
+    ensure_group_player,
+    add_group_points,
+    get_group_leaderboard,
+    get_group_leaderboard_page,
+    get_group_daily_leaderboard,
+    get_group_weekly_leaderboard,
+    get_group_monthly_leaderboard,
+    get_player_group_rank_info,
+    increment_group_games_played,
+    increment_group_games_won,
+    record_group_correct_answer,
+    record_group_wrong_answer,
+    has_played_daily_quiz,
+    record_daily_quiz_attempt,
+    get_broadcast_chat_ids,
 )
 
 # stats
@@ -71,7 +86,7 @@ from .stats import (
 )
 
 __all__ = [
-    # connection
+    # connection / schema
     "get_conn",
     "create_tables",
 
@@ -124,12 +139,27 @@ __all__ = [
     "search_questions_by_keyword",
     "export_questions_to_rows",
 
-    # games
+    # games / groups / daily quiz
     "create_game",
     "finish_game",
     "record_game_result",
     "get_total_games",
     "get_total_groups",
+    "ensure_group_player",
+    "add_group_points",
+    "get_group_leaderboard",
+    "get_group_leaderboard_page",
+    "get_group_daily_leaderboard",
+    "get_group_weekly_leaderboard",
+    "get_group_monthly_leaderboard",
+    "get_player_group_rank_info",
+    "increment_group_games_played",
+    "increment_group_games_won",
+    "record_group_correct_answer",
+    "record_group_wrong_answer",
+    "has_played_daily_quiz",
+    "record_daily_quiz_attempt",
+    "get_broadcast_chat_ids",
 
     # stats
     "get_question_count",

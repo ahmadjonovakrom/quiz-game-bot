@@ -132,6 +132,7 @@ def create_tables():
         """)
 
         # ---- backward-compatible migrations ----
+
         question_columns = _get_column_names(conn, "questions")
         if "category" not in question_columns:
             conn.execute("ALTER TABLE questions ADD COLUMN category TEXT DEFAULT 'mixed'")
@@ -158,11 +159,26 @@ def create_tables():
         if "wrong_answers" not in group_score_columns:
             conn.execute("ALTER TABLE group_scores ADD COLUMN wrong_answers INTEGER DEFAULT 0")
 
+        # IMPORTANT: repair old history tables too
+        group_points_history_columns = _get_column_names(conn, "group_points_history")
+        if "created_at" not in group_points_history_columns:
+            conn.execute(
+                "ALTER TABLE group_points_history ADD COLUMN created_at TEXT DEFAULT CURRENT_TIMESTAMP"
+            )
+
+        player_points_history_columns = _get_column_names(conn, "player_points_history")
+        if "created_at" not in player_points_history_columns:
+            conn.execute(
+                "ALTER TABLE player_points_history ADD COLUMN created_at TEXT DEFAULT CURRENT_TIMESTAMP"
+            )
+
         # ---- indexes ----
+
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_players_points
             ON players(total_points DESC)
         """)
+
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_players_rank_sort
             ON players(total_points DESC, correct_answers DESC, games_won DESC, user_id ASC)
@@ -172,10 +188,12 @@ def create_tables():
             CREATE INDEX IF NOT EXISTS idx_questions_category
             ON questions(category)
         """)
+
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_questions_difficulty
             ON questions(difficulty)
         """)
+
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_questions_usage
             ON questions(times_used)
@@ -185,6 +203,7 @@ def create_tables():
             CREATE INDEX IF NOT EXISTS idx_games_chat_id
             ON games(chat_id)
         """)
+
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_games_status
             ON games(status)
@@ -194,6 +213,7 @@ def create_tables():
             CREATE INDEX IF NOT EXISTS idx_group_scores_points
             ON group_scores(total_points DESC)
         """)
+
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_group_scores_rank
             ON group_scores(chat_id, total_points DESC, correct_answers DESC, games_won DESC, user_id ASC)
@@ -203,14 +223,17 @@ def create_tables():
             CREATE INDEX IF NOT EXISTS idx_group_points_history_chat
             ON group_points_history(chat_id)
         """)
+
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_group_points_history_created
             ON group_points_history(created_at)
         """)
+
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_group_points_history_chat_created
             ON group_points_history(chat_id, created_at)
         """)
+
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_group_points_history_chat_user_created
             ON group_points_history(chat_id, user_id, created_at)
@@ -220,14 +243,17 @@ def create_tables():
             CREATE INDEX IF NOT EXISTS idx_player_points_history_user
             ON player_points_history(user_id)
         """)
+
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_player_points_history_created
             ON player_points_history(created_at)
         """)
+
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_player_points_history_user_created
             ON player_points_history(user_id, created_at)
         """)
+
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_player_points_history_created_user
             ON player_points_history(created_at, user_id)

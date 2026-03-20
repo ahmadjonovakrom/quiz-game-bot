@@ -67,8 +67,6 @@ def leaderboard_menu_keyboard(chat_type: str) -> InlineKeyboardMarkup:
     ])
 
 
-# ================= ADMIN =================
-
 def admin_main_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("📚 Question Management", callback_data="admin_questions")],
@@ -123,3 +121,51 @@ def question_action_keyboard(qid: int, is_active: int, source: str = "questions"
             InlineKeyboardButton("⬅️ Back", callback_data=f"admin_return_{source}"),
         ],
     ])
+
+
+def questions_pagination_keyboard(
+    page: int,
+    total_pages: int,
+    source: str = "questions",
+) -> InlineKeyboardMarkup:
+    buttons = []
+
+    nav_row = []
+    if page > 1:
+        nav_row.append(
+            InlineKeyboardButton("⬅️ Prev", callback_data=f"admin_questions_page_{page - 1}")
+        )
+    if page < total_pages:
+        nav_row.append(
+            InlineKeyboardButton("Next ➡️", callback_data=f"admin_questions_page_{page + 1}")
+        )
+    if nav_row:
+        buttons.append(nav_row)
+
+    buttons.append([
+        InlineKeyboardButton("⬅️ Back", callback_data=f"admin_return_{source}")
+    ])
+
+    return InlineKeyboardMarkup(buttons)
+
+
+def search_results_keyboard(page: int, total_pages: int) -> InlineKeyboardMarkup:
+    buttons = []
+
+    nav_row = []
+    if page > 1:
+        nav_row.append(
+            InlineKeyboardButton("⬅️ Prev", callback_data=f"admin_search_page_{page - 1}")
+        )
+    if page < total_pages:
+        nav_row.append(
+            InlineKeyboardButton("Next ➡️", callback_data=f"admin_search_page_{page + 1}")
+        )
+    if nav_row:
+        buttons.append(nav_row)
+
+    buttons.append([
+        InlineKeyboardButton("⬅️ Back", callback_data="admin_questions")
+    ])
+
+    return InlineKeyboardMarkup(buttons)

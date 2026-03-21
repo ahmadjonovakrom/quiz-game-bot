@@ -60,7 +60,7 @@ def build_join_text(game, remaining: int, blink: bool = False) -> str:
 
         joined_names.append(mention)
 
-    joined_text = " | ".join(joined_names) if joined_names else "-"
+    joined_text = ", ".join(joined_names) if joined_names else "-"
 
     return (
         f"{timer_line}\n\n"

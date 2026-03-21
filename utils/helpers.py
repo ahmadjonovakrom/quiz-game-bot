@@ -46,15 +46,24 @@ def build_join_text(game, remaining: int, blink: bool = False) -> str:
         timer_line = f"Registration is open ({remaining}s)"
 
     joined_names = []
-    for player in players.values():
+    for user_id, player in players.items():
         if isinstance(player, dict):
             name = player.get("full_name") or player.get("username") or "Player"
+            username = player.get("username")
         else:
             name = getattr(player, "full_name", None) or getattr(player, "username", None) or "Player"
+            username = getattr(player, "username", None)
 
-        joined_names.append(html.escape(str(name)))
+        safe_name = html.escape(str(name))
 
-    joined_text = "\n".join(joined_names) if joined_names else "-"
+        if username:
+            mention = f'<a href="https://t.me/{html.escape(username)}">{safe_name}</a>'
+        else:
+            mention = f'<a href="tg://user?id={user_id}">{safe_name}</a>'
+
+        joined_names.append(mention)
+
+    joined_text = " | ".join(joined_names) if joined_names else "-"
 
     return (
         f"{timer_line}\n\n"

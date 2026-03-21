@@ -84,6 +84,16 @@ CATEGORY_LABELS = {
 }
 
 
+def row_value(row, key, default=None):
+    if row is None:
+        return default
+    try:
+        value = row[key]
+        return default if value is None else value
+    except Exception:
+        return default
+
+
 def format_category_name(category: str) -> str:
     return CATEGORY_LABELS.get(str(category).lower(), str(category).replace("_", " ").title())
 
@@ -275,23 +285,30 @@ async def daily_quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     ensure_player(user)
 
-    question = get_random_question()
+    try:
+        question = get_random_question()
+        logger.warning("Daily question fetched: %s", dict(question) if question else None)
+    except Exception:
+        logger.exception("Failed to fetch daily question")
+        await update.message.reply_text("❌ Failed to load daily question.")
+        return
+
     if not question:
         await update.message.reply_text("No questions available.")
         return
 
-    q_id = question["id"]
-    q_text = question["question_text"]
-    difficulty = question.get("difficulty", "easy")
-    points = get_question_points(difficulty)
-
-    options, correct_index = shuffle_question(question)
-
-    if correct_index not in (0, 1, 2, 3):
-        await update.message.reply_text("This daily question has an invalid correct answer.")
-        return
-
     try:
+        q_id = question["id"]
+        q_text = question["question_text"]
+        difficulty = row_value(question, "difficulty", "easy")
+        points = get_question_points(difficulty)
+
+        options, correct_index = shuffle_question(question)
+
+        if correct_index not in (0, 1, 2, 3):
+            await update.message.reply_text("This daily question has an invalid correct answer.")
+            return
+
         msg = await context.bot.send_poll(
             chat_id=chat.id,
             question=format_question_text(q_text, points),
@@ -665,7 +682,15 @@ async def send_question(chat_id, context):
         if not game or game["status"] != "running":
             return
 
-        question = get_unused_question(game)
+        try:
+            question = get_unused_question(game)
+            logger.warning("Fetched game question: %s", dict(question) if question else None)
+        except Exception:
+            logger.exception("Failed to fetch question for chat %s", chat_id)
+            await context.bot.send_message(chat_id, "❌ Failed to load question from database.")
+            await end_game(chat_id, context)
+            return
+
         no_question = not question
 
     if no_question:
@@ -676,24 +701,24 @@ async def send_question(chat_id, context):
         await end_game(chat_id, context)
         return
 
-    q_id = question["id"]
-    q_text = question["question_text"]
-    difficulty = question.get("difficulty", "easy")
-    points = get_question_points(difficulty)
-
-    options, correct_index = shuffle_question(question)
-
-    if correct_index not in (0, 1, 2, 3):
-        await context.bot.send_message(
-            chat_id,
-            f"Question ID {q_id} has an invalid correct option.",
-        )
-        await end_game(chat_id, context)
-        return
-
-    poll_question = format_question_text(q_text, points)
-
     try:
+        q_id = question["id"]
+        q_text = question["question_text"]
+        difficulty = row_value(question, "difficulty", "easy")
+        points = get_question_points(difficulty)
+
+        options, correct_index = shuffle_question(question)
+
+        if correct_index not in (0, 1, 2, 3):
+            await context.bot.send_message(
+                chat_id,
+                f"Question ID {q_id} has an invalid correct option.",
+            )
+            await end_game(chat_id, context)
+            return
+
+        poll_question = format_question_text(q_text, points)
+
         msg = await context.bot.send_poll(
             chat_id=chat_id,
             question=poll_question,

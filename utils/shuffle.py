@@ -9,7 +9,7 @@ def shuffle_question(question_row):
         (3, question_row["option_d"]),
     ]
 
-    correct_index = question_row["correct_option"] - 1
+    correct_index = int(question_row["correct_option"]) - 1
 
     random.shuffle(options)
 

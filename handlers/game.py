@@ -110,6 +110,39 @@ def format_final_results_page(results, page=1):
 
         lines.append(f"{prefix} {name} — {points}🍋")
 
+    if results:
+        mvp = max(results, key=lambda x: x.get("points", 0))
+
+        def accuracy_value(row):
+            correct = row.get("correct_answers", 0)
+            wrong = row.get("wrong_answers", 0)
+            total_answers = correct + wrong
+            if total_answers == 0:
+                return 0
+            return (correct / total_answers) * 100
+
+        accuracy_king = max(results, key=accuracy_value)
+
+        mvp_name = (
+            mvp.get("full_name")
+            or mvp.get("name")
+            or mvp.get("username")
+            or "Unknown"
+        )
+
+        accuracy_name = (
+            accuracy_king.get("full_name")
+            or accuracy_king.get("name")
+            or accuracy_king.get("username")
+            or "Unknown"
+        )
+
+        accuracy_percent = int(accuracy_value(accuracy_king))
+
+        lines.append("")
+        lines.append(f"👑 MVP: {mvp_name}")
+        lines.append(f"🎯 Accuracy King: {accuracy_name} ({accuracy_percent}%)")
+
     lines.append("")
     lines.append(f"📄 Page {page}/{total_pages}")
 
@@ -986,6 +1019,8 @@ async def end_game(chat_id, context):
                 "user_id": row.get("user_id"),
                 "full_name": name,
                 "points": row.get("points", 0),
+                "correct_answers": row.get("correct_answers", 0),
+                "wrong_answers": row.get("wrong_answers", 0),
             })
 
         normalized_results.sort(key=lambda x: x["points"], reverse=True)

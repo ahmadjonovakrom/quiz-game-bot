@@ -272,7 +272,7 @@ async def refresh_join_message(context: ContextTypes.DEFAULT_TYPE, chat_id: int)
     if not join_message_id:
         return
 
-    remaining = get_join_remaining_seconds(game)
+    remaining = max(0, get_join_remaining_seconds(game))
 
     try:
         await context.bot.edit_message_text(
@@ -651,23 +651,48 @@ async def begin_game_after_join(chat_id, context):
     logger.warning("BEGIN GAME AFTER JOIN: %s", chat_id)
 
     try:
-        total_time = JOIN_SECONDS  # e.g. 60
+        loop = asyncio.get_event_loop()
 
-        # ✅ Set ONCE (important fix)
+        # Set the countdown end time only once
         lock = get_game_lock(chat_id)
         async with lock:
             game = active_games.get(chat_id)
             if not game or game["status"] != "joining":
                 return
 
-            game["join_end_time"] = asyncio.get_event_loop().time() + total_time
+            game["join_end_time"] = loop.time() + JOIN_SECONDS
 
-        # ✅ Update every 10 seconds (clean countdown)
-        for _ in range(total_time // 10):
-            await refresh_join_message(context, chat_id)
-            await asyncio.sleep(10)
+        # Refresh at 10-second checkpoints based on real remaining time
+        last_shown = None
 
-        # ===== FINAL STEP =====
+        while True:
+            lock = get_game_lock(chat_id)
+            async with lock:
+                game = active_games.get(chat_id)
+                if not game or game["status"] != "joining":
+                    return
+
+                end_time = game.get("join_end_time")
+                if end_time is None:
+                    return
+
+                remaining = max(0, int(end_time - loop.time()))
+
+            # Show only 60, 50, 40, 30, 20, 10, 0 style checkpoints
+            checkpoint = ((remaining + 9) // 10) * 10
+            checkpoint = min(checkpoint, JOIN_SECONDS)
+
+            if checkpoint != last_shown:
+                await refresh_join_message(context, chat_id)
+                last_shown = checkpoint
+
+            if remaining <= 0:
+                break
+
+            # Sleep a little so countdown stays accurate
+            await asyncio.sleep(0.5)
+
+        # FINAL STEP
         lock = get_game_lock(chat_id)
         async with lock:
             game = active_games.get(chat_id)
@@ -707,31 +732,12 @@ async def begin_game_after_join(chat_id, context):
                     status="running",
                 )
             except Exception:
-                logger.exception("Failed to create game record")
-
-        await context.bot.send_message(chat_id, "Game started! Get ready for the first question.")
-        await send_question(chat_id, context)
-
-    except Exception:
-        logger.exception("Error in begin_game_after_join")
-
-        lock = get_game_lock(chat_id)
-        async with lock:
-            game = active_games.get(chat_id)
-            if not game or game["status"] != "running":
-                return
-
-            try:
-                game["db_game_id"] = create_game(
-                    chat_id=chat_id,
-                    total_players=len(game["players"]),
-                    total_rounds=game["questions_per_game"],
-                    status="running",
-                )
-            except Exception:
                 logger.exception("Failed to create game record for chat %s", chat_id)
 
-        await context.bot.send_message(chat_id, "Game started! Get ready for the first question.")
+        await context.bot.send_message(
+            chat_id,
+            "Game started! Get ready for the first question."
+        )
         await send_question(chat_id, context)
 
     except Exception:

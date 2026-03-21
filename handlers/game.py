@@ -651,20 +651,21 @@ async def begin_game_after_join(chat_id, context):
     logger.warning("BEGIN GAME AFTER JOIN: %s", chat_id)
 
     try:
-        while True:
+        checkpoints = [60, 50, 40, 30, 20, 10]
+
+        for remaining in checkpoints:
             lock = get_game_lock(chat_id)
             async with lock:
                 game = active_games.get(chat_id)
                 if not game or game["status"] != "joining":
                     return
 
-                remaining = get_join_remaining_seconds(game)
-                if remaining <= 0:
-                    break
+                game["join_end_time"] = asyncio.get_event_loop().time() + remaining
 
             await refresh_join_message(context, chat_id)
-            await asyncio.sleep(min(10, max(1, remaining)))
+            await asyncio.sleep(10)
 
+        # FINAL STEP (0 seconds)
         lock = get_game_lock(chat_id)
         async with lock:
             game = active_games.get(chat_id)
@@ -708,6 +709,7 @@ async def begin_game_after_join(chat_id, context):
 
         await context.bot.send_message(chat_id, "Game started! Get ready for the first question.")
         await send_question(chat_id, context)
+
     except Exception:
         logger.exception("Error in begin_game_after_join for chat %s", chat_id)
 
@@ -1020,7 +1022,7 @@ async def end_game(chat_id, context):
             )
 
             name = f'<a href="tg://user?id={user_id}">{raw_name}</a>'
-            
+
             normalized_results.append({
                 "user_id": row.get("user_id"),
                 "full_name": name,

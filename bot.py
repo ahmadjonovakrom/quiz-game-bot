@@ -1,11 +1,6 @@
 # bot.py
 
 import logging
-from dotenv import load_dotenv
-
-# Load local .env file for VS Code/debugging.
-# On Railway, environment variables will still work normally.
-load_dotenv()
 
 from telegram.ext import (
     Application,
@@ -113,9 +108,7 @@ def main():
     create_tables()
 
     if not BOT_TOKEN:
-        raise ValueError(
-            "BOT_TOKEN is missing. Put BOT_TOKEN in Railway variables or in a local .env file."
-        )
+        raise ValueError("BOT_TOKEN is missing!")
 
     app = Application.builder().token(BOT_TOKEN).build()
     logger.warning("APP BUILT")
@@ -181,37 +174,11 @@ def main():
     app.add_handler(CommandHandler("dailyquiz", daily_quiz))
     app.add_handler(CommandHandler("myid", myid))
 
-    # Group leaderboard callbacks
-    app.add_handler(
-        CallbackQueryHandler(
-            group_leaderboard_callback_handler,
-            pattern=r"^group_lb_(all|daily|weekly|monthly)$",
-        )
-    )
-
-    # Game/setup callbacks
-    app.add_handler(
-        CallbackQueryHandler(
-            button_handler,
-            pattern=r"^(setup_|join\|)",
-        )
-    )
-
-    # Menu callbacks
-    app.add_handler(
-        CallbackQueryHandler(
-            menu_handler,
-            pattern=r"^menu_",
-        )
-    )
-
-    # Profile + leaderboard callbacks
-    app.add_handler(
-        CallbackQueryHandler(
-            profile_callback_handler,
-            pattern=r"^(profile|leaderboard_.*)$",
-        )
-    )
+    # Callbacks
+    app.add_handler(CallbackQueryHandler(group_leaderboard_callback_handler, pattern=r"^group_lb_"))
+    app.add_handler(CallbackQueryHandler(button_handler, pattern=r"^(setup_|join\|)"))
+    app.add_handler(CallbackQueryHandler(menu_handler, pattern=r"^menu_"))
+    app.add_handler(CallbackQueryHandler(profile_callback_handler, pattern=r"^(profile|leaderboard_)"))
 
     app.add_handler(PollAnswerHandler(receive_poll_answer))
 

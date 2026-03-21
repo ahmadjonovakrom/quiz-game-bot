@@ -1,16 +1,16 @@
 # config.py
 
 import os
-from dotenv import load_dotenv
 
-# Load local .env for VS Code/debugging.
-# On Railway, Railway environment variables will still work.
-load_dotenv()
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    # Railway can still provide environment variables without python-dotenv
+    pass
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-
 DB_PATH = os.getenv("DB_PATH", "quiz_bot.db")
-
 ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
 
 MIN_PLAYERS = 1

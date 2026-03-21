@@ -1,8 +1,11 @@
 from contextlib import closing
 from typing import List, Optional
+import logging
 
 from config import ALLOWED_CATEGORIES, ALLOWED_DIFFICULTIES
 from .connection import get_conn
+
+logger = logging.getLogger(__name__)
 
 
 def normalize_correct_option(value) -> int:
@@ -108,13 +111,16 @@ def get_random_question(
     """
     params = []
 
-    if category and category != "mixed":
-        query += " AND category = ?"
-        params.append(category.strip().lower())
+    normalized_category = (category or "").strip().lower()
+    normalized_difficulty = (difficulty or "").strip().lower()
 
-    if difficulty and difficulty != "mixed":
-        query += " AND difficulty = ?"
-        params.append(difficulty.strip().lower())
+    if normalized_category and normalized_category != "mixed":
+        query += " AND LOWER(TRIM(category)) = ?"
+        params.append(normalized_category)
+
+    if normalized_difficulty and normalized_difficulty != "mixed":
+        query += " AND LOWER(TRIM(difficulty)) = ?"
+        params.append(normalized_difficulty)
 
     if exclude_ids:
         placeholders = ",".join("?" for _ in exclude_ids)
@@ -122,6 +128,13 @@ def get_random_question(
         params.extend(exclude_ids)
 
     query += " ORDER BY times_used ASC, RANDOM() LIMIT 1"
+
+    logger.warning(
+        "GET_RANDOM_QUESTION category=%s difficulty=%s exclude_count=%s",
+        normalized_category or None,
+        normalized_difficulty or None,
+        len(exclude_ids or []),
+    )
 
     with closing(get_conn()) as conn, conn:
         row = conn.execute(query, params).fetchone()
@@ -132,6 +145,18 @@ def get_random_question(
                 SET times_used = times_used + 1
                 WHERE id = ?
             """, (row["id"],))
+            logger.warning(
+                "QUESTION FOUND id=%s category=%s difficulty=%s",
+                row["id"],
+                row["category"],
+                row["difficulty"],
+            )
+        else:
+            logger.warning(
+                "NO QUESTION FOUND query=%s params=%s",
+                " ".join(query.split()),
+                params,
+            )
 
         return row
 
@@ -149,16 +174,19 @@ def list_questions(
     """
     params = []
 
+    normalized_category = (category or "").strip().lower()
+    normalized_difficulty = (difficulty or "").strip().lower()
+
     if active_only:
         query += " AND is_active = 1"
 
-    if category and category != "mixed":
-        query += " AND category = ?"
-        params.append(category.strip().lower())
+    if normalized_category and normalized_category != "mixed":
+        query += " AND LOWER(TRIM(category)) = ?"
+        params.append(normalized_category)
 
-    if difficulty and difficulty != "mixed":
-        query += " AND difficulty = ?"
-        params.append(difficulty.strip().lower())
+    if normalized_difficulty and normalized_difficulty != "mixed":
+        query += " AND LOWER(TRIM(difficulty)) = ?"
+        params.append(normalized_difficulty)
 
     query += " ORDER BY id DESC LIMIT ?"
     params.append(limit)
@@ -181,16 +209,19 @@ def list_questions_paginated(
     """
     params = []
 
+    normalized_category = (category or "").strip().lower()
+    normalized_difficulty = (difficulty or "").strip().lower()
+
     if active_only:
         query += " AND is_active = 1"
 
-    if category and category != "mixed":
-        query += " AND category = ?"
-        params.append(category.strip().lower())
+    if normalized_category and normalized_category != "mixed":
+        query += " AND LOWER(TRIM(category)) = ?"
+        params.append(normalized_category)
 
-    if difficulty and difficulty != "mixed":
-        query += " AND difficulty = ?"
-        params.append(difficulty.strip().lower())
+    if normalized_difficulty and normalized_difficulty != "mixed":
+        query += " AND LOWER(TRIM(difficulty)) = ?"
+        params.append(normalized_difficulty)
 
     query += " ORDER BY id DESC LIMIT ? OFFSET ?"
     params.extend([limit, offset])
@@ -389,6 +420,15 @@ def activate_question(question_id: int) -> bool:
 
 def delete_question(question_id: int) -> bool:
     return deactivate_question(question_id)
+
+
+def activate_all_questions() -> int:
+    with closing(get_conn()) as conn, conn:
+        cur = conn.execute("""
+            UPDATE questions
+            SET is_active = 1
+        """)
+        return cur.rowcount
 
 
 def get_question_count() -> int:

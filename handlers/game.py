@@ -927,4 +927,5 @@ async def end_game(chat_id, context):
     await context.bot.send_message(
         chat_id,
         results_text if results_text else "🏁 Game finished.",
+        parse_mode="HTML",
     )

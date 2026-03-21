@@ -121,7 +121,11 @@ def add_player_to_game(game: dict, user) -> bool:
     if user.id in game["players"]:
         return False
 
-    game["players"][user.id] = clickable_name(user)
+    game["players"][user.id] = {
+    "full_name": user.full_name,
+    "username": user.username,
+    "first_name": user.first_name,
+    }
     game["player_objects"][user.id] = user
     game["scores"][user.id] = 0
     game["correct_counts"][user.id] = 0

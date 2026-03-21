@@ -56,10 +56,7 @@ def build_join_text(game, remaining: int, blink: bool = False) -> str:
 
         safe_name = html.escape(str(name))
 
-        if username:
-            mention = f'<a href="https://t.me/{html.escape(username)}">{safe_name}</a>'
-        else:
-            mention = f'<a href="tg://user?id={user_id}">{safe_name}</a>'
+        mention = safe_name
 
         joined_names.append(mention)
 

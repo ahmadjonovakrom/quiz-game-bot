@@ -1,7 +1,7 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 
-LEADERBOARD_PAGE_SIZE = 15
+LEADERBOARD_PAGE_SIZE = 10
 FINAL_RESULTS_PAGE_SIZE = 10
 
 

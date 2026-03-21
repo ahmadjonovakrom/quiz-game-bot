@@ -286,6 +286,24 @@ async def refresh_join_message(context: ContextTypes.DEFAULT_TYPE, chat_id: int)
     except Exception as e:
         logger.warning("Failed to refresh join message in chat %s: %s", chat_id, e)
 
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    logger.warning("START COMMAND RECEIVED")
+
+    user = update.effective_user
+    chat = update.effective_chat
+    message = update.effective_message
+
+    if user:
+        ensure_player(user)
+    if chat:
+        ensure_chat(chat)
+
+    await message.reply_text(
+        "Welcome to English Lemon !\n\n"
+        "Practice vocabulary, play quiz games, and climb the leaderboard.",
+        reply_markup=get_main_menu_keyboard(),
+    )
+
 
 async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query

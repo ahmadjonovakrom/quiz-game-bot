@@ -47,7 +47,7 @@ def build_join_text(game, remaining: int, blink: bool = False) -> str:
 
     if players:
         joined_text = "\n".join(
-            (player.get("full_name") or player.get("username") or "Player")
+            html.escape(player.get("full_name") or player.get("username") or "Player")
             for player in players.values()
         )
     else:

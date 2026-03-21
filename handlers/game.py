@@ -434,7 +434,7 @@ async def daily_quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user = update.effective_user
     chat = update.effective_chat
-    today = str(date.today()))
+    today = str(date.today())
 
     if chat:
         ensure_chat(chat)

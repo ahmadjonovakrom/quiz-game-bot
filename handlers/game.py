@@ -341,7 +341,10 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             async with lock:
                 if has_active_game(query.message.chat.id):
                     existing_game = active_games.get(query.message.chat.id)
-                    await query.answer(get_existing_game_message(existing_game), show_alert=True)
+                    await query.answer(
+                        get_existing_game_message(existing_game),
+                        show_alert=True,
+                    )
                     return
 
             await start_game(update, context)
@@ -379,7 +382,41 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if data in ("menu_back", "menu_main"):
         chat_id = query.message.chat.id
-        await clear_game(context, chat_id)
+        chat_type = query.message.chat.type
+
+        if chat_type in ("group", "supergroup"):
+            lock = get_game_lock(chat_id)
+            async with lock:
+                game = active_games.get(chat_id)
+
+                if game:
+                    status = game.get("status")
+
+                    if status == "running":
+                        await query.answer(
+                            "You cannot close the menu while a game is running.",
+                            show_alert=True,
+                        )
+                        return
+
+                    if status in ("setup", "joining"):
+                        allowed = is_admin(query.from_user.id) or await is_group_admin(
+                            context,
+                            chat_id,
+                            query.from_user.id,
+                        )
+
+                        if not allowed:
+                            await query.answer(
+                                "Only group admins can cancel setup or joining.",
+                                show_alert=True,
+                            )
+                            return
+
+            await clear_game(context, chat_id)
+        else:
+            await clear_game(context, chat_id)
+
         await query.edit_message_text(
             "Welcome to English Lemon !\n\n"
             "Practice vocabulary, play quiz games, and climb the leaderboard.",
@@ -397,7 +434,7 @@ async def daily_quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user = update.effective_user
     chat = update.effective_chat
-    today = str(date.today())
+    today = str(date.today()))
 
     if chat:
         ensure_chat(chat)
@@ -1049,7 +1086,6 @@ async def receive_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     if is_correct:
         add_points(user.id, points_to_add)
-
         record_correct_answer(user.id, answer_time=elapsed)
 
         if chat_id < 0:

@@ -733,6 +733,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def send_question(chat_id, context):
     logger.warning("SEND QUESTION: %s", chat_id)
 
+    should_end = False
+
     lock = get_game_lock(chat_id)
     async with lock:
         game = active_games.get(chat_id)
@@ -740,9 +742,10 @@ async def send_question(chat_id, context):
             return
 
         current_round, questions_per_game, should_end = start_next_round(game)
-        if should_end:
-            await end_game(chat_id, context)
-            return
+
+    if should_end:
+        await end_game(chat_id, context)
+        return
 
     lock = get_game_lock(chat_id)
     async with lock:

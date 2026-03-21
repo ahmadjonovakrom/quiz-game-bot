@@ -653,7 +653,6 @@ async def begin_game_after_join(chat_id, context):
     try:
         loop = asyncio.get_event_loop()
 
-        # Set the countdown end time only once
         lock = get_game_lock(chat_id)
         async with lock:
             game = active_games.get(chat_id)
@@ -662,8 +661,9 @@ async def begin_game_after_join(chat_id, context):
 
             game["join_end_time"] = loop.time() + JOIN_SECONDS
 
-        # Refresh at 10-second checkpoints based on real remaining time
-        last_shown = None
+        last_checkpoint = None
+
+        last_checkpoint = None
 
         while True:
             lock = get_game_lock(chat_id)
@@ -678,21 +678,19 @@ async def begin_game_after_join(chat_id, context):
 
                 remaining = max(0, int(end_time - loop.time()))
 
-            # Show only 60, 50, 40, 30, 20, 10, 0 style checkpoints
-            checkpoint = ((remaining + 9) // 10) * 10
-            checkpoint = min(checkpoint, JOIN_SECONDS)
+            # ✅ clean 10-second checkpoints only
+            checkpoint = (remaining // 10) * 10
 
-            if checkpoint != last_shown:
+            if checkpoint != last_checkpoint:
                 await refresh_join_message(context, chat_id)
-                last_shown = checkpoint
+                last_checkpoint = checkpoint
 
             if remaining <= 0:
                 break
 
-            # Sleep a little so countdown stays accurate
-            await asyncio.sleep(0.5)
+            # ✅ ALWAYS wait 1 second (for accuracy, not UI)
+            await asyncio.sleep(1)
 
-        # FINAL STEP
         lock = get_game_lock(chat_id)
         async with lock:
             game = active_games.get(chat_id)

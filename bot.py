@@ -1,6 +1,11 @@
 # bot.py
 
 import logging
+from dotenv import load_dotenv
+
+# Load local .env file for VS Code/debugging.
+# On Railway, environment variables will still work normally.
+load_dotenv()
 
 from telegram.ext import (
     Application,
@@ -107,6 +112,11 @@ def main():
     logger.warning("BOT STARTED")
     create_tables()
 
+    if not BOT_TOKEN:
+        raise ValueError(
+            "BOT_TOKEN is missing. Put BOT_TOKEN in Railway variables or in a local .env file."
+        )
+
     app = Application.builder().token(BOT_TOKEN).build()
     logger.warning("APP BUILT")
 
@@ -179,7 +189,7 @@ def main():
         )
     )
 
-    # IMPORTANT: button_handler must come BEFORE menu/profile callback handlers
+    # Game/setup callbacks
     app.add_handler(
         CallbackQueryHandler(
             button_handler,

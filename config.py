@@ -1,7 +1,13 @@
 # config.py
-import os
 
-BOT_TOKEN = os.getenv("BOT_TOKEN", "")
+import os
+from dotenv import load_dotenv
+
+# Load local .env for VS Code/debugging.
+# On Railway, Railway environment variables will still work.
+load_dotenv()
+
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 DB_PATH = os.getenv("DB_PATH", "quiz_bot.db")
 

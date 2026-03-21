@@ -1003,6 +1003,13 @@ async def receive_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     if is_correct:
         add_points(user.id, points_to_add)
+        
+        lock = get_game_lock(chat_id)
+        async with lock:
+            game = active_games.get(chat_id)
+            if game:
+                game.setdefault("scores", {})
+                game["scores"][user.id] = game["scores"].get(user.id, 0) + points_to_add
         record_correct_answer(user.id, answer_time=elapsed)
 
         if chat_id < 0:

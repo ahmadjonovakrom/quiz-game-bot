@@ -34,6 +34,7 @@ logger = logging.getLogger(__name__)
 
 LEADERBOARD_PAGE_SIZE = 10
 
+
 def format_number(n: int) -> str:
     if n < 1000:
         return str(n)
@@ -53,6 +54,7 @@ def format_number(n: int) -> str:
             return f"{formatted:.1f}{unit}"
 
     return str(n)
+
 
 def _safe_get(row, key, default=None):
     if row is None:
@@ -106,6 +108,7 @@ def format_leaderboard_text(
     viewer_rank: int | None = None,
     viewer_points: int | None = None,
     empty_message: str | None = None,
+    start_rank: int = 0,
 ) -> str:
     if not rows:
         fallback_message = "No activity yet.\nBe the first to play!"
@@ -117,7 +120,7 @@ def format_leaderboard_text(
     lines = [f"🏆 {title}", ""]
     viewer_in_top = False
 
-    for index, row in enumerate(rows, start=1):
+    for index, row in enumerate(rows, start=start_rank + 1):
         prefix = _rank_prefix(index)
         name = _extract_name(row)
         points = format_number(_safe_get(row, points_key, 0))
@@ -134,7 +137,7 @@ def format_leaderboard_text(
             "",
             "──────────",
             f"👤 YOU — #{viewer_rank} — {format_number(viewer_points or 0)} 🍋",
-    ])
+        ])
 
     return "\n".join(lines)
 
@@ -153,6 +156,7 @@ def _build_paginated_text_and_markup(
 ):
     visible_rows = rows[:LEADERBOARD_PAGE_SIZE]
     has_next = len(rows) > LEADERBOARD_PAGE_SIZE
+    start_rank = (page - 1) * LEADERBOARD_PAGE_SIZE
 
     text = format_leaderboard_text(
         title=title,
@@ -162,6 +166,7 @@ def _build_paginated_text_and_markup(
         viewer_rank=viewer_rank,
         viewer_points=viewer_points,
         empty_message=empty_message,
+        start_rank=start_rank,
     )
 
     markup = leaderboard_pagination_keyboard(
@@ -247,7 +252,6 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await _send_or_edit(update, text, back_keyboard("menu_main"))
         return
 
-    # --- basic fields ---
     full_name = _safe_get(profile_data, "full_name", user.full_name)
     username = _safe_get(profile_data, "username")
 
@@ -257,16 +261,13 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     correct_answers = _safe_get(profile_data, "correct_answers", 0)
     wrong_answers = _safe_get(profile_data, "wrong_answers", 0)
 
-    # --- accuracy ---
     total_answers = correct_answers + wrong_answers
     accuracy = int((correct_answers / total_answers) * 100) if total_answers > 0 else 0
 
-    # --- group rank (only if in group) ---
     group_rank = None
     if chat.type != "private":
         group_rank, _ = get_player_group_rank_info(chat.id, user.id)
 
-    # --- build text ---
     lines = [
         "👤 My Profile",
         "",
@@ -276,14 +277,11 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if username:
         lines.append(f"Username: @{username}")
 
-    # Global rank
     lines.append(f"🏆 Global Rank: #{rank}" if rank else "🏆 Global Rank: Not ranked yet")
 
-    # Group rank (only in group)
     if chat.type != "private":
         lines.append(f"👥 Group Rank: #{group_rank}" if group_rank else "👥 Group Rank: Not ranked yet")
 
-    # Stats
     lines.extend([
         "",
         f"🍋 Lemons: {format_number(total_points)}",

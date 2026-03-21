@@ -356,12 +356,15 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await message.reply_text(text)
             return
 
-        active_games[chat.id] = create_new_game_data(
+        game = create_new_game_data(
             started_by=user.id,
             questions_per_game=DEFAULT_QUESTIONS_PER_GAME,
             category=DEFAULT_CATEGORY,
             difficulty="mixed",
         )
+
+        add_player_to_game(game, user)
+        active_games[chat.id] = game
 
     text = format_setup_step_1_text()
     keyboard = get_question_count_keyboard()
@@ -646,6 +649,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         user = query.from_user
         added = add_player_to_game(game, user)
+        logger.warning("JOIN RESULT: user=%s added=%s players=%s", user.id, added, len(game["players"]))
         if not added:
             await query.answer("Already joined")
             return

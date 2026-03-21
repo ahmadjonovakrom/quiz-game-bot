@@ -8,7 +8,7 @@ DB_PATH = os.getenv("DB_PATH", "quiz_bot.db")
 ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
 
 MIN_PLAYERS = 1
-JOIN_SECONDS = 20
+JOIN_SECONDS = 60
 QUESTION_SECONDS = 15
 
 CORRECT_POINTS = 10

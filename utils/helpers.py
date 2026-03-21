@@ -56,7 +56,7 @@ def build_join_text(game, remaining: int, blink: bool = False) -> str:
 
         safe_name = html.escape(str(name))
 
-        mention = safe_name
+        mention = f'<a href="tg://user?id={user_id}">{safe_name}</a>'
 
         joined_names.append(mention)
 

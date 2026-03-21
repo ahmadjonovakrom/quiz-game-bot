@@ -108,9 +108,10 @@ def format_leaderboard_text(
     empty_message: str | None = None,
 ) -> str:
     if not rows:
+        fallback_message = "No activity yet.\nBe the first to play!"
         return (
             f"🏆 {title}\n\n"
-            f"{empty_message or 'No activity yet.\nBe the first to play!'}"
+            f"{empty_message or fallback_message}"
         )
 
     lines = [f"🏆 {title}", ""]

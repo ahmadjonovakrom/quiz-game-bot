@@ -1003,7 +1003,7 @@ async def receive_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     if is_correct:
         add_points(user.id, points_to_add)
-        
+
         lock = get_game_lock(chat_id)
         async with lock:
             game = active_games.get(chat_id)
@@ -1058,30 +1058,35 @@ async def end_game(chat_id, context):
         if poll_id:
             poll_map.pop(poll_id, None)
 
-        final_results = build_final_results(game)
-
         normalized_results = []
-        for row in final_results:
-            user_id = row.get("user_id")
 
+        for user_id, player_data in players.items():
             raw_name = (
-                row.get("full_name")
-                or row.get("name")
-                or row.get("username")
+                player_data.get("full_name")
+                or player_data.get("name")
+                or player_data.get("username")
                 or "Unknown"
             )
 
-            name = f'<a href="tg://user?id={user_id}">{raw_name}</a>'
+            safe_name = str(raw_name).replace("<", "&lt;").replace(">", "&gt;")
+            name = f'<a href="tg://user?id={user_id}">{safe_name}</a>'
 
             normalized_results.append({
-                "user_id": row.get("user_id"),
+                "user_id": user_id,
                 "full_name": name,
-                "points": row.get("points", 0),
-                "correct_answers": row.get("correct_answers", 0),
-                "wrong_answers": row.get("wrong_answers", 0),
+                "points": scores.get(user_id, 0),
+                "correct_answers": correct_counts.get(user_id, 0),
+                "wrong_answers": wrong_counts.get(user_id, 0),
             })
 
-        normalized_results.sort(key=lambda x: x["points"], reverse=True)
+        normalized_results.sort(
+            key=lambda x: (
+                x["points"],
+                x["correct_answers"],
+               -x["wrong_answers"],
+            ),
+            reverse=True,
+        )
 
         winner_user_id = None
         if normalized_results:

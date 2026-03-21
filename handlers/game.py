@@ -427,7 +427,6 @@ async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFA
 
     data = query.data
 
-    # Only handle setup/menu callbacks here
     if not data.startswith("setup_") and data not in ("menu_back", "menu_main"):
         return False
 
@@ -515,28 +514,13 @@ async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFA
         if data == "setup_start_game":
             mark_game_joining(game, JOIN_SECONDS)
 
-            msg = await context.bot.send_message(
-                chat_id=chat_id,
-                text=build_join_text(active_games[chat_id], JOIN_SECONDS),
+            await query.edit_message_text(
+                text=build_join_text(game, JOIN_SECONDS),
                 reply_markup=get_join_keyboard(chat_id),
                 parse_mode="HTML",
             )
 
-            lock2 = get_game_lock(chat_id)
-            async with lock2:
-                g2 = active_games.get(chat_id)
-                if not g2 or g2.get("status") != "joining":
-                    await safe_delete_message(context.bot, chat_id, msg.message_id)
-                    return True
-
-                g2["join_message_id"] = msg.message_id
-
-            await query.edit_message_text(
-                format_setup_summary(
-                    question_count=active_games[chat_id]["questions_per_game"],
-                    category=active_games[chat_id]["category"],
-                )
-            )
+            game["join_message_id"] = query.message.message_id
 
             safe_task(begin_game_after_join(chat_id, context))
             return True
@@ -615,13 +599,11 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     data = query.data
 
-    # Handle setup buttons only here
-    if data.startswith("setup_"):
+    if data.startswith("setup_") or data in ("menu_back", "menu_main"):
         handled = await game_setup_callback_handler(update, context)
         if handled is True:
             return
 
-    # Handle join buttons separately
     parts = data.split("|")
     if parts[0] != "join":
         await query.answer()
@@ -649,7 +631,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         user = query.from_user
         added = add_player_to_game(game, user)
-        logger.warning("JOIN RESULT: user=%s added=%s players=%s", user.id, added, len(game["players"]))
+        logger.warning("JOIN RESULT: user=%s added=%s total=%s", user.id, added, len(game["players"]))
+
         if not added:
             await query.answer("Already joined")
             return

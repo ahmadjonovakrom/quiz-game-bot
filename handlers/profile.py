@@ -9,7 +9,6 @@ from database import (
     get_daily_leaderboard_page,
     get_weekly_leaderboard_page,
     get_monthly_leaderboard_page,
-    get_group_leaderboard,
     get_group_leaderboard_page,
     get_group_daily_leaderboard,
     get_group_weekly_leaderboard,
@@ -475,11 +474,13 @@ async def show_group_daily_leaderboard(update: Update, context: ContextTypes.DEF
             )
             return
 
-        all_rows = get_group_daily_leaderboard(chat.id, limit=1000)
+        offset = _offset_for_page(page)
+        rows = get_group_daily_leaderboard(
+            chat.id,
+            limit=LEADERBOARD_PAGE_SIZE + 1,
+            offset=offset,
+        )
         rank, points = get_player_group_daily_rank_info(chat.id, user.id) if user else (None, 0)
-
-        start = _offset_for_page(page)
-        rows = all_rows[start:start + LEADERBOARD_PAGE_SIZE + 1]
 
         text, markup = _build_paginated_text_and_markup(
             title="This Group • Daily",
@@ -517,11 +518,13 @@ async def show_group_weekly_leaderboard(update: Update, context: ContextTypes.DE
             )
             return
 
-        all_rows = get_group_weekly_leaderboard(chat.id, limit=1000)
+        offset = _offset_for_page(page)
+        rows = get_group_weekly_leaderboard(
+            chat.id,
+            limit=LEADERBOARD_PAGE_SIZE + 1,
+            offset=offset,
+        )
         rank, points = get_player_group_weekly_rank_info(chat.id, user.id) if user else (None, 0)
-
-        start = _offset_for_page(page)
-        rows = all_rows[start:start + LEADERBOARD_PAGE_SIZE + 1]
 
         text, markup = _build_paginated_text_and_markup(
             title="This Group • Weekly",
@@ -559,11 +562,13 @@ async def show_group_monthly_leaderboard(update: Update, context: ContextTypes.D
             )
             return
 
-        all_rows = get_group_monthly_leaderboard(chat.id, limit=1000)
+        offset = _offset_for_page(page)
+        rows = get_group_monthly_leaderboard(
+            chat.id,
+            limit=LEADERBOARD_PAGE_SIZE + 1,
+            offset=offset,
+        )
         rank, points = get_player_group_monthly_rank_info(chat.id, user.id) if user else (None, 0)
-
-        start = _offset_for_page(page)
-        rows = all_rows[start:start + LEADERBOARD_PAGE_SIZE + 1]
 
         text, markup = _build_paginated_text_and_markup(
             title="This Group • Monthly",

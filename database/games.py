@@ -281,35 +281,35 @@ def _group_period_sql(where_clause: str) -> str:
     """
 
 
-def get_group_daily_leaderboard(chat_id: int, limit: int = 10):
+def get_group_daily_leaderboard(chat_id: int, limit: int = 10, offset: int = 0):
     with closing(get_conn()) as conn:
         return conn.execute(
             _group_period_sql("DATE(gph.created_at, 'localtime') = DATE('now', 'localtime')")
-            + "\nLIMIT ?",
-            (chat_id, limit),
+            + "\nLIMIT ? OFFSET ?",
+            (chat_id, limit, offset),
         ).fetchall()
 
 
-def get_group_weekly_leaderboard(chat_id: int, limit: int = 10):
+def get_group_weekly_leaderboard(chat_id: int, limit: int = 10, offset: int = 0):
     with closing(get_conn()) as conn:
         return conn.execute(
             _group_period_sql(
                 "DATE(gph.created_at, 'localtime') >= DATE('now', 'localtime', 'weekday 1', '-7 days') "
                 "AND DATE(gph.created_at, 'localtime') <= DATE('now', 'localtime')"
             )
-            + "\nLIMIT ?",
-            (chat_id, limit),
+            + "\nLIMIT ? OFFSET ?",
+            (chat_id, limit, offset),
         ).fetchall()
 
 
-def get_group_monthly_leaderboard(chat_id: int, limit: int = 10):
+def get_group_monthly_leaderboard(chat_id: int, limit: int = 10, offset: int = 0):
     with closing(get_conn()) as conn:
         return conn.execute(
             _group_period_sql(
                 "strftime('%Y-%m', gph.created_at, 'localtime') = strftime('%Y-%m', 'now', 'localtime')"
             )
-            + "\nLIMIT ?",
-            (chat_id, limit),
+            + "\nLIMIT ? OFFSET ?",
+            (chat_id, limit, offset),
         ).fetchall()
 
 

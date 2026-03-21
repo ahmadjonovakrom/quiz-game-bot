@@ -37,14 +37,6 @@ from handlers.profile import (
     profile_callback_handler,
 )
 
-from handlers.group_leaderboard import (
-    group_leaderboard,
-    group_daily,
-    group_weekly,
-    group_monthly,
-    group_leaderboard_callback_handler,
-)
-
 from handlers.admin import (
     admin_panel,
     admin_button_handler,
@@ -108,12 +100,9 @@ def main():
     logger.warning("BOT STARTED")
     create_tables()
 
-    if not BOT_TOKEN:
-        raise ValueError("BOT_TOKEN is missing!")
-
     app = Application.builder().token(BOT_TOKEN).build()
-    logger.warning("APP BUILT")
 
+    # ================= ADMIN =================
     admin_conv = ConversationHandler(
         entry_points=[
             CommandHandler("admin", admin_panel),
@@ -153,9 +142,9 @@ def main():
 
     app.add_handler(admin_conv)
 
+    # ================= COMMANDS =================
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("play", start_game))
-    app.add_handler(CommandHandler("startgame", start_game))
     app.add_handler(CommandHandler("stopgame", stop_game))
 
     app.add_handler(CommandHandler("leaderboard", leaderboard))
@@ -163,45 +152,18 @@ def main():
     app.add_handler(CommandHandler("daily", daily))
     app.add_handler(CommandHandler("weekly", weekly))
     app.add_handler(CommandHandler("monthly", monthly))
-
-    app.add_handler(CommandHandler("groupleaderboard", group_leaderboard))
-    app.add_handler(CommandHandler("groupdaily", group_daily))
-    app.add_handler(CommandHandler("groupweekly", group_weekly))
-    app.add_handler(CommandHandler("groupmonthly", group_monthly))
-
     app.add_handler(CommandHandler("profile", profile))
+
     app.add_handler(CommandHandler("botstats", bot_stats_command))
     app.add_handler(CommandHandler("dailyquiz", daily_quiz))
     app.add_handler(CommandHandler("myid", myid))
 
-    app.add_handler(
-        CallbackQueryHandler(
-            group_leaderboard_callback_handler,
-            pattern=r"^group_lb_(all|daily|weekly|monthly)$",
-        )
-    )
+    # ================= CALLBACKS =================
+    app.add_handler(CallbackQueryHandler(button_handler, pattern=r"^(setup_|join\|)"))
+    app.add_handler(CallbackQueryHandler(menu_handler, pattern=r"^menu_"))
+    app.add_handler(CallbackQueryHandler(final_results_callback_handler, pattern=r"^final_results:"))
 
-    app.add_handler(
-        CallbackQueryHandler(
-            button_handler,
-            pattern=r"^(setup_|join\|)",
-        )
-    )
-
-    app.add_handler(
-        CallbackQueryHandler(
-            menu_handler,
-            pattern=r"^menu_",
-        )
-    )
-
-    app.add_handler(
-        CallbackQueryHandler(
-            final_results_callback_handler,
-            pattern=r"^final_results:",
-        )
-    )
-
+    # 🔥 MAIN LEADERBOARD HANDLER (ONLY ONE)
     app.add_handler(
         CallbackQueryHandler(
             profile_callback_handler,

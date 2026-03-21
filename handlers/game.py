@@ -1,4 +1,3 @@
-import time
 import asyncio
 import logging
 from datetime import date
@@ -82,13 +81,6 @@ CATEGORY_LABELS = {
     "idioms_phrases": "Idioms & Phrases",
     "synonyms": "Synonyms",
     "collocations": "Collocations",
-}
-
-DIFFICULTY_LABELS = {
-    "easy": "Easy",
-    "medium": "Medium",
-    "hard": "Hard",
-    "mixed": "Mixed",
 }
 
 
@@ -183,7 +175,7 @@ async def refresh_join_message(context: ContextTypes.DEFAULT_TYPE, chat_id: int)
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    print("🔥 START COMMAND RECEIVED")
+    logger.warning("START COMMAND RECEIVED")
 
     user = update.effective_user
     chat = update.effective_chat
@@ -203,7 +195,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    print(f"🔥 MENU CALLBACK: {query.data}")
+    logger.warning("MENU CALLBACK: %s", query.data)
     await query.answer()
 
     data = query.data
@@ -268,7 +260,7 @@ async def myid(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def daily_quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    print("🔥 DAILY QUIZ COMMAND RECEIVED")
+    logger.warning("DAILY QUIZ COMMAND RECEIVED")
 
     user = update.effective_user
     chat = update.effective_chat
@@ -329,7 +321,7 @@ async def daily_quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    print("🔥 START GAME COMMAND RECEIVED")
+    logger.warning("START GAME COMMAND RECEIVED")
 
     chat = update.effective_chat
     user = update.effective_user
@@ -381,7 +373,7 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def stop_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    print("🔥 STOP GAME COMMAND RECEIVED")
+    logger.warning("STOP GAME COMMAND RECEIVED")
 
     chat = update.effective_chat
     user = update.effective_user
@@ -428,7 +420,7 @@ async def stop_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    print(f"🔥 SETUP CALLBACK: {query.data}")
+    logger.warning("SETUP CALLBACK: %s", query.data)
     await query.answer()
 
     user = query.from_user
@@ -544,7 +536,8 @@ async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFA
 
 
 async def begin_game_after_join(chat_id, context):
-    print(f"🔥 BEGIN GAME AFTER JOIN: {chat_id}")
+    logger.warning("BEGIN GAME AFTER JOIN: %s", chat_id)
+
     try:
         while True:
             lock = get_game_lock(chat_id)
@@ -609,7 +602,7 @@ async def begin_game_after_join(chat_id, context):
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    print(f"🔥 BUTTON CALLBACK: {query.data}")
+    logger.warning("BUTTON CALLBACK: %s", query.data)
 
     handled = await game_setup_callback_handler(update, context)
     if handled is True:
@@ -655,7 +648,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def send_question(chat_id, context):
-    print(f"🔥 SEND QUESTION: {chat_id}")
+    logger.warning("SEND QUESTION: %s", chat_id)
 
     lock = get_game_lock(chat_id)
     async with lock:
@@ -866,7 +859,7 @@ async def delete_later(context: ContextTypes.DEFAULT_TYPE, chat_id: int, message
 
 
 async def end_game(chat_id, context):
-    print(f"🔥 END GAME: {chat_id}")
+    logger.warning("END GAME: %s", chat_id)
 
     lock = get_game_lock(chat_id)
     async with lock:

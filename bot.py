@@ -100,24 +100,21 @@ logging.basicConfig(
     level=logging.INFO,
 )
 
+logger = logging.getLogger(__name__)
+
 
 def main():
-    print("=== BOT STARTED ===")
-
+    logger.warning("BOT STARTED")
     create_tables()
 
     app = Application.builder().token(BOT_TOKEN).build()
-
-    print("=== APP BUILT ===")
+    logger.warning("APP BUILT")
 
     admin_conv = ConversationHandler(
         entry_points=[
             CommandHandler("admin", admin_panel),
             CallbackQueryHandler(admin_button_handler, pattern=r"^admin_"),
-            CallbackQueryHandler(
-                import_questions_entry,
-                pattern=r"^admin_import_questions$",
-            ),
+            CallbackQueryHandler(import_questions_entry, pattern=r"^admin_import_questions$"),
         ],
         states={
             QUESTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, question_step)],
@@ -152,7 +149,6 @@ def main():
 
     app.add_handler(admin_conv)
 
-    # commands
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("play", start_game))
     app.add_handler(CommandHandler("startgame", start_game))
@@ -174,7 +170,6 @@ def main():
     app.add_handler(CommandHandler("dailyquiz", daily_quiz))
     app.add_handler(CommandHandler("myid", myid))
 
-    # old group leaderboard callbacks
     app.add_handler(
         CallbackQueryHandler(
             group_leaderboard_callback_handler,
@@ -182,7 +177,6 @@ def main():
         )
     )
 
-    # menu callbacks
     app.add_handler(
         CallbackQueryHandler(
             menu_handler,
@@ -190,7 +184,6 @@ def main():
         )
     )
 
-    # profile + leaderboard callbacks
     app.add_handler(
         CallbackQueryHandler(
             profile_callback_handler,
@@ -198,7 +191,6 @@ def main():
         )
     )
 
-    # game setup + join callbacks
     app.add_handler(
         CallbackQueryHandler(
             button_handler,
@@ -208,7 +200,7 @@ def main():
 
     app.add_handler(PollAnswerHandler(receive_poll_answer))
 
-    print("=== RUNNING POLLING ===")
+    logger.warning("RUNNING POLLING")
     app.run_polling(drop_pending_updates=True)
 
 

@@ -274,20 +274,18 @@ async def refresh_join_message(context: ContextTypes.DEFAULT_TYPE, chat_id: int)
 
     actual_remaining = max(0, get_join_remaining_seconds(game))
 
-    # lock display above 10 seconds so joins do not visually change timer
+    # keep timer visually locked above 10s
     if actual_remaining > 10:
         display_remaining = ((actual_remaining + 9) // 10) * 10
         display_remaining = min(display_remaining, JOIN_SECONDS)
-        blink = False
     else:
         display_remaining = actual_remaining
-        blink = (actual_remaining % 2 == 0)  # blinking effect
 
     try:
         await context.bot.edit_message_text(
             chat_id=chat_id,
             message_id=join_message_id,
-            text=build_join_text(game, display_remaining, blink=blink),
+            text=build_join_text(game, display_remaining),
             reply_markup=get_join_keyboard(chat_id),
             parse_mode="HTML",
         )

@@ -651,21 +651,23 @@ async def begin_game_after_join(chat_id, context):
     logger.warning("BEGIN GAME AFTER JOIN: %s", chat_id)
 
     try:
-        checkpoints = [60, 50, 40, 30, 20, 10]
+        total_time = JOIN_SECONDS  # e.g. 60
 
-        for remaining in checkpoints:
-            lock = get_game_lock(chat_id)
-            async with lock:
-                game = active_games.get(chat_id)
-                if not game or game["status"] != "joining":
-                    return
+        # ✅ Set ONCE (important fix)
+        lock = get_game_lock(chat_id)
+        async with lock:
+            game = active_games.get(chat_id)
+            if not game or game["status"] != "joining":
+                return
 
-                game["join_end_time"] = asyncio.get_event_loop().time() + remaining
+            game["join_end_time"] = asyncio.get_event_loop().time() + total_time
 
+        # ✅ Update every 10 seconds (clean countdown)
+        for _ in range(total_time // 10):
             await refresh_join_message(context, chat_id)
             await asyncio.sleep(10)
 
-        # FINAL STEP (0 seconds)
+        # ===== FINAL STEP =====
         lock = get_game_lock(chat_id)
         async with lock:
             game = active_games.get(chat_id)
@@ -690,6 +692,28 @@ async def begin_game_after_join(chat_id, context):
                 f"❌ Not enough players.\nGame cancelled.\n\nMinimum players needed: {MIN_PLAYERS}",
             )
             return
+
+        lock = get_game_lock(chat_id)
+        async with lock:
+            game = active_games.get(chat_id)
+            if not game or game["status"] != "running":
+                return
+
+            try:
+                game["db_game_id"] = create_game(
+                    chat_id=chat_id,
+                    total_players=len(game["players"]),
+                    total_rounds=game["questions_per_game"],
+                    status="running",
+                )
+            except Exception:
+                logger.exception("Failed to create game record")
+
+        await context.bot.send_message(chat_id, "Game started! Get ready for the first question.")
+        await send_question(chat_id, context)
+
+    except Exception:
+        logger.exception("Error in begin_game_after_join")
 
         lock = get_game_lock(chat_id)
         async with lock:

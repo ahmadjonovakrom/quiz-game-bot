@@ -75,6 +75,13 @@ from services.game_service import (
 logger = logging.getLogger(__name__)
 
 
+def has_active_game(chat_id: int) -> bool:
+    game = active_games.get(chat_id)
+    if not game:
+        return False
+    return game.get("status") in ("setup", "joining", "running")
+
+
 # ================= FINAL RESULTS PAGINATION =================
 
 def format_final_results_page(results, page=1):
@@ -174,8 +181,6 @@ async def final_results_callback_handler(update: Update, context: ContextTypes.D
         parse_mode="HTML",
     )
 
-
-# ============================================================
 
 CATEGORY_LABELS = {
     "mixed": "Mixed",
@@ -332,6 +337,13 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 return
 
+            lock = get_game_lock(query.message.chat.id)
+            async with lock:
+                if has_active_game(query.message.chat.id):
+                    existing_game = active_games.get(query.message.chat.id)
+                    await query.answer(get_existing_game_message(existing_game), show_alert=True)
+                    return
+
             await start_game(update, context)
             return
         else:
@@ -486,9 +498,10 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     lock = get_game_lock(chat.id)
     async with lock:
-        game = active_games.get(chat.id)
-        if game:
-            text = get_existing_game_message(game)
+        if has_active_game(chat.id):
+            existing_game = active_games.get(chat.id)
+            text = get_existing_game_message(existing_game)
+
             if query:
                 await query.answer(text, show_alert=True)
             else:
@@ -599,12 +612,12 @@ async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFA
     lock = get_game_lock(chat_id)
     async with lock:
         game = active_games.get(chat_id)
-        if not game:
+        if not game or game.get("status") not in ("setup", "joining"):
             await query.edit_message_text("No active game setup found.")
             return True
 
-        if game["status"] != "setup":
-            await query.answer("Setup is closed.", show_alert=True)
+        if game["status"] == "joining" and data.startswith("setup_"):
+            await query.answer("Game already started.", show_alert=True)
             return True
 
         if data.startswith("setup_questions_"):
@@ -660,6 +673,10 @@ async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFA
             return True
 
         if data == "setup_start_game":
+            if game.get("status") != "setup":
+                await query.answer("Game already started.", show_alert=True)
+                return True
+
             try:
                 mark_game_joining(game, JOIN_SECONDS)
 
@@ -1032,13 +1049,6 @@ async def receive_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     if is_correct:
         add_points(user.id, points_to_add)
-
-        lock = get_game_lock(chat_id)
-        async with lock:
-            game = active_games.get(chat_id)
-            if game:
-                game.setdefault("scores", {})
-                game["scores"][user.id] = game["scores"].get(user.id, 0) + points_to_add
 
         record_correct_answer(user.id, answer_time=elapsed)
 

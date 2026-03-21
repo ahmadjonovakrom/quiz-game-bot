@@ -421,11 +421,17 @@ async def stop_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     logger.warning("SETUP CALLBACK: %s", query.data)
+
+    data = query.data
+
+    # Only handle setup/menu callbacks here
+    if not data.startswith("setup_") and data not in ("menu_back", "menu_main"):
+        return False
+
     await query.answer()
 
     user = query.from_user
     chat_id = query.message.chat.id
-    data = query.data
 
     if data in ("menu_back", "menu_main"):
         await clear_game(context, chat_id)
@@ -604,17 +610,22 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     logger.warning("BUTTON CALLBACK: %s", query.data)
 
-    handled = await game_setup_callback_handler(update, context)
-    if handled is True:
-        return
+    data = query.data
 
-    data = query.data.split("|")
-    if data[0] != "join":
+    # Handle setup buttons only here
+    if data.startswith("setup_"):
+        handled = await game_setup_callback_handler(update, context)
+        if handled is True:
+            return
+
+    # Handle join buttons separately
+    parts = data.split("|")
+    if parts[0] != "join":
         await query.answer()
         return
 
     try:
-        chat_id = int(data[1])
+        chat_id = int(parts[1])
     except (IndexError, ValueError):
         await query.answer("Invalid join request.")
         return

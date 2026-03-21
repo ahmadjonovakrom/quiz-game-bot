@@ -219,10 +219,19 @@ def build_final_results(game: dict) -> list[dict]:
         times = game["answer_times"].get(user_id, [])
         avg_time = round(sum(times) / len(times), 2) if times else None
 
+        player = game["players"].get(user_id, {})
+
+        name = (
+            player.get("full_name")
+            or player.get("first_name")
+            or player.get("username")
+            or f"User {user_id}"
+        )
+
         final_results.append({
             "position": position,
             "user_id": user_id,
-            "name": game["players"].get(user_id, f"User {user_id}"),
+            "name": name,
             "score": score,
             "correct": game["correct_counts"].get(user_id, 0),
             "wrong": game["wrong_counts"].get(user_id, 0),

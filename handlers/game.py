@@ -272,44 +272,19 @@ async def refresh_join_message(context: ContextTypes.DEFAULT_TYPE, chat_id: int)
     if not join_message_id:
         return
 
-    actual_remaining = max(0, get_join_remaining_seconds(game))
-
-    # keep timer visually locked above 10s
-    if actual_remaining > 10:
-        display_remaining = ((actual_remaining + 9) // 10) * 10
-        display_remaining = min(display_remaining, JOIN_SECONDS)
-    else:
-        display_remaining = actual_remaining
+    display_remaining = game.get("display_remaining", JOIN_SECONDS)
+    blink = game.get("display_blink", False)
 
     try:
         await context.bot.edit_message_text(
             chat_id=chat_id,
             message_id=join_message_id,
-            text=build_join_text(game, display_remaining),
+            text=build_join_text(game, display_remaining, blink=blink),
             reply_markup=get_join_keyboard(chat_id),
             parse_mode="HTML",
         )
     except Exception as e:
         logger.warning("Failed to refresh join message in chat %s: %s", chat_id, e)
-
-
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    logger.warning("START COMMAND RECEIVED")
-
-    user = update.effective_user
-    chat = update.effective_chat
-    message = update.effective_message
-
-    if user:
-        ensure_player(user)
-    if chat:
-        ensure_chat(chat)
-
-    await message.reply_text(
-        "Welcome to English Lemon !\n\n"
-        "Practice vocabulary, play quiz games, and climb the leaderboard.",
-        reply_markup=get_main_menu_keyboard(),
-    )
 
 
 async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -667,8 +642,11 @@ async def begin_game_after_join(chat_id, context):
                 return
 
             game["join_end_time"] = loop.time() + JOIN_SECONDS
+            game["display_remaining"] = JOIN_SECONDS
+            game["display_blink"] = False
 
         last_display_value = None
+        last_blink = None
 
         while True:
             lock = get_game_lock(chat_id)
@@ -683,15 +661,21 @@ async def begin_game_after_join(chat_id, context):
 
                 actual_remaining = max(0, int(end_time - loop.time()))
 
-            if actual_remaining > 10:
-                display_value = ((actual_remaining + 9) // 10) * 10
-                display_value = min(display_value, JOIN_SECONDS)
-            else:
-                display_value = actual_remaining
+                if actual_remaining > 10:
+                    display_value = ((actual_remaining + 9) // 10) * 10
+                    display_value = min(display_value, JOIN_SECONDS)
+                    blink = False
+                else:
+                    display_value = actual_remaining
+                    blink = (actual_remaining % 2 == 0)
 
-            if display_value != last_display_value:
+                game["display_remaining"] = display_value
+                game["display_blink"] = blink
+
+            if display_value != last_display_value or blink != last_blink:
                 await refresh_join_message(context, chat_id)
                 last_display_value = display_value
+                last_blink = blink
 
             if actual_remaining <= 0:
                 break

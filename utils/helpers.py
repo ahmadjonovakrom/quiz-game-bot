@@ -34,45 +34,31 @@ def format_category_name(category: str) -> str:
 
 
 def build_join_text(game, remaining: int, blink: bool = False) -> str:
-    total = len(game.get("players", {}))
-    questions = game.get("questions_per_game", 10)
-    category = game.get("category", "mixed")
-
-    category_map = {
-        "mixed": "Mixed",
-        "vocabulary": "Vocabulary",
-        "grammar": "Grammar",
-        "idioms_phrases": "Idioms & Phrases",
-        "synonyms": "Synonyms",
-        "collocations": "Collocations",
-    }
-
-    category_name = category_map.get(
-        str(category).lower(),
-        str(category).replace("_", " ").title()
-    )
+    players = game.get("players", {})
+    total = len(players)
 
     if remaining <= 10:
         if blink:
-            timer_text = (
-                f"🚨 <b>LAST {remaining} SECONDS!</b>\n"
-                f"🔥 <b>JOIN NOW</b>"
-            )
+            timer_line = f"🚨 Registration is open ({remaining}s)"
         else:
-            timer_text = (
-                f"⚠️ <b>LAST {remaining} SECONDS!</b>\n"
-                f"⏳ <b>HURRY UP</b>"
-            )
+            timer_line = f"⚠️ Registration is open ({remaining}s)"
     else:
-        timer_text = f"⏳ Registration is open <b>({remaining}s)</b>"
+        timer_line = f"Registration is open ({remaining}s)"
+
+    if players:
+        joined_text = "\n".join(
+            (player.get("full_name") or player.get("username") or "Player")
+            for player in players.values()
+        )
+    else:
+        joined_text = "-"
 
     return (
-        "🎮 <b>English Lemon Quiz</b>\n\n"
-        f"{timer_text}\n\n"
-        f"👥 Total: <b>{total}</b>\n"
-        f"❓ Questions: <b>{questions}</b>\n"
-        f"📚 Category: <b>{category_name}</b>\n"
-        f"✅ Minimum needed: <b>{MIN_PLAYERS}</b>"
+        f"{timer_line}\n\n"
+        f"Joined:\n"
+        f"{joined_text}\n\n"
+        f"Total: {total}\n"
+        f"Minimum needed: {MIN_PLAYERS}"
     )
 
 

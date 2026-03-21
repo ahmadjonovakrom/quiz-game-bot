@@ -18,8 +18,6 @@ from config import (
     ALLOWED_QUESTION_COUNTS,
     DEFAULT_CATEGORY,
     ALLOWED_CATEGORIES,
-    DEFAULT_DIFFICULTY,
-    ALLOWED_DIFFICULTIES,
     POINTS,
 )
 from database import (
@@ -59,7 +57,6 @@ from utils.keyboards import (
 from services.game_service import (
     active_games,
     poll_map,
-    daily_quiz_players,
     get_game_lock,
     cleanup_game_lock,
     clear_game,
@@ -97,10 +94,6 @@ DIFFICULTY_LABELS = {
 
 def format_category_name(category: str) -> str:
     return CATEGORY_LABELS.get(str(category).lower(), str(category).replace("_", " ").title())
-
-
-def format_difficulty_name(difficulty: str) -> str:
-    return DIFFICULTY_LABELS.get(str(difficulty).lower(), str(difficulty).title())
 
 
 def get_main_menu_keyboard():
@@ -190,6 +183,8 @@ async def refresh_join_message(context: ContextTypes.DEFAULT_TYPE, chat_id: int)
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    print("🔥 START COMMAND RECEIVED")
+
     user = update.effective_user
     chat = update.effective_chat
     message = update.effective_message
@@ -208,6 +203,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
+    print(f"🔥 MENU CALLBACK: {query.data}")
     await query.answer()
 
     data = query.data
@@ -272,6 +268,8 @@ async def myid(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def daily_quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    print("🔥 DAILY QUIZ COMMAND RECEIVED")
+
     user = update.effective_user
     chat = update.effective_chat
     today = str(date.today())
@@ -331,6 +329,8 @@ async def daily_quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    print("🔥 START GAME COMMAND RECEIVED")
+
     chat = update.effective_chat
     user = update.effective_user
     message = update.effective_message
@@ -381,6 +381,8 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def stop_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    print("🔥 STOP GAME COMMAND RECEIVED")
+
     chat = update.effective_chat
     user = update.effective_user
 
@@ -426,6 +428,7 @@ async def stop_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
+    print(f"🔥 SETUP CALLBACK: {query.data}")
     await query.answer()
 
     user = query.from_user
@@ -541,6 +544,7 @@ async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFA
 
 
 async def begin_game_after_join(chat_id, context):
+    print(f"🔥 BEGIN GAME AFTER JOIN: {chat_id}")
     try:
         while True:
             lock = get_game_lock(chat_id)
@@ -605,9 +609,10 @@ async def begin_game_after_join(chat_id, context):
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
+    print(f"🔥 BUTTON CALLBACK: {query.data}")
 
     handled = await game_setup_callback_handler(update, context)
-    if handled:
+    if handled is True:
         return
 
     data = query.data.split("|")
@@ -650,6 +655,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def send_question(chat_id, context):
+    print(f"🔥 SEND QUESTION: {chat_id}")
+
     lock = get_game_lock(chat_id)
     async with lock:
         game = active_games.get(chat_id)
@@ -859,6 +866,8 @@ async def delete_later(context: ContextTypes.DEFAULT_TYPE, chat_id: int, message
 
 
 async def end_game(chat_id, context):
+    print(f"🔥 END GAME: {chat_id}")
+
     lock = get_game_lock(chat_id)
     async with lock:
         game = active_games.get(chat_id)
@@ -869,6 +878,9 @@ async def end_game(chat_id, context):
         db_game_id = game.get("db_game_id")
         players = game.get("players", {})
         total_rounds = game.get("round", 0)
+        scores = game.get("scores", {})
+        correct_counts = game.get("correct_counts", {})
+        wrong_counts = game.get("wrong_counts", {})
 
         if poll_id:
             poll_map.pop(poll_id, None)
@@ -896,10 +908,6 @@ async def end_game(chat_id, context):
         logger.exception("Failed to finish game for chat %s", chat_id)
 
     try:
-        scores = game.get("scores", {})
-        correct_counts = game.get("correct_counts", {})
-        wrong_counts = game.get("wrong_counts", {})
-
         for user_id in players.keys():
             increment_games_played(user_id)
             if chat_id < 0:

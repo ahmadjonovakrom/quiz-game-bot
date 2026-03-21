@@ -102,15 +102,22 @@ logging.basicConfig(
 
 
 def main():
+    print("=== BOT STARTED ===")
+
     create_tables()
 
     app = Application.builder().token(BOT_TOKEN).build()
+
+    print("=== APP BUILT ===")
 
     admin_conv = ConversationHandler(
         entry_points=[
             CommandHandler("admin", admin_panel),
             CallbackQueryHandler(admin_button_handler, pattern=r"^admin_"),
-            CallbackQueryHandler(import_questions_entry, pattern=r"^admin_import_questions$"),
+            CallbackQueryHandler(
+                import_questions_entry,
+                pattern=r"^admin_import_questions$",
+            ),
         ],
         states={
             QUESTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, question_step)],
@@ -201,7 +208,8 @@ def main():
 
     app.add_handler(PollAnswerHandler(receive_poll_answer))
 
-    app.run_polling()
+    print("=== RUNNING POLLING ===")
+    app.run_polling(drop_pending_updates=True)
 
 
 if __name__ == "__main__":

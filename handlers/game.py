@@ -631,20 +631,26 @@ async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFA
             return True
 
         if data == "setup_start_game":
-            mark_game_joining(game, JOIN_SECONDS)
+            try:
+                mark_game_joining(game, JOIN_SECONDS)
 
-            await query.edit_message_text(
-                text=build_join_text(game, JOIN_SECONDS),
-                reply_markup=get_join_keyboard(chat_id),
-                parse_mode="HTML",
-            )
+                await query.edit_message_text(
+                    text=build_join_text(game, JOIN_SECONDS),
+                    reply_markup=get_join_keyboard(chat_id),
+                    parse_mode="HTML",
+                )
 
-            game["join_message_id"] = query.message.message_id
+                game["join_message_id"] = query.message.message_id
 
-            safe_task(begin_game_after_join(chat_id, context))
-            return True
+                safe_task(begin_game_after_join(chat_id, context))
+                return True
 
-    return False
+            except Exception:
+                logger.exception("Failed in setup_start_game for chat %s", chat_id)
+                await query.answer("Failed to start registration.", show_alert=True)
+                return True
+
+        return False
 
 
 async def begin_game_after_join(chat_id, context):

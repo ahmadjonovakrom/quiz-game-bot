@@ -45,13 +45,16 @@ def build_join_text(game, remaining: int, blink: bool = False) -> str:
     else:
         timer_line = f"Registration is open ({remaining}s)"
 
-    if players:
-        joined_text = "\n".join(
-            html.escape(player.get("full_name") or player.get("username") or "Player")
-            for player in players.values()
-        )
-    else:
-        joined_text = "-"
+    joined_names = []
+    for player in players.values():
+        if isinstance(player, dict):
+            name = player.get("full_name") or player.get("username") or "Player"
+        else:
+            name = getattr(player, "full_name", None) or getattr(player, "username", None) or "Player"
+
+        joined_names.append(html.escape(str(name)))
+
+    joined_text = "\n".join(joined_names) if joined_names else "-"
 
     return (
         f"{timer_line}\n\n"

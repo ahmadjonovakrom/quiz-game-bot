@@ -24,6 +24,7 @@ from handlers.game import (
     menu_handler,
     daily_quiz,
     myid,
+    final_results_callback_handler,
 )
 
 from handlers.profile import (
@@ -152,7 +153,6 @@ def main():
 
     app.add_handler(admin_conv)
 
-    # Commands
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("play", start_game))
     app.add_handler(CommandHandler("startgame", start_game))
@@ -174,11 +174,40 @@ def main():
     app.add_handler(CommandHandler("dailyquiz", daily_quiz))
     app.add_handler(CommandHandler("myid", myid))
 
-    # Callbacks
-    app.add_handler(CallbackQueryHandler(group_leaderboard_callback_handler, pattern=r"^group_lb_"))
-    app.add_handler(CallbackQueryHandler(button_handler, pattern=r"^(setup_|join\|)"))
-    app.add_handler(CallbackQueryHandler(menu_handler, pattern=r"^menu_"))
-    app.add_handler(CallbackQueryHandler(profile_callback_handler, pattern=r"^(profile|leaderboard_)"))
+    app.add_handler(
+        CallbackQueryHandler(
+            group_leaderboard_callback_handler,
+            pattern=r"^group_lb_(all|daily|weekly|monthly)$",
+        )
+    )
+
+    app.add_handler(
+        CallbackQueryHandler(
+            button_handler,
+            pattern=r"^(setup_|join\|)",
+        )
+    )
+
+    app.add_handler(
+        CallbackQueryHandler(
+            menu_handler,
+            pattern=r"^menu_",
+        )
+    )
+
+    app.add_handler(
+        CallbackQueryHandler(
+            final_results_callback_handler,
+            pattern=r"^final_results:",
+        )
+    )
+
+    app.add_handler(
+        CallbackQueryHandler(
+            profile_callback_handler,
+            pattern=r"^(profile|leaderboard_.*)$",
+        )
+    )
 
     app.add_handler(PollAnswerHandler(receive_poll_answer))
 

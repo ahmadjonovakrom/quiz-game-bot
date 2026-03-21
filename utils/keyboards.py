@@ -2,6 +2,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 
 LEADERBOARD_PAGE_SIZE = 15
+FINAL_RESULTS_PAGE_SIZE = 10
 
 
 def main_menu_keyboard() -> InlineKeyboardMarkup:
@@ -110,6 +111,32 @@ def leaderboard_pagination_keyboard(
         rows.append([InlineKeyboardButton("⬅️ Back", callback_data="leaderboard_scope_group")])
 
     return InlineKeyboardMarkup(rows)
+
+
+def final_results_keyboard(game_id: int, page: int, has_next: bool) -> InlineKeyboardMarkup:
+    nav_row = []
+
+    if page > 1:
+        nav_row.append(
+            InlineKeyboardButton(
+                "⬅️ Prev",
+                callback_data=f"final_results:{game_id}:{page - 1}",
+            )
+        )
+
+    if has_next:
+        nav_row.append(
+            InlineKeyboardButton(
+                "Next ➡️",
+                callback_data=f"final_results:{game_id}:{page + 1}",
+            )
+        )
+
+    rows = []
+    if nav_row:
+        rows.append(nav_row)
+
+    return InlineKeyboardMarkup(rows) if rows else None
 
 
 def game_setup_questions_keyboard() -> InlineKeyboardMarkup:

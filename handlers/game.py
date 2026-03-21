@@ -52,6 +52,8 @@ from utils.keyboards import (
     game_setup_questions_keyboard,
     game_setup_categories_keyboard,
     game_setup_confirm_keyboard,
+    final_results_keyboard,
+    FINAL_RESULTS_PAGE_SIZE,
 )
 from services.game_service import (
     active_games,
@@ -74,6 +76,72 @@ from services.game_service import (
 
 logger = logging.getLogger(__name__)
 
+# ================= FINAL RESULTS PAGINATION =================
+
+def format_final_results_page(results, page=1):
+    total = len(results)
+    total_pages = max(1, (total + FINAL_RESULTS_PAGE_SIZE - 1) // FINAL_RESULTS_PAGE_SIZE)
+
+    page = max(1, min(page, total_pages))
+    start = (page - 1) * FINAL_RESULTS_PAGE_SIZE
+    end = start + FINAL_RESULTS_PAGE_SIZE
+    chunk = results[start:end]
+    has_next = page < total_pages
+
+    lines = ["🍋 ENGLISH LEMON RESULTS", "", "🏆 Final Leaderboard:"]
+
+    for index, row in enumerate(chunk, start=start + 1):
+        name = (
+            row.get("full_name")
+            or row.get("name")
+            or row.get("username")
+            or "Unknown"
+        )
+        points = row.get("points", 0)
+
+        if index == 1:
+            prefix = "🥇"
+        elif index == 2:
+            prefix = "🥈"
+        elif index == 3:
+            prefix = "🥉"
+        else:
+            prefix = f"{index}."
+
+        lines.append(f"{prefix} {name} — {points}🍋")
+
+    lines.append("")
+    lines.append(f"📄 Page {page}/{total_pages}")
+
+    return "\n".join(lines), has_next
+
+
+async def final_results_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    try:
+        _, game_id_str, page_str = query.data.split(":")
+        game_id = int(game_id_str)
+        page = int(page_str)
+    except Exception:
+        await query.answer("Invalid page.", show_alert=True)
+        return
+
+    all_results = context.bot_data.get("final_results_pages", {}).get(game_id)
+    if not all_results:
+        await query.edit_message_text("Final results are no longer available.")
+        return
+
+    text, has_next = format_final_results_page(all_results, page=page)
+    markup = final_results_keyboard(game_id, page, has_next)
+
+    await query.edit_message_text(
+        text=text,
+        reply_markup=markup,
+    )
+
+# ============================================================
 CATEGORY_LABELS = {
     "mixed": "Mixed",
     "vocabulary": "Vocabulary",
@@ -902,11 +970,29 @@ async def end_game(chat_id, context):
             poll_map.pop(poll_id, None)
 
         final_results = build_final_results(game)
-        results_text = build_results_text(final_results)
+
+        normalized_results = []
+        for row in final_results:
+            name = (
+                row.get("full_name")
+                or row.get("name")
+                or row.get("username")
+                or "Unknown"
+            )
+            normalized_results.append({
+                "user_id": row.get("user_id"),
+                "full_name": name,
+                "points": row.get("points", 0),
+            })
+
+        normalized_results.sort(key=lambda x: x["points"], reverse=True)
 
         winner_user_id = None
-        if final_results:
-            winner_user_id = final_results[0].get("user_id")
+        if normalized_results:
+            winner_user_id = normalized_results[0].get("user_id")
+
+        game_id = db_game_id or chat_id
+        context.bot_data.setdefault("final_results_pages", {})[game_id] = normalized_results
 
         active_games.pop(chat_id, None)
         cleanup_game_lock(chat_id)
@@ -949,8 +1035,17 @@ async def end_game(chat_id, context):
     except Exception:
         logger.exception("Failed to save final game stats for chat %s", chat_id)
 
-    await context.bot.send_message(
-        chat_id,
-        results_text if results_text else "🏁 Game finished.",
-        parse_mode="HTML",
-    )
+    if normalized_results:
+        text, has_next = format_final_results_page(normalized_results, page=1)
+        markup = final_results_keyboard(game_id, 1, has_next)
+
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=text,
+            reply_markup=markup,
+        )
+    else:
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="🏁 Game finished.",
+        )

@@ -33,23 +33,46 @@ def format_category_name(category: str) -> str:
     return mapping.get(str(category).lower(), str(category).replace("_", " ").title())
 
 
-def build_join_text(game, remaining: int) -> str:
-    players = game.get("players", {})
+def build_join_text(game, remaining: int, blink: bool = False) -> str:
+    total = len(game.get("players", {}))
+    questions = game.get("questions_per_game", 10)
+    category = game.get("category", "mixed")
 
-    if not players:
-        return (
-            f"Registration is open ({remaining}s)\n\n"
-            f"Total: 0\n"
-            f"Minimum needed: {MIN_PLAYERS}"
-        )
+    category_map = {
+        "mixed": "Mixed",
+        "vocabulary": "Vocabulary",
+        "grammar": "Grammar",
+        "idioms_phrases": "Idioms & Phrases",
+        "synonyms": "Synonyms",
+        "collocations": "Collocations",
+    }
 
-    players_text = ", ".join(players.values())
+    category_name = category_map.get(
+        str(category).lower(),
+        str(category).replace("_", " ").title()
+    )
+
+    if remaining <= 10:
+        if blink:
+            timer_text = (
+                f"🚨 <b>LAST {remaining} SECONDS!</b>\n"
+                f"🔥 <b>JOIN NOW</b>"
+            )
+        else:
+            timer_text = (
+                f"⚠️ <b>LAST {remaining} SECONDS!</b>\n"
+                f"⏳ <b>HURRY UP</b>"
+            )
+    else:
+        timer_text = f"⏳ Registration is open <b>({remaining}s)</b>"
 
     return (
-        f"Registration is open ({remaining}s)\n\n"
-        f"Joined:\n{players_text}\n\n"
-        f"Total: {len(players)}\n"
-        f"Minimum needed: {MIN_PLAYERS}"
+        "🎮 <b>English Lemon Quiz</b>\n\n"
+        f"{timer_text}\n\n"
+        f"👥 Total: <b>{total}</b>\n"
+        f"❓ Questions: <b>{questions}</b>\n"
+        f"📚 Category: <b>{category_name}</b>\n"
+        f"✅ Minimum needed: <b>{MIN_PLAYERS}</b>"
     )
 
 

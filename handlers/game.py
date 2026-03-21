@@ -272,13 +272,22 @@ async def refresh_join_message(context: ContextTypes.DEFAULT_TYPE, chat_id: int)
     if not join_message_id:
         return
 
-    remaining = max(0, get_join_remaining_seconds(game))
+    actual_remaining = max(0, get_join_remaining_seconds(game))
+
+    # lock display above 10 seconds so joins do not visually change timer
+    if actual_remaining > 10:
+        display_remaining = ((actual_remaining + 9) // 10) * 10
+        display_remaining = min(display_remaining, JOIN_SECONDS)
+        blink = False
+    else:
+        display_remaining = actual_remaining
+        blink = (actual_remaining % 2 == 0)  # blinking effect
 
     try:
         await context.bot.edit_message_text(
             chat_id=chat_id,
             message_id=join_message_id,
-            text=build_join_text(game, remaining),
+            text=build_join_text(game, display_remaining, blink=blink),
             reply_markup=get_join_keyboard(chat_id),
             parse_mode="HTML",
         )
@@ -661,9 +670,7 @@ async def begin_game_after_join(chat_id, context):
 
             game["join_end_time"] = loop.time() + JOIN_SECONDS
 
-        last_checkpoint = None
-
-        last_checkpoint = None
+        last_display_value = None
 
         while True:
             lock = get_game_lock(chat_id)
@@ -676,19 +683,21 @@ async def begin_game_after_join(chat_id, context):
                 if end_time is None:
                     return
 
-                remaining = max(0, int(end_time - loop.time()))
+                actual_remaining = max(0, int(end_time - loop.time()))
 
-            # ✅ clean 10-second checkpoints only
-            checkpoint = (remaining // 10) * 10
+            if actual_remaining > 10:
+                display_value = ((actual_remaining + 9) // 10) * 10
+                display_value = min(display_value, JOIN_SECONDS)
+            else:
+                display_value = actual_remaining
 
-            if checkpoint != last_checkpoint:
+            if display_value != last_display_value:
                 await refresh_join_message(context, chat_id)
-                last_checkpoint = checkpoint
+                last_display_value = display_value
 
-            if remaining <= 0:
+            if actual_remaining <= 0:
                 break
 
-            # ✅ ALWAYS wait 1 second (for accuracy, not UI)
             await asyncio.sleep(1)
 
         lock = get_game_lock(chat_id)

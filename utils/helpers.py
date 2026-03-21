@@ -2,6 +2,8 @@ import asyncio
 import html
 import logging
 
+from telegram.constants import ChatMemberStatus
+
 from config import ADMIN_ID, MIN_PLAYERS
 
 logger = logging.getLogger(__name__)
@@ -9,6 +11,22 @@ logger = logging.getLogger(__name__)
 
 def is_admin(user_id: int) -> bool:
     return user_id == ADMIN_ID
+
+
+async def is_group_admin(context, chat_id: int, user_id: int) -> bool:
+    try:
+        member = await context.bot.get_chat_member(chat_id, user_id)
+        return member.status in (
+            ChatMemberStatus.ADMINISTRATOR,
+            ChatMemberStatus.OWNER,
+        )
+    except Exception:
+        logger.exception(
+            "Failed to check admin status for user %s in chat %s",
+            user_id,
+            chat_id,
+        )
+        return False
 
 
 def safe_task(coro):
@@ -49,15 +67,11 @@ def build_join_text(game, remaining: int, blink: bool = False) -> str:
     for user_id, player in players.items():
         if isinstance(player, dict):
             name = player.get("full_name") or player.get("username") or "Player"
-            username = player.get("username")
         else:
             name = getattr(player, "full_name", None) or getattr(player, "username", None) or "Player"
-            username = getattr(player, "username", None)
 
         safe_name = html.escape(str(name))
-
         mention = f'<a href="tg://user?id={user_id}">{safe_name}</a>'
-
         joined_names.append(mention)
 
     joined_text = ", ".join(joined_names) if joined_names else "-"

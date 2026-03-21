@@ -46,6 +46,7 @@ from utils.helpers import (
     safe_delete_message,
     build_join_text,
     is_admin,
+    is_group_admin,
 )
 from utils.keyboards import (
     main_menu_keyboard,
@@ -64,17 +65,15 @@ from services.game_service import (
     create_new_game_data,
     get_existing_game_message,
     get_unused_question,
-    get_join_remaining_seconds,
     add_player_to_game,
     mark_game_joining,
     start_next_round,
     prepare_round_state,
     apply_poll_answer,
-    build_final_results,
-    build_results_text,
 )
 
 logger = logging.getLogger(__name__)
+
 
 # ================= FINAL RESULTS PAGINATION =================
 
@@ -172,10 +171,12 @@ async def final_results_callback_handler(update: Update, context: ContextTypes.D
     await query.edit_message_text(
         text=text,
         reply_markup=markup,
-        parse_mode="HTML",  
+        parse_mode="HTML",
     )
 
+
 # ============================================================
+
 CATEGORY_LABELS = {
     "mixed": "Mixed",
     "vocabulary": "Vocabulary",
@@ -286,6 +287,7 @@ async def refresh_join_message(context: ContextTypes.DEFAULT_TYPE, chat_id: int)
     except Exception as e:
         logger.warning("Failed to refresh join message in chat %s: %s", chat_id, e)
 
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.warning("START COMMAND RECEIVED")
 
@@ -317,12 +319,19 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if data == "menu_play":
         if query.message.chat.type in ("group", "supergroup"):
-            if not is_admin(query.from_user.id):
+            allowed = is_admin(query.from_user.id) or await is_group_admin(
+                context,
+                query.message.chat.id,
+                query.from_user.id,
+            )
+
+            if not allowed:
                 await query.edit_message_text(
                     "❌ Admin only.\n\nOnly a group admin can start a quiz game.",
                     reply_markup=back_kb,
                 )
                 return
+
             await start_game(update, context)
             return
         else:
@@ -450,11 +459,22 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if chat:
         ensure_chat(chat)
 
-    if not user or not is_admin(user.id):
+    if not user:
         if query:
             await query.edit_message_text("❌ Admin only.")
         else:
             await message.reply_text("❌ Admin only.")
+        return
+
+    allowed = is_admin(user.id)
+    if chat.type in ("group", "supergroup"):
+        allowed = allowed or await is_group_admin(context, chat.id, user.id)
+
+    if not allowed:
+        if query:
+            await query.edit_message_text("❌ Only group admins can start a quiz game.")
+        else:
+            await message.reply_text("❌ Only group admins can start a quiz game.")
         return
 
     if chat.type == "private":
@@ -500,7 +520,15 @@ async def stop_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
     user = update.effective_user
 
-    if not user or not is_admin(user.id):
+    if not user:
+        await update.message.reply_text("Admin only.")
+        return
+
+    allowed = is_admin(user.id)
+    if chat.type in ("group", "supergroup"):
+        allowed = allowed or await is_group_admin(context, chat.id, user.id)
+
+    if not allowed:
         await update.message.reply_text("Admin only.")
         return
 
@@ -563,7 +591,8 @@ async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFA
         )
         return True
 
-    if not is_admin(user.id):
+    allowed = is_admin(user.id) or await is_group_admin(context, chat_id, user.id)
+    if not allowed:
         await query.answer("Admin only.", show_alert=True)
         return True
 
@@ -1010,6 +1039,7 @@ async def receive_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
             if game:
                 game.setdefault("scores", {})
                 game["scores"][user.id] = game["scores"].get(user.id, 0) + points_to_add
+
         record_correct_answer(user.id, answer_time=elapsed)
 
         if chat_id < 0:
@@ -1083,7 +1113,7 @@ async def end_game(chat_id, context):
             key=lambda x: (
                 x["points"],
                 x["correct_answers"],
-               -x["wrong_answers"],
+                -x["wrong_answers"],
             ),
             reverse=True,
         )
@@ -1144,7 +1174,7 @@ async def end_game(chat_id, context):
             chat_id=chat_id,
             text=text,
             reply_markup=markup,
-            parse_mode="HTML",  
+            parse_mode="HTML",
         )
     else:
         await context.bot.send_message(

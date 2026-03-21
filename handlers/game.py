@@ -172,6 +172,7 @@ async def final_results_callback_handler(update: Update, context: ContextTypes.D
     await query.edit_message_text(
         text=text,
         reply_markup=markup,
+        parse_mode="HTML",  
     )
 
 # ============================================================
@@ -1009,12 +1010,17 @@ async def end_game(chat_id, context):
 
         normalized_results = []
         for row in final_results:
-            name = (
+            user_id = row.get("user_id")
+
+            raw_name = (
                 row.get("full_name")
                 or row.get("name")
                 or row.get("username")
                 or "Unknown"
             )
+
+            name = f'<a href="tg://user?id={user_id}">{raw_name}</a>'
+            
             normalized_results.append({
                 "user_id": row.get("user_id"),
                 "full_name": name,
@@ -1081,6 +1087,7 @@ async def end_game(chat_id, context):
             chat_id=chat_id,
             text=text,
             reply_markup=markup,
+            parse_mode="HTML",  
         )
     else:
         await context.bot.send_message(

@@ -158,6 +158,30 @@ def create_tables():
             )
         """)
 
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS settings (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            )
+        """)
+
+        defaults = {
+            "min_players": "1",
+            "join_seconds": "60",
+            "question_seconds": "15",
+            "speed_bonus_seconds": "5",
+            "speed_bonus_points": "5",
+            "points_easy": "15",
+            "points_medium": "25",
+            "points_hard": "35",
+        }
+
+        for key, value in defaults.items():
+            conn.execute("""
+                INSERT OR IGNORE INTO settings (key, value)
+                VALUES (?, ?)
+            """, (key, value))
+
         question_columns = _get_column_names(conn, "questions")
         if "category" not in question_columns:
             conn.execute("ALTER TABLE questions ADD COLUMN category TEXT DEFAULT 'mixed'")

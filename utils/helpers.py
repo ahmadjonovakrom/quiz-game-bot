@@ -54,6 +54,7 @@ def format_category_name(category: str) -> str:
 def build_join_text(game, remaining: int, blink: bool = False) -> str:
     players = game.get("players", {})
     total = len(players)
+    min_players = game.get("min_players", MIN_PLAYERS)
 
     if remaining <= 10:
         if blink:
@@ -81,7 +82,7 @@ def build_join_text(game, remaining: int, blink: bool = False) -> str:
         f"Joined:\n"
         f"{joined_text}\n\n"
         f"Total: {total}\n"
-        f"Minimum needed: {MIN_PLAYERS}"
+        f"Minimum needed: {min_players}"
     )
 
 

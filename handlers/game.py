@@ -737,6 +737,7 @@ async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFA
                 return True
 
             try:
+                game["min_players"] = settings["MIN_PLAYERS"]
                 mark_game_joining(game, join_seconds)
 
                 await query.edit_message_text(

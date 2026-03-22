@@ -13,6 +13,8 @@ from utils.helpers import is_admin
 from utils.keyboards import (
     admin_main_keyboard,
     admin_questions_keyboard,
+    admin_danger_keyboard,          
+    admin_reset_confirm_keyboard,
     back_cancel_keyboard,
     broadcast_confirm_keyboard,
     delete_confirm_keyboard,
@@ -613,6 +615,24 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             text,
             reply_markup=nav_keyboard(),
         )
+        return ADMIN_MENU
+
+    if data == "admin_danger_zone":
+        await query.edit_message_text(
+         "⚠️ Danger Zone\n\nChoose an action:",
+            reply_markup=admin_danger_keyboard(),
+        )
+        return ADMIN_MENU
+    
+    if data == "admin_reset_stats_confirm":
+        await query.edit_message_text(
+        "⚠️ Are you sure you want to reset ALL stats?\n\nThis cannot be undone.",
+            reply_markup=admin_reset_confirm_keyboard(),
+        )
+        return ADMIN_MENU
+    
+    if data == "admin_reset_stats_yes":
+        await reset_stats(update, context)
         return ADMIN_MENU
 
     if data == "admin_question_stats":

@@ -189,6 +189,7 @@ def admin_main_keyboard() -> InlineKeyboardMarkup:
         [InlineKeyboardButton("📢 Broadcast", callback_data="admin_broadcast")],
         [InlineKeyboardButton("📥 Import Questions", callback_data="admin_import_questions")],
         [InlineKeyboardButton("📊 Bot Stats", callback_data="admin_botstats")],
+        [InlineKeyboardButton("⚠️ Danger Zone", callback_data="admin_danger_zone")],
         [InlineKeyboardButton("❌ Close", callback_data="admin_close")],
     ])
 
@@ -213,6 +214,13 @@ def delete_confirm_keyboard() -> InlineKeyboardMarkup:
         ]
     ])
 
+def admin_reset_confirm_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("✅ Yes, Reset", callback_data="admin_reset_stats_yes"),
+            InlineKeyboardButton("❌ Cancel", callback_data="admin_danger_zone"),
+        ]
+    ])
 
 def broadcast_confirm_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
@@ -289,3 +297,9 @@ def search_results_keyboard(results) -> InlineKeyboardMarkup:
 
     rows.append([InlineKeyboardButton("⬅️ Back", callback_data="admin_questions")])
     return InlineKeyboardMarkup(rows)
+
+def admin_danger_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("♻️ Reset Stats", callback_data="admin_reset_stats_confirm")],
+        [InlineKeyboardButton("⬅️ Back", callback_data="admin_back")],
+    ])

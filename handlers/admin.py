@@ -864,6 +864,7 @@ async def edit_id_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Choose what you want to edit:",
         reply_markup=edit_question_menu_keyboard(),
     )
+    await update.message.delete()
     return ADMIN_MENU
 
 

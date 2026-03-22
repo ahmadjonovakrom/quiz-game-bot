@@ -116,7 +116,7 @@ def main():
     admin_conv = ConversationHandler(
         entry_points=[
             CommandHandler("admin", admin_panel),
-            CallbackQueryHandler(admin_button_handler, pattern=r"^admin_"),
+            CallbackQueryHandler(admin_button_handler, pattern=r"^(admin_|edit_)"),
             CallbackQueryHandler(import_questions_entry, pattern=r"^admin_import_questions$"),
         ],
         states={
@@ -148,7 +148,7 @@ def main():
             BROADCAST_CONFIRM: [CallbackQueryHandler(broadcast_confirm_step)],
             IMPORT_FILE: [MessageHandler(filters.Document.ALL, import_questions_file_step)],
             SEARCH_KEYWORD: [MessageHandler(filters.TEXT & ~filters.COMMAND, search_keyword_step)],
-            ADMIN_MENU: [CallbackQueryHandler(admin_button_handler, pattern=r"^admin_")],
+            ADMIN_MENU: [CallbackQueryHandler(admin_button_handler, pattern=r"^(admin_|edit_)")],
         },
         fallbacks=[
             CommandHandler("cancel", cancel),

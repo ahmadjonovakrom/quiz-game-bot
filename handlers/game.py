@@ -22,6 +22,7 @@ from config import (
 from database import (
     get_random_question,
     ensure_player,
+    ensure_user,
     ensure_chat,
     ensure_group_player,
     add_points,
@@ -301,6 +302,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.effective_message
 
     if user:
+        ensure_user(user)
         ensure_player(user)
     if chat:
         ensure_chat(chat)

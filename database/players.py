@@ -57,6 +57,30 @@ def ensure_player(user_or_id, username: str = None, full_name: str = None):
             ) VALUES (?, ?, ?)
         """, (user_id, username, full_name))
 
+def ensure_user(user_or_id, username: str = None, full_name: str = None):
+    user_id, username, full_name = _normalize_user_input(user_or_id, username, full_name)
+
+    with closing(get_conn()) as conn, conn:
+        existing = conn.execute(
+            "SELECT user_id FROM users WHERE user_id = ?",
+            (user_id,),
+        ).fetchone()
+
+        if existing:
+            conn.execute("""
+                UPDATE users
+                SET username = ?, full_name = ?
+                WHERE user_id = ?
+            """, (username, full_name, user_id))
+            return
+
+        conn.execute("""
+            INSERT INTO users (
+                user_id,
+                username,
+                full_name
+            ) VALUES (?, ?, ?)
+        """, (user_id, username, full_name))
 
 def get_player(user_id: int):
     with closing(get_conn()) as conn:
@@ -591,6 +615,6 @@ def get_total_users_count():
     with closing(get_conn()) as conn:
         row = conn.execute("""
             SELECT COUNT(*) AS count
-            FROM players
+            FROM users
         """).fetchone()
     return row["count"] if row else 0

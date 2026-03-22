@@ -4,6 +4,7 @@ from .schema import create_tables
 # players
 from .players import (
     ensure_player,
+    ensure_user,
     get_player,
     add_points,
     add_manual_points,
@@ -95,6 +96,7 @@ __all__ = [
 
     # players
     "ensure_player",
+    "ensure_user",
     "get_player",
     "add_points",
     "add_manual_points",

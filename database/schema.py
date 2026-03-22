@@ -51,6 +51,15 @@ def create_tables():
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                user_id INTEGER PRIMARY KEY,
+                username TEXT,
+                full_name TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
 
         conn.execute("""
             CREATE TABLE IF NOT EXISTS chats (

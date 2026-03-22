@@ -31,7 +31,14 @@ from utils.texts import (
     format_questions_menu_text,
     format_search_results_text,
 )
-from database import get_question_by_id, get_conn
+from database import (
+    get_question_by_id,
+    get_conn,
+    get_total_questions_count,
+    get_active_question_count,
+    get_question_count_by_category,
+    get_question_count_by_difficulty,
+)
 
 from services.question_service import (
     create_question_service,
@@ -605,6 +612,31 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         await query.edit_message_text(
             text,
             reply_markup=nav_keyboard(),
+        )
+        return ADMIN_MENU
+
+    if data == "admin_question_stats":
+        total = get_total_questions_count()
+        active = get_active_question_count()
+        by_category = get_question_count_by_category()
+        by_difficulty = get_question_count_by_difficulty()
+
+        text = "📊 Question Stats\n\n"
+        text += f"📚 Total: {total}\n"
+        text += f"✅ Active: {active}\n"
+        text += f"❌ Inactive: {total - active}\n\n"
+
+        text += "📂 By Category:\n"
+        for key, value in by_category.items():
+            text += f"• {key.title().replace('_', ' ')}: {value}\n"
+
+        text += "\n📈 By Difficulty:\n"
+        for key, value in by_difficulty.items():
+            text += f"• {key.title()}: {value}\n"
+
+        await query.edit_message_text(
+            text,
+            reply_markup=admin_questions_keyboard(),
         )
         return ADMIN_MENU
 

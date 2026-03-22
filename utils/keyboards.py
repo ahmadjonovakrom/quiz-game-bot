@@ -200,6 +200,7 @@ def admin_questions_keyboard() -> InlineKeyboardMarkup:
         [InlineKeyboardButton("✏️ Edit Question", callback_data="admin_edit_question")],
         [InlineKeyboardButton("🗑 Delete Question", callback_data="admin_delete_question")],
         [InlineKeyboardButton("📤 Export CSV", callback_data="admin_export_questions")],
+        [InlineKeyboardButton("📊 Question Stats", callback_data="admin_question_stats")],
         [InlineKeyboardButton("⬅️ Back", callback_data="admin_back")],
     ])
 

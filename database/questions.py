@@ -441,3 +441,32 @@ def get_total_questions_count() -> int:
     with closing(get_conn()) as conn:
         row = conn.execute("SELECT COUNT(*) AS count FROM questions").fetchone()
         return row["count"] if row else 0
+    
+def get_question_count_by_category():
+    with closing(get_conn()) as conn:
+        rows = conn.execute("""
+            SELECT category, COUNT(*) as count
+            FROM questions
+            GROUP BY category
+        """).fetchall()
+    return {row["category"]: row["count"] for row in rows}
+
+
+def get_question_count_by_difficulty():
+    with closing(get_conn()) as conn:
+        rows = conn.execute("""
+            SELECT difficulty, COUNT(*) as count
+            FROM questions
+            GROUP BY difficulty
+        """).fetchall()
+    return {row["difficulty"]: row["count"] for row in rows}
+
+
+def get_active_question_count():
+    with closing(get_conn()) as conn:
+        row = conn.execute("""
+            SELECT COUNT(*) as count
+            FROM questions
+            WHERE is_active = 1
+        """).fetchone()
+    return row["count"] if row else 0

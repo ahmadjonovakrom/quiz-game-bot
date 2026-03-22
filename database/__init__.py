@@ -52,6 +52,9 @@ from .questions import (
     deactivate_question,
     search_questions_by_keyword,
     export_questions_to_rows,
+    get_question_count_by_category,
+    get_question_count_by_difficulty,
+    get_active_question_count,
 )
 
 # games / group scores / daily quiz
@@ -143,6 +146,9 @@ __all__ = [
     "deactivate_question",
     "search_questions_by_keyword",
     "export_questions_to_rows",
+    "get_question_count_by_category",
+    "get_question_count_by_difficulty",
+    "get_active_question_count",
 
     # games / groups / daily quiz
     "create_game",

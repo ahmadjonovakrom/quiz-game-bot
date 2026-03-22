@@ -5,6 +5,7 @@ from typing import Dict
 
 from telegram.ext import ContextTypes
 
+from config import MIN_PLAYERS
 from database import get_random_question
 from utils.helpers import safe_delete_message, clickable_name
 
@@ -65,6 +66,7 @@ def create_new_game_data(
         "questions_per_game": questions_per_game,
         "category": category,
         "difficulty": difficulty,
+        "min_players": MIN_PLAYERS,
     }
 
 
@@ -122,9 +124,9 @@ def add_player_to_game(game: dict, user) -> bool:
         return False
 
     game["players"][user.id] = {
-    "full_name": user.full_name,
-    "username": user.username,
-    "first_name": user.first_name,
+        "full_name": user.full_name,
+        "username": user.username,
+        "first_name": user.first_name,
     }
     game["player_objects"][user.id] = user
     game["scores"][user.id] = 0

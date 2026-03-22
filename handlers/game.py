@@ -40,6 +40,7 @@ from database import (
     record_game_result,
     has_played_daily_quiz,
     record_daily_quiz_attempt,
+    get_game_settings,
 )
 from handlers.profile import profile, leaderboard
 from utils.helpers import (
@@ -55,8 +56,6 @@ from utils.keyboards import (
     game_setup_categories_keyboard,
     game_setup_confirm_keyboard,
     final_results_keyboard,
-    admin_danger_keyboard,
-    admin_reset_confirm_keyboard,
     FINAL_RESULTS_PAGE_SIZE,
 )
 from services.game_service import (
@@ -78,14 +77,24 @@ from services.game_service import (
 logger = logging.getLogger(__name__)
 
 
+def load_dynamic_settings():
+    settings = get_game_settings()
+    return {
+        "MIN_PLAYERS": settings["min_players"],
+        "JOIN_SECONDS": settings["join_seconds"],
+        "QUESTION_SECONDS": settings["question_seconds"],
+        "SPEED_BONUS_SECONDS": settings["speed_bonus_seconds"],
+        "SPEED_BONUS_POINTS": settings["speed_bonus_points"],
+        "POINTS": settings["points"],
+    }
+
+
 def has_active_game(chat_id: int) -> bool:
     game = active_games.get(chat_id)
     if not game:
         return False
     return game.get("status") in ("setup", "joining", "running")
 
-
-# ================= FINAL RESULTS PAGINATION =================
 
 def format_final_results_page(results, page=1):
     total = len(results)
@@ -247,6 +256,9 @@ def format_setup_step_2_text(selected_count: int) -> str:
 
 
 def format_setup_summary(question_count: int, category: str) -> str:
+    settings = load_dynamic_settings()
+    points = settings["POINTS"]
+
     return (
         "🎮 Game Setup\n\n"
         "✅ Ready to Start\n\n"
@@ -255,17 +267,20 @@ def format_setup_summary(question_count: int, category: str) -> str:
         f"• Category: {format_category_name(category)}\n"
         "• Difficulty: Mixed\n\n"
         "🍋 Rewards:\n"
-        f"• Easy: +{POINTS['easy']}\n"
-        f"• Medium: +{POINTS['medium']}\n"
-        f"• Hard: +{POINTS['hard']}\n\n"
+        f"• Easy: +{points['easy']}\n"
+        f"• Medium: +{points['medium']}\n"
+        f"• Hard: +{points['hard']}\n\n"
         "🚀 Press Start when you're ready"
     )
 
 
 def get_question_points(difficulty: str) -> int:
+    settings = load_dynamic_settings()
+    points = settings["POINTS"]
+
     if not difficulty:
-        return POINTS["easy"]
-    return POINTS.get(str(difficulty).lower(), POINTS["easy"])
+        return points["easy"]
+    return points.get(str(difficulty).lower(), points["easy"])
 
 
 def format_question_text(question: str, points: int) -> str:
@@ -273,6 +288,9 @@ def format_question_text(question: str, points: int) -> str:
 
 
 async def refresh_join_message(context: ContextTypes.DEFAULT_TYPE, chat_id: int):
+    settings = load_dynamic_settings()
+    join_seconds = settings["JOIN_SECONDS"]
+
     game = active_games.get(chat_id)
     if not game or game.get("status") != "joining":
         return
@@ -281,7 +299,7 @@ async def refresh_join_message(context: ContextTypes.DEFAULT_TYPE, chat_id: int)
     if not join_message_id:
         return
 
-    display_remaining = game.get("display_remaining", JOIN_SECONDS)
+    display_remaining = game.get("display_remaining", join_seconds)
     blink = game.get("display_blink", False)
 
     try:
@@ -434,6 +452,9 @@ async def myid(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def daily_quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    settings = load_dynamic_settings()
+    question_seconds = settings["QUESTION_SECONDS"]
+
     logger.warning("DAILY QUIZ COMMAND RECEIVED")
 
     user = update.effective_user
@@ -480,7 +501,7 @@ async def daily_quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
             type="quiz",
             correct_option_id=correct_index,
             is_anonymous=False,
-            open_period=QUESTION_SECONDS,
+            open_period=question_seconds,
         )
     except Exception:
         logger.exception("Failed to send daily quiz poll for user %s", user.id)
@@ -623,6 +644,9 @@ async def stop_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    settings = load_dynamic_settings()
+    join_seconds = settings["JOIN_SECONDS"]
+
     query = update.callback_query
     logger.warning("SETUP CALLBACK: %s", query.data)
 
@@ -719,10 +743,10 @@ async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFA
                 return True
 
             try:
-                mark_game_joining(game, JOIN_SECONDS)
+                mark_game_joining(game, join_seconds)
 
                 await query.edit_message_text(
-                    text=build_join_text(game, JOIN_SECONDS),
+                    text=build_join_text(game, join_seconds),
                     reply_markup=get_join_keyboard(chat_id),
                     parse_mode="HTML",
                 )
@@ -741,6 +765,10 @@ async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFA
 
 
 async def begin_game_after_join(chat_id, context):
+    settings = load_dynamic_settings()
+    min_players = settings["MIN_PLAYERS"]
+    join_seconds = settings["JOIN_SECONDS"]
+
     logger.warning("BEGIN GAME AFTER JOIN: %s", chat_id)
 
     try:
@@ -752,8 +780,8 @@ async def begin_game_after_join(chat_id, context):
             if not game or game["status"] != "joining":
                 return
 
-            game["join_end_time"] = loop.time() + JOIN_SECONDS
-            game["display_remaining"] = JOIN_SECONDS
+            game["join_end_time"] = loop.time() + join_seconds
+            game["display_remaining"] = join_seconds
             game["display_blink"] = False
 
         last_display_value = None
@@ -774,7 +802,7 @@ async def begin_game_after_join(chat_id, context):
 
                 if actual_remaining > 10:
                     display_value = ((actual_remaining + 9) // 10) * 10
-                    display_value = min(display_value, JOIN_SECONDS)
+                    display_value = min(display_value, join_seconds)
                     blink = False
                 else:
                     display_value = actual_remaining
@@ -801,7 +829,7 @@ async def begin_game_after_join(chat_id, context):
 
             join_message_id = game.get("join_message_id")
 
-            if len(game["players"]) < MIN_PLAYERS:
+            if len(game["players"]) < min_players:
                 active_games.pop(chat_id, None)
                 cleanup_game_lock(chat_id)
                 not_enough_players = True
@@ -814,7 +842,7 @@ async def begin_game_after_join(chat_id, context):
         if not_enough_players:
             await context.bot.send_message(
                 chat_id,
-                f"❌ Not enough players.\nGame cancelled.\n\nMinimum players needed: {MIN_PLAYERS}",
+                f"❌ Not enough players.\nGame cancelled.\n\nMinimum players needed: {min_players}",
             )
             return
 
@@ -897,6 +925,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def send_question(chat_id, context):
+    settings = load_dynamic_settings()
+    question_seconds = settings["QUESTION_SECONDS"]
+
     logger.warning("SEND QUESTION: %s", chat_id)
 
     should_end = False
@@ -963,7 +994,7 @@ async def send_question(chat_id, context):
             type="quiz",
             correct_option_id=correct_index,
             is_anonymous=False,
-            open_period=QUESTION_SECONDS,
+            open_period=question_seconds,
         )
     except Exception:
         logger.exception("Failed to send poll in chat %s round %s", chat_id, current_round)
@@ -993,7 +1024,10 @@ async def send_question(chat_id, context):
 
 
 async def wait_and_continue(chat_id, context, poll_id, round_number):
-    await asyncio.sleep(QUESTION_SECONDS + 1)
+    settings = load_dynamic_settings()
+    question_seconds = settings["QUESTION_SECONDS"]
+
+    await asyncio.sleep(question_seconds + 1)
 
     lock = get_game_lock(chat_id)
     async with lock:
@@ -1011,6 +1045,11 @@ async def wait_and_continue(chat_id, context, poll_id, round_number):
 
 
 async def receive_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    settings = load_dynamic_settings()
+    points_map = settings["POINTS"]
+    speed_bonus_seconds = settings["SPEED_BONUS_SECONDS"]
+    speed_bonus_points = settings["SPEED_BONUS_POINTS"]
+
     answer = update.poll_answer
     poll_id = answer.poll_id
     info = poll_map.get(poll_id)
@@ -1069,15 +1108,15 @@ async def receive_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
         user = answer.user
         ensure_player(user)
 
-        base_points = info.get("points", POINTS["easy"])
+        base_points = info.get("points", points_map["easy"])
 
         result = apply_poll_answer(
             game=game,
             user_id=user.id,
             option_ids=answer.option_ids,
             correct_points=base_points,
-            speed_bonus_seconds=SPEED_BONUS_SECONDS,
-            speed_bonus_points=SPEED_BONUS_POINTS,
+            speed_bonus_seconds=speed_bonus_seconds,
+            speed_bonus_points=speed_bonus_points,
         )
 
         if result is None:
@@ -1101,7 +1140,7 @@ async def receive_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
 
         reward_text = f"✅ {display_name} +{base_points} 🍋"
         if got_speed_bonus:
-            reward_text += f"\n⚡ Speed bonus +{SPEED_BONUS_POINTS}"
+            reward_text += f"\n⚡ Speed bonus +{speed_bonus_points}"
 
         msg = await context.bot.send_message(chat_id, reward_text)
         safe_task(delete_later(context, chat_id, msg.message_id, 4))

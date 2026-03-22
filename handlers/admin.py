@@ -23,6 +23,7 @@ from utils.keyboards import (
     question_action_keyboard,
     questions_pagination_keyboard,
     search_results_keyboard,
+    admin_settings_keyboard,
 )
 from utils.texts import (
     admin_only_text,
@@ -774,6 +775,32 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         )
         return ADMIN_MENU
 
+    if data == "admin_settings":
+        from database import get_all_settings
+
+        settings = get_all_settings()
+
+        text = "⚙️ Settings\n\n"
+        for k, v in settings.items():
+            text += f"• {k}: {v}\n"
+
+        await query.edit_message_text(
+            text,
+            reply_markup=admin_settings_keyboard(),
+        )
+        return ADMIN_MENU
+
+    if data.startswith("settings_"):
+        key = data.replace("settings_", "")
+
+        context.user_data["setting_key"] = key
+
+        await query.edit_message_text(
+            f"✏️ Update Setting\n\nSend new value for:\n{key}",
+            reply_markup=nav_keyboard("admin_settings"),
+        )
+        return 1000
+
     if data == "admin_danger_zone":
         await query.edit_message_text(
          "⚠️ Danger Zone\n\nChoose an action:",
@@ -1391,6 +1418,28 @@ async def broadcast_message_step(update: Update, context: ContextTypes.DEFAULT_T
     )
     return BROADCAST_CONFIRM
 
+async def settings_update_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    from database import set_setting
+
+    key = context.user_data.get("setting_key")
+    value = update.message.text.strip()
+
+    if not key:
+        await update.message.reply_text(
+            "No setting selected.",
+            reply_markup=admin_main_keyboard(),
+        )
+        return ConversationHandler.END
+
+    set_setting(key, value)
+
+    await update.message.reply_text(
+        f"✅ Updated {key} = {value}",
+        reply_markup=admin_main_keyboard(),
+    )
+
+    context.user_data.clear()
+    return ConversationHandler.END
 
 async def broadcast_confirm_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query

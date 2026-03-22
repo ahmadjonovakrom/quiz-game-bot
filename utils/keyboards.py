@@ -186,6 +186,7 @@ def admin_main_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("➕ Add Question", callback_data="admin_add_question")],
         [InlineKeyboardButton("📚 Manage Questions", callback_data="admin_questions")],
+        [InlineKeyboardButton("⚙️ Settings", callback_data="admin_settings")],
         [InlineKeyboardButton("📢 Broadcast", callback_data="admin_broadcast")],
         [InlineKeyboardButton("📥 Import Questions", callback_data="admin_import_questions")],
         [InlineKeyboardButton("📊 Bot Stats", callback_data="admin_botstats")],
@@ -230,6 +231,17 @@ def broadcast_confirm_keyboard() -> InlineKeyboardMarkup:
         ]
     ])
 
+def admin_settings_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("👥 Min Players", callback_data="settings_min_players")],
+        [InlineKeyboardButton("⏱ Join Time", callback_data="settings_join_seconds")],
+        [InlineKeyboardButton("❓ Question Time", callback_data="settings_question_seconds")],
+        [InlineKeyboardButton("⚡ Speed Bonus Time", callback_data="settings_speed_bonus_seconds")],
+        [InlineKeyboardButton("🍋 Easy Points", callback_data="settings_points_easy")],
+        [InlineKeyboardButton("🍋 Medium Points", callback_data="settings_points_medium")],
+        [InlineKeyboardButton("🍋 Hard Points", callback_data="settings_points_hard")],
+        [InlineKeyboardButton("⬅️ Back", callback_data="admin_back")],
+    ])
 
 def question_action_keyboard(
     question_id: int,

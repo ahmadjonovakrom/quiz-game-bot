@@ -96,6 +96,7 @@ from handlers.admin import (
     EDIT_CORRECT_ONLY,
     EDIT_CATEGORY_ONLY,
     EDIT_DIFFICULTY_ONLY,
+    settings_update_step,
 )
 
 logging.basicConfig(
@@ -149,6 +150,7 @@ def main():
             IMPORT_FILE: [MessageHandler(filters.Document.ALL, import_questions_file_step)],
             SEARCH_KEYWORD: [MessageHandler(filters.TEXT & ~filters.COMMAND, search_keyword_step)],
             ADMIN_MENU: [CallbackQueryHandler(admin_button_handler, pattern=r"^(admin_|edit_)")],
+            1000: [MessageHandler(filters.TEXT & ~filters.COMMAND, settings_update_step)],
         },
         fallbacks=[
             CommandHandler("cancel", cancel),

@@ -147,7 +147,7 @@ def format_final_results_page(results, page=1):
 
         lines.append("")
         lines.append(f"👑 MVP: {mvp_name}")
-        lines.append(f"🎯 Accuracy King: {accuracy_name} ({accuracy_percent}%)")
+        lines.append(f"🎯 Accuracy Champion: {accuracy_name} ({accuracy_percent}%)")
 
     lines.append("")
     lines.append(f"📄 Page {page}/{total_pages}")

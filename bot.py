@@ -1,5 +1,4 @@
 # bot.py
-
 import logging
 
 from telegram.ext import (
@@ -103,7 +102,6 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO,
 )
-
 logger = logging.getLogger(__name__)
 
 
@@ -117,8 +115,14 @@ def main():
     admin_conv = ConversationHandler(
         entry_points=[
             CommandHandler("admin", admin_panel),
-            CallbackQueryHandler(admin_button_handler, pattern=r"^(admin_|edit_)"),
-            CallbackQueryHandler(import_questions_entry, pattern=r"^admin_import_questions$"),
+            CallbackQueryHandler(
+                admin_button_handler,
+                pattern=r"^(admin_|edit_|settings_)"
+            ),
+            CallbackQueryHandler(
+                import_questions_entry,
+                pattern=r"^admin_import_questions$"
+            ),
         ],
         states={
             QUESTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, question_step)],
@@ -139,17 +143,25 @@ def main():
             EDIT_CATEGORY: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_category_step)],
             EDIT_DIFFICULTY: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_difficulty_step)],
 
-            # 🔥 NEW EDIT SYSTEM
+            # NEW EDIT SYSTEM
             EDIT_TEXT_ONLY: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_text_only_step)],
             EDIT_OPTION_ONLY: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_option_only_step)],
             EDIT_CORRECT_ONLY: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_correct_only_step)],
             EDIT_CATEGORY_ONLY: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_category_only_step)],
             EDIT_DIFFICULTY_ONLY: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_difficulty_only_step)],
+
             BROADCAST_MESSAGE: [MessageHandler(filters.ALL & ~filters.COMMAND, broadcast_message_step)],
             BROADCAST_CONFIRM: [CallbackQueryHandler(broadcast_confirm_step)],
             IMPORT_FILE: [MessageHandler(filters.Document.ALL, import_questions_file_step)],
             SEARCH_KEYWORD: [MessageHandler(filters.TEXT & ~filters.COMMAND, search_keyword_step)],
-            ADMIN_MENU: [CallbackQueryHandler(admin_button_handler, pattern=r"^(admin_|edit_)")],
+
+            ADMIN_MENU: [
+                CallbackQueryHandler(
+                    admin_button_handler,
+                    pattern=r"^(admin_|edit_|settings_)"
+                )
+            ],
+
             1000: [MessageHandler(filters.TEXT & ~filters.COMMAND, settings_update_step)],
         },
         fallbacks=[
@@ -158,7 +170,6 @@ def main():
         ],
         allow_reentry=True,
     )
-
     app.add_handler(admin_conv)
 
     # ================= COMMANDS =================
@@ -182,7 +193,7 @@ def main():
     app.add_handler(CallbackQueryHandler(menu_handler, pattern=r"^menu_"))
     app.add_handler(CallbackQueryHandler(final_results_callback_handler, pattern=r"^final_results:"))
 
-    # 🔥 MAIN LEADERBOARD HANDLER (ONLY ONE)
+    # MAIN LEADERBOARD HANDLER
     app.add_handler(
         CallbackQueryHandler(
             profile_callback_handler,

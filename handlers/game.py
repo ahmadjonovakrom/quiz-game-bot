@@ -7,17 +7,11 @@ from telegram.ext import ContextTypes
 
 from utils.shuffle import shuffle_question
 from config import (
-    MIN_PLAYERS,
-    JOIN_SECONDS,
-    QUESTION_SECONDS,
     CORRECT_POINTS,
-    SPEED_BONUS_SECONDS,
-    SPEED_BONUS_POINTS,
     DEFAULT_QUESTIONS_PER_GAME,
     ALLOWED_QUESTION_COUNTS,
     DEFAULT_CATEGORY,
     ALLOWED_CATEGORIES,
-    POINTS,
 )
 from database import (
     get_random_question,

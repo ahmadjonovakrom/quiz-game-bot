@@ -579,9 +579,18 @@ def get_all_user_ids():
 
 def get_total_players():
     with closing(get_conn()) as conn:
-        row = conn.execute("SELECT COUNT(*) AS count FROM players").fetchone()
+        row = conn.execute("""
+            SELECT COUNT(*) AS count
+            FROM players
+            WHERE games_played > 0
+        """).fetchone()
     return row["count"] if row else 0
 
 
 def get_total_users_count():
-    return get_total_players()
+    with closing(get_conn()) as conn:
+        row = conn.execute("""
+            SELECT COUNT(*) AS count
+            FROM players
+        """).fetchone()
+    return row["count"] if row else 0

@@ -120,8 +120,8 @@ def format_final_results_page(results, page=1):
         mvp = max(results, key=lambda x: x.get("points", 0))
 
         def accuracy_value(row):
-            correct = row.get("correct_answers", 0)
-            wrong = row.get("wrong_answers", 0)
+            correct = row.get("correct", 0)
+            wrong = row.get("wrong", 0)
             total_answers = correct + wrong
             if total_answers == 0:
                 return 0

@@ -232,7 +232,7 @@ def build_final_results(game: dict) -> list[dict]:
             "position": position,
             "user_id": user_id,
             "name": name,
-            "score": score,
+            "points": score,
             "correct": game["correct_counts"].get(user_id, 0),
             "wrong": game["wrong_counts"].get(user_id, 0),
             "avg_time": avg_time,

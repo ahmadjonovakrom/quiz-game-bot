@@ -64,6 +64,11 @@ EDIT_ID, EDIT_QUESTION, EDIT_A, EDIT_B, EDIT_C, EDIT_D, EDIT_CORRECT, EDIT_CATEG
 BROADCAST_MESSAGE, BROADCAST_CONFIRM = range(18, 20)
 IMPORT_FILE = 20
 SEARCH_KEYWORD = 21
+EDIT_TEXT_ONLY = 22
+EDIT_OPTION_ONLY = 23
+EDIT_CORRECT_ONLY = 24
+EDIT_CATEGORY_ONLY = 25
+EDIT_DIFFICULTY_ONLY = 26
 
 
 def nav_keyboard(back_callback: str = "admin_back") -> InlineKeyboardMarkup:
@@ -484,6 +489,156 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         )
         return ADMIN_MENU
 
+    if data == "edit_field_text":
+        await query.edit_message_text(
+            "✏️ Edit Text\n\nSend the new question text:",
+            reply_markup=nav_keyboard("admin_questions"),
+        )
+        return EDIT_TEXT_ONLY
+
+    if data == "edit_field_options":
+        await query.edit_message_text(
+            "🔘 Edit Options\n\nChoose which option to edit:",
+            reply_markup=edit_options_keyboard(),
+        )
+        return ADMIN_MENU
+
+    if data == "edit_option_a":
+        context.user_data["edit_option_target"] = "option_a"
+        await query.edit_message_text(
+            "🔘 Edit Option A\n\nSend the new text for option A:",
+            reply_markup=nav_keyboard("admin_questions"),
+        )
+        return EDIT_OPTION_ONLY
+
+    if data == "edit_option_b":
+        context.user_data["edit_option_target"] = "option_b"
+        await query.edit_message_text(
+            "🔘 Edit Option B\n\nSend the new text for option B:",
+            reply_markup=nav_keyboard("admin_questions"),
+        )
+        return EDIT_OPTION_ONLY
+
+    if data == "edit_option_c":
+        context.user_data["edit_option_target"] = "option_c"
+        await query.edit_message_text(
+            "🔘 Edit Option C\n\nSend the new text for option C:",
+            reply_markup=nav_keyboard("admin_questions"),
+        )
+        return EDIT_OPTION_ONLY
+
+    if data == "edit_option_d":
+        context.user_data["edit_option_target"] = "option_d"
+        await query.edit_message_text(
+            "🔘 Edit Option D\n\nSend the new text for option D:",
+            reply_markup=nav_keyboard("admin_questions"),
+        )
+        return EDIT_OPTION_ONLY
+
+    if data == "edit_field_correct":
+        await query.edit_message_text(
+            "✅ Edit Correct Answer\n\nSend A, B, C, or D:",
+            reply_markup=nav_keyboard("admin_questions"),
+        )
+        return EDIT_CORRECT_ONLY
+
+    if data == "edit_field_category":
+        await query.edit_message_text(
+            "🏷 Edit Category\n\n"
+            f"Allowed: {', '.join(ALLOWED_CATEGORIES)}",
+            reply_markup=nav_keyboard("admin_questions"),
+        )
+        return EDIT_CATEGORY_ONLY
+
+    if data == "edit_field_difficulty":
+        await query.edit_message_text(
+            "📈 Edit Difficulty\n\n"
+            f"Allowed: {', '.join(ALLOWED_DIFFICULTIES)}",
+            reply_markup=nav_keyboard("admin_questions"),
+        )
+        return EDIT_DIFFICULTY_ONLY
+
+    if data == "edit_preview":
+        q = context.user_data.get("edit_question")
+        if not q:
+            await query.edit_message_text(
+                "No question loaded.",
+                reply_markup=nav_keyboard("admin_questions"),
+            )
+            return ADMIN_MENU
+
+        preview_tuple = (
+            context.user_data["edit_qid"],
+            q["question_text"],
+            q["option_a"],
+            q["option_b"],
+            q["option_c"],
+            q["option_d"],
+            q["correct_option"],
+            q["category"],
+            q["difficulty"],
+            1,
+            0,
+        )
+
+        await query.edit_message_text(
+            "👁 Preview\n\n"
+            f"{format_question_preview(preview_tuple)}",
+            reply_markup=edit_question_menu_keyboard(),
+        )
+        return ADMIN_MENU
+
+    if data == "edit_save":
+        qid = context.user_data.get("edit_qid")
+        qdata = context.user_data.get("edit_question")
+
+        if not qid or not qdata:
+            await query.edit_message_text(
+                "No question loaded.",
+                reply_markup=nav_keyboard("admin_questions"),
+            )
+            return ADMIN_MENU
+
+        result = update_question_service(qid, qdata)
+        context.user_data.clear()
+
+        await query.edit_message_text(
+            result["message"],
+            reply_markup=questions_keyboard(),
+        )
+        return ConversationHandler.END
+
+    if data == "edit_back_menu":
+        q = context.user_data.get("edit_question")
+        if not q:
+            await query.edit_message_text(
+                "No question loaded.",
+                reply_markup=nav_keyboard("admin_questions"),
+            )
+            return ADMIN_MENU
+
+        preview_tuple = (
+            context.user_data["edit_qid"],
+            q["question_text"],
+            q["option_a"],
+            q["option_b"],
+            q["option_c"],
+            q["option_d"],
+            q["correct_option"],
+            q["category"],
+            q["difficulty"],
+            1,
+            0,
+        )
+
+        await query.edit_message_text(
+            "✏️ Edit Question\n\n"
+            f"{format_question_preview(preview_tuple)}\n\n"
+            "Choose what you want to edit:",
+            reply_markup=edit_question_menu_keyboard(),
+        )
+        return ADMIN_MENU
+
     if data == "admin_close":
         context.user_data.clear()
         await query.edit_message_text("Closed.")
@@ -865,6 +1020,169 @@ async def edit_id_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=edit_question_menu_keyboard(),
     )
     await update.message.delete()
+    return ADMIN_MENU
+
+async def edit_text_only_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["edit_question"]["question_text"] = update.message.text
+
+    q = context.user_data["edit_question"]
+    preview_tuple = (
+        context.user_data["edit_qid"],
+        q["question_text"],
+        q["option_a"],
+        q["option_b"],
+        q["option_c"],
+        q["option_d"],
+        q["correct_option"],
+        q["category"],
+        q["difficulty"],
+        1,
+        0,
+    )
+
+    await update.message.reply_text(
+        "✅ Question text updated.\n\n"
+        f"{format_question_preview(preview_tuple)}",
+        reply_markup=edit_question_menu_keyboard(),
+    )
+    return ADMIN_MENU
+
+
+async def edit_option_only_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    target = context.user_data.get("edit_option_target")
+    if not target:
+        await update.message.reply_text(
+            "No option selected.",
+            reply_markup=edit_question_menu_keyboard(),
+        )
+        return ADMIN_MENU
+
+    context.user_data["edit_question"][target] = update.message.text
+
+    q = context.user_data["edit_question"]
+    preview_tuple = (
+        context.user_data["edit_qid"],
+        q["question_text"],
+        q["option_a"],
+        q["option_b"],
+        q["option_c"],
+        q["option_d"],
+        q["correct_option"],
+        q["category"],
+        q["difficulty"],
+        1,
+        0,
+    )
+
+    await update.message.reply_text(
+        "✅ Option updated.\n\n"
+        f"{format_question_preview(preview_tuple)}",
+        reply_markup=edit_question_menu_keyboard(),
+    )
+    return ADMIN_MENU
+
+
+async def edit_correct_only_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    correct = update.message.text.strip().upper()
+    if correct not in ("A", "B", "C", "D"):
+        await update.message.reply_text(
+            "Invalid input. Send only A, B, C, or D.",
+            reply_markup=nav_keyboard("admin_questions"),
+        )
+        return EDIT_CORRECT_ONLY
+
+    context.user_data["edit_question"]["correct_option"] = correct
+
+    q = context.user_data["edit_question"]
+    preview_tuple = (
+        context.user_data["edit_qid"],
+        q["question_text"],
+        q["option_a"],
+        q["option_b"],
+        q["option_c"],
+        q["option_d"],
+        q["correct_option"],
+        q["category"],
+        q["difficulty"],
+        1,
+        0,
+    )
+
+    await update.message.reply_text(
+        "✅ Correct answer updated.\n\n"
+        f"{format_question_preview(preview_tuple)}",
+        reply_markup=edit_question_menu_keyboard(),
+    )
+    return ADMIN_MENU
+
+
+async def edit_category_only_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    category = update.message.text.strip().lower()
+    if category not in ALLOWED_CATEGORIES:
+        await update.message.reply_text(
+            "Invalid category.\n\n"
+            f"Allowed: {', '.join(ALLOWED_CATEGORIES)}",
+            reply_markup=nav_keyboard("admin_questions"),
+        )
+        return EDIT_CATEGORY_ONLY
+
+    context.user_data["edit_question"]["category"] = category
+
+    q = context.user_data["edit_question"]
+    preview_tuple = (
+        context.user_data["edit_qid"],
+        q["question_text"],
+        q["option_a"],
+        q["option_b"],
+        q["option_c"],
+        q["option_d"],
+        q["correct_option"],
+        q["category"],
+        q["difficulty"],
+        1,
+        0,
+    )
+
+    await update.message.reply_text(
+        "✅ Category updated.\n\n"
+        f"{format_question_preview(preview_tuple)}",
+        reply_markup=edit_question_menu_keyboard(),
+    )
+    return ADMIN_MENU
+
+
+async def edit_difficulty_only_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    difficulty = update.message.text.strip().lower()
+    if difficulty not in ALLOWED_DIFFICULTIES:
+        await update.message.reply_text(
+            "Invalid difficulty.\n\n"
+            f"Allowed: {', '.join(ALLOWED_DIFFICULTIES)}",
+            reply_markup=nav_keyboard("admin_questions"),
+        )
+        return EDIT_DIFFICULTY_ONLY
+
+    context.user_data["edit_question"]["difficulty"] = difficulty
+
+    q = context.user_data["edit_question"]
+    preview_tuple = (
+        context.user_data["edit_qid"],
+        q["question_text"],
+        q["option_a"],
+        q["option_b"],
+        q["option_c"],
+        q["option_d"],
+        q["correct_option"],
+        q["category"],
+        q["difficulty"],
+        1,
+        0,
+    )
+
+    await update.message.reply_text(
+        "✅ Difficulty updated.\n\n"
+        f"{format_question_preview(preview_tuple)}",
+        reply_markup=edit_question_menu_keyboard(),
+    )
     return ADMIN_MENU
 
 

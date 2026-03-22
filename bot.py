@@ -86,6 +86,16 @@ from handlers.admin import (
     BROADCAST_CONFIRM,
     IMPORT_FILE,
     SEARCH_KEYWORD,
+    edit_text_only_step,
+    edit_option_only_step,
+    edit_correct_only_step,
+    edit_category_only_step,
+    edit_difficulty_only_step,
+    EDIT_TEXT_ONLY,
+    EDIT_OPTION_ONLY,
+    EDIT_CORRECT_ONLY,
+    EDIT_CATEGORY_ONLY,
+    EDIT_DIFFICULTY_ONLY,
 )
 
 logging.basicConfig(
@@ -127,6 +137,13 @@ def main():
             EDIT_CORRECT: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_correct_step)],
             EDIT_CATEGORY: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_category_step)],
             EDIT_DIFFICULTY: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_difficulty_step)],
+
+            # 🔥 NEW EDIT SYSTEM
+            EDIT_TEXT_ONLY: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_text_only_step)],
+            EDIT_OPTION_ONLY: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_option_only_step)],
+            EDIT_CORRECT_ONLY: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_correct_only_step)],
+            EDIT_CATEGORY_ONLY: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_category_only_step)],
+            EDIT_DIFFICULTY_ONLY: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_difficulty_only_step)],
             BROADCAST_MESSAGE: [MessageHandler(filters.ALL & ~filters.COMMAND, broadcast_message_step)],
             BROADCAST_CONFIRM: [CallbackQueryHandler(broadcast_confirm_step)],
             IMPORT_FILE: [MessageHandler(filters.Document.ALL, import_questions_file_step)],

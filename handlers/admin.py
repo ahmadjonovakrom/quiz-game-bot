@@ -17,6 +17,8 @@ from utils.keyboards import (
     admin_reset_confirm_keyboard,
     back_cancel_keyboard,
     broadcast_confirm_keyboard,
+    edit_question_menu_keyboard,
+    edit_options_keyboard,
     delete_confirm_keyboard,
     question_action_keyboard,
     questions_pagination_keyboard,
@@ -344,10 +346,10 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         await query.edit_message_text(
             "✏️ Edit Question\n\n"
             f"{format_question_preview(q)}\n\n"
-            "Send new question text:",
-            reply_markup=nav_keyboard("admin_questions"),
+            "Choose what you want to edit:",
+            reply_markup=edit_question_menu_keyboard(),
         )
-        return EDIT_QUESTION
+        return ADMIN_MENU
     
     if data.startswith("admin_delete_direct_"):
         qid_text = data.replace("admin_delete_direct_", "").strip()
@@ -475,12 +477,12 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         }
 
         await query.edit_message_text(
-            "✏️ Edit Question\n\n"
+           "✏️ Edit Question\n\n"
             f"{format_question_preview(q)}\n\n"
-            "Send new question text:",
-            reply_markup=nav_keyboard("admin_questions"),
+            "Choose what you want to edit:",
+            reply_markup=edit_question_menu_keyboard(),
         )
-        return EDIT_QUESTION
+        return ADMIN_MENU
 
     if data == "admin_close":
         context.user_data.clear()
@@ -859,10 +861,10 @@ async def edit_id_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "✏️ Edit Question\n\n"
         f"{format_question_preview(q)}\n\n"
-        "Send new question text:",
-        reply_markup=nav_keyboard("admin_questions"),
+        "Choose what you want to edit:",
+        reply_markup=edit_question_menu_keyboard(),
     )
-    return EDIT_QUESTION
+    return ADMIN_MENU
 
 
 async def edit_question_step(update: Update, context: ContextTypes.DEFAULT_TYPE):

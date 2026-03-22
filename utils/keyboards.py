@@ -303,3 +303,29 @@ def admin_danger_keyboard() -> InlineKeyboardMarkup:
         [InlineKeyboardButton("♻️ Reset Stats", callback_data="admin_reset_stats_confirm")],
         [InlineKeyboardButton("⬅️ Back", callback_data="admin_back")],
     ])
+
+def edit_question_menu_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("✏️ Edit Text", callback_data="edit_field_text")],
+        [InlineKeyboardButton("🔘 Edit Options", callback_data="edit_field_options")],
+        [InlineKeyboardButton("✅ Edit Correct Answer", callback_data="edit_field_correct")],
+        [InlineKeyboardButton("🏷 Edit Category", callback_data="edit_field_category")],
+        [InlineKeyboardButton("📈 Edit Difficulty", callback_data="edit_field_difficulty")],
+        [InlineKeyboardButton("👀 Preview", callback_data="edit_preview")],
+        [InlineKeyboardButton("💾 Save", callback_data="edit_save")],
+        [InlineKeyboardButton("⬅️ Back", callback_data="admin_questions")],
+    ])
+
+
+def edit_options_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("A", callback_data="edit_option_a"),
+            InlineKeyboardButton("B", callback_data="edit_option_b"),
+        ],
+        [
+            InlineKeyboardButton("C", callback_data="edit_option_c"),
+            InlineKeyboardButton("D", callback_data="edit_option_d"),
+        ],
+        [InlineKeyboardButton("⬅️ Back", callback_data="edit_back_menu")],
+    ])

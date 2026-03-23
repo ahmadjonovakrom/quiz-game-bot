@@ -128,14 +128,22 @@ def format_final_results_page(results, page=1):
         mvp = max(results, key=lambda x: x.get("points", 0))
 
         def accuracy_value(row):
-            correct = row.get("correct", 0)
-            wrong = row.get("wrong", 0)
+            correct = row.get("correct_answers", 0)
+            wrong = row.get("wrong_answers", 0)
             total_answers = correct + wrong
+
             if total_answers == 0:
-                return 0
+                return -1
+
             return (correct / total_answers) * 100
 
-        accuracy_king = max(results, key=accuracy_value)
+        accuracy_king = max(
+            results,
+            key=lambda x: (
+                accuracy_value(x),
+                x.get("correct_answers", 0),
+            ),
+        )
 
         mvp_name = (
             mvp.get("full_name")
@@ -151,11 +159,16 @@ def format_final_results_page(results, page=1):
             or "Unknown"
         )
 
-        accuracy_percent = int(accuracy_value(accuracy_king))
+        accuracy_score = accuracy_value(accuracy_king)
 
         lines.append("")
         lines.append(f"👑 MVP: {mvp_name}")
-        lines.append(f"🎯 Accuracy Champion: {accuracy_name} ({accuracy_percent}%)")
+
+        if accuracy_score < 0:
+            lines.append("🎯 Accuracy Champion: No answers yet")
+        else:
+            accuracy_percent = int(accuracy_score)
+            lines.append(f"🎯 Accuracy Champion: {accuracy_name} ({accuracy_percent}%)")
 
     lines.append("")
     lines.append(f"📄 Page {page}/{total_pages}")

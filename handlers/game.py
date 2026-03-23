@@ -195,11 +195,19 @@ async def final_results_callback_handler(update: Update, context: ContextTypes.D
     text, has_next = format_final_results_page(all_results, page=page)
     markup = final_results_keyboard(game_id, page, has_next)
 
-    await query.edit_message_text(
-        text=text,
-        reply_markup=markup,
-        parse_mode="HTML",
-    )
+    try:
+        await query.edit_message_text(
+            text=text,
+            reply_markup=markup,
+            parse_mode="HTML",
+        )
+    except Exception:
+        await context.bot.send_message(
+            chat_id=query.message.chat.id,
+            text=text,
+            reply_markup=markup,
+            parse_mode="HTML",
+        )
 
 
 CATEGORY_LABELS = {
@@ -373,7 +381,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         game["questions_per_game"] = None
 
         # use chat_id for reliable return path
-        game["return_to_results"] = chat_id
+        game["return_to_results"] = source_game_id
 
         add_player_to_game(game, query.from_user)
         active_games[chat_id] = game
@@ -381,7 +389,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(
             format_setup_step_1_text(),
             reply_markup=get_question_count_keyboard(
-                back_callback=f"setup_back_to_results:{chat_id}"
+                back_callback=f"setup_back_to_results:{source_game_id}"
             ),
         )
         return

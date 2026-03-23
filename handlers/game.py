@@ -379,8 +379,6 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         game["status"] = "setup"
         game["questions_per_game"] = None
-
-        # use chat_id for reliable return path
         game["return_to_results"] = source_game_id
 
         add_player_to_game(game, query.from_user)
@@ -778,6 +776,29 @@ async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFA
 
     # default back/menu behavior
     if data in ("menu_back", "menu_main"):
+        game = active_games.get(chat_id)
+
+        # 🔥 If came from results → go BACK to results instead of menu
+        if game and game.get("return_to_results"):
+            game_id = game["return_to_results"]
+
+            all_pages = context.bot_data.get("final_results_pages", {})
+            all_results = all_pages.get(game_id)
+
+            if all_results:
+                await clear_game(context, chat_id)
+
+                text, has_next = format_final_results_page(all_results, page=1)
+                markup = final_results_keyboard(game_id, 1, has_next)
+
+                await query.edit_message_text(
+                    text=text,
+                    reply_markup=markup,
+                    parse_mode="HTML",
+                )
+                return True
+
+        # ✅ normal behavior
         await clear_game(context, chat_id)
         await query.edit_message_text(
             "Welcome to English Lemon !\n\n"

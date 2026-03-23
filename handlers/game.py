@@ -371,7 +371,9 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         game["status"] = "setup"
         game["questions_per_game"] = None
-        game["return_to_results"] = source_game_id
+
+        # IMPORTANT: use chat_id consistently for return path
+        game["return_to_results"] = chat_id
 
         add_player_to_game(game, query.from_user)
         active_games[chat_id] = game
@@ -379,7 +381,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(
             format_setup_step_1_text(),
             reply_markup=get_question_count_keyboard(
-                back_callback=f"setup_back_to_results:{source_game_id}"
+                back_callback=f"setup_back_to_results:{chat_id}"
             ),
         )
         return

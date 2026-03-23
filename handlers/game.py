@@ -230,8 +230,8 @@ def get_main_menu_keyboard():
     return main_menu_keyboard()
 
 
-def get_question_count_keyboard():
-    return game_setup_questions_keyboard()
+def get_question_count_keyboard(back_callback: str = "menu_main"):
+    return game_setup_questions_keyboard(back_callback)
 
 
 def get_category_keyboard():
@@ -351,6 +351,38 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     back_kb = InlineKeyboardMarkup(
         [[InlineKeyboardButton("⬅️ Back", callback_data="menu_back")]]
     )
+
+    if data.startswith("results_play_again:"):
+        try:
+            _, game_id_str = data.split(":")
+            source_game_id = int(game_id_str)
+        except Exception:
+            await query.answer("Error.", show_alert=True)
+            return
+
+        chat_id = query.message.chat.id
+
+        game = create_new_game_data(
+            started_by=query.from_user.id,
+            questions_per_game=DEFAULT_QUESTIONS_PER_GAME,
+            category=DEFAULT_CATEGORY,
+            difficulty="mixed",
+        )
+
+        game["status"] = "setup"
+        game["questions_per_game"] = None
+        game["return_to_results"] = source_game_id
+
+        add_player_to_game(game, query.from_user)
+        active_games[chat_id] = game
+
+        await query.edit_message_text(
+            format_setup_step_1_text(),
+            reply_markup=get_question_count_keyboard(
+                back_callback=f"setup_back_to_results:{source_game_id}"
+            ),
+        )
+        return
 
     if data == "menu_play":
         if query.message.chat.type in ("group", "supergroup"):
@@ -694,7 +726,11 @@ async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFA
 
     data = query.data
 
-    if not data.startswith("setup_") and data not in ("menu_back", "menu_main"):
+    if (
+        not data.startswith("setup_")
+        and data not in ("menu_back", "menu_main")
+        and not data.startswith("setup_back_to_results:")
+    ):
         return False
 
     await query.answer()
@@ -702,6 +738,33 @@ async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFA
     user = query.from_user
     chat_id = query.message.chat.id
 
+    # 🔥 return from Play Again setup back to final results
+    if data.startswith("setup_back_to_results:"):
+        try:
+            _, _, game_id_str = data.split(":")
+            game_id = int(game_id_str)
+        except Exception:
+            await query.answer("Error.", show_alert=True)
+            return True
+
+        await clear_game(context, chat_id)
+
+        all_results = context.bot_data.get("final_results_pages", {}).get(game_id)
+        if not all_results:
+            await query.edit_message_text("Results not available.")
+            return True
+
+        text, has_next = format_final_results_page(all_results, page=1)
+        markup = final_results_keyboard(game_id, 1, has_next)
+
+        await query.edit_message_text(
+            text=text,
+            reply_markup=markup,
+            parse_mode="HTML",
+        )
+        return True
+
+    # default back/menu behavior
     if data in ("menu_back", "menu_main"):
         await clear_game(context, chat_id)
         await query.edit_message_text(
@@ -747,9 +810,13 @@ async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFA
             return True
 
         if data == "setup_back_to_questions":
+            back_callback = "menu_main"
+            if game.get("return_to_results"):
+                back_callback = f"setup_back_to_results:{game['return_to_results']}"
+
             await query.edit_message_text(
                 format_setup_step_1_text(),
-                reply_markup=get_question_count_keyboard(),
+                reply_markup=get_question_count_keyboard(back_callback=back_callback),
             )
             return True
 
@@ -921,12 +988,18 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     data = query.data
 
-    if data.startswith("setup_") or data in ("menu_back", "menu_main"):
+    # 🔥 IMPORTANT FIX
+    if (
+        data.startswith("setup_")
+        or data in ("menu_back", "menu_main")
+        or data.startswith("setup_back_to_results:")
+    ):
         handled = await game_setup_callback_handler(update, context)
         if handled is True:
             return
 
     parts = data.split("|")
+
     if parts[0] != "join":
         await query.answer()
         return
@@ -941,8 +1014,10 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ensure_chat(query.message.chat)
 
     lock = get_game_lock(chat_id)
+
     async with lock:
         game = active_games.get(chat_id)
+
         if not game:
             await query.answer("No active game")
             return
@@ -953,13 +1028,13 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         user = query.from_user
         added = add_player_to_game(game, user)
-        logger.warning("JOIN RESULT: user=%s added=%s total=%s", user.id, added, len(game["players"]))
 
         if not added:
             await query.answer("Already joined")
             return
 
     ensure_player(user)
+
     if chat_id < 0:
         ensure_group_player(chat_id, user)
 

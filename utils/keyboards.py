@@ -113,18 +113,18 @@ def leaderboard_pagination_keyboard(
     return InlineKeyboardMarkup(rows)
 
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-
-
 def final_results_keyboard(game_id: int, page: int, has_next: bool) -> InlineKeyboardMarkup:
     rows = []
 
-    # 🔁 MAIN ACTION BUTTONS (your design)
-    rows.append([InlineKeyboardButton("🍋 Play Again", callback_data="menu_play")])
+    rows.append([
+        InlineKeyboardButton(
+            "🍋 Play Again",
+            callback_data=f"results_play_again:{game_id}"
+        )
+    ])
     rows.append([InlineKeyboardButton("🏆 Leaderboard", callback_data="menu_leaderboard")])
     rows.append([InlineKeyboardButton("🏠 Menu", callback_data="menu_main")])
 
-    # 📄 NAVIGATION (keep this for pagination)
     nav_row = []
 
     if page > 1:
@@ -149,7 +149,9 @@ def final_results_keyboard(game_id: int, page: int, has_next: bool) -> InlineKey
     return InlineKeyboardMarkup(rows)
 
 
-def game_setup_questions_keyboard() -> InlineKeyboardMarkup:
+def game_setup_questions_keyboard(
+    back_callback: str = "menu_main",
+) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("5", callback_data="setup_questions_5"),
@@ -160,7 +162,7 @@ def game_setup_questions_keyboard() -> InlineKeyboardMarkup:
             InlineKeyboardButton("20", callback_data="setup_questions_20"),
         ],
         [
-            InlineKeyboardButton("⬅️ Back", callback_data="menu_main"),
+            InlineKeyboardButton("⬅️ Back", callback_data=back_callback),
         ],
     ])
 
@@ -225,6 +227,7 @@ def delete_confirm_keyboard() -> InlineKeyboardMarkup:
         ]
     ])
 
+
 def admin_reset_confirm_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [
@@ -233,6 +236,7 @@ def admin_reset_confirm_keyboard() -> InlineKeyboardMarkup:
         ]
     ])
 
+
 def broadcast_confirm_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [
@@ -240,6 +244,7 @@ def broadcast_confirm_keyboard() -> InlineKeyboardMarkup:
             InlineKeyboardButton("❌ Cancel", callback_data="broadcast_no"),
         ]
     ])
+
 
 def admin_settings_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
@@ -252,6 +257,7 @@ def admin_settings_keyboard() -> InlineKeyboardMarkup:
         [InlineKeyboardButton("🍋 Hard Points", callback_data="settings_points_hard")],
         [InlineKeyboardButton("⬅️ Back", callback_data="admin_back")],
     ])
+
 
 def question_action_keyboard(
     question_id: int,
@@ -320,11 +326,13 @@ def search_results_keyboard(results) -> InlineKeyboardMarkup:
     rows.append([InlineKeyboardButton("⬅️ Back", callback_data="admin_questions")])
     return InlineKeyboardMarkup(rows)
 
+
 def admin_danger_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("♻️ Reset Stats", callback_data="admin_reset_stats_confirm")],
         [InlineKeyboardButton("⬅️ Back", callback_data="admin_back")],
     ])
+
 
 def edit_question_menu_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([

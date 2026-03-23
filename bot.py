@@ -192,8 +192,19 @@ def main():
     app.add_handler(CommandHandler("myid", myid))
 
     # ================= CALLBACKS =================
-    app.add_handler(CallbackQueryHandler(button_handler, pattern=r"^(setup_|join\|)"))
-    app.add_handler(CallbackQueryHandler(menu_handler, pattern=r"^menu_"))
+    app.add_handler(
+        CallbackQueryHandler(
+            button_handler,
+            pattern=r"^(setup_|setup_back_to_results:|join\|)"
+        )
+    )
+
+    app.add_handler(
+        CallbackQueryHandler(
+            menu_handler,
+            pattern=r"^(menu_|results_play_again:)"
+        )
+    )
     app.add_handler(CallbackQueryHandler(final_results_callback_handler, pattern=r"^final_results:"))
 
     # MAIN LEADERBOARD HANDLER

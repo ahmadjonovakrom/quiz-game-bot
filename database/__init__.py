@@ -84,6 +84,13 @@ from .games import (
     get_broadcast_chat_ids,
 )
 
+from .group_bonus import (
+    save_bot_group_invite,
+    get_inviter_for_group,
+    has_claimed_group_bonus,
+    mark_group_bonus_claimed,
+)
+
 # stats
 from .stats import (
     get_question_count,
@@ -194,4 +201,9 @@ __all__ = [
     "set_setting",
     "get_all_settings",
     "get_game_settings",
+
+    "save_bot_group_invite",
+    "get_inviter_for_group",
+    "has_claimed_group_bonus",
+    "mark_group_bonus_claimed",
 ]

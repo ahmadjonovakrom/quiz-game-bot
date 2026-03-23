@@ -70,6 +70,7 @@ from services.game_service import (
 
 logger = logging.getLogger(__name__)
 
+from handlers.group_bonus import try_give_group_bonus
 
 def load_dynamic_settings():
     settings = get_game_settings()
@@ -1265,3 +1266,6 @@ async def end_game(chat_id, context):
             chat_id=chat_id,
             text="🏁 Game finished.",
         )
+
+    # ✅ GIVE BONUS HERE
+    await try_give_group_bonus(chat_id, {"players": players}, context)

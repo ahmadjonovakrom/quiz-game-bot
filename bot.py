@@ -36,6 +36,9 @@ from handlers.profile import (
     profile_callback_handler,
 )
 
+from telegram.ext import ChatMemberHandler
+from handlers.group_bonus import bot_added_to_group_handler
+
 from handlers.admin import (
     admin_panel,
     admin_button_handler,
@@ -202,6 +205,13 @@ def main():
     )
 
     app.add_handler(PollAnswerHandler(receive_poll_answer))
+
+    app.add_handler(
+        ChatMemberHandler(
+            bot_added_to_group_handler,
+            ChatMemberHandler.MY_CHAT_MEMBER
+        )
+    )
 
     logger.warning("RUNNING POLLING")
     app.run_polling(drop_pending_updates=True)

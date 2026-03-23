@@ -740,7 +740,6 @@ async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFA
     user = query.from_user
     chat_id = query.message.chat.id
 
-    # 🔥 return from Play Again setup back to final results
     if data.startswith("setup_back_to_results:"):
         try:
             _, _, game_id_str = data.split(":")
@@ -749,18 +748,15 @@ async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFA
             await query.answer("Error.", show_alert=True)
             return True
 
-        await clear_game(context, chat_id)
-
+        # ✅ NOW INSIDE THE BLOCK
         all_pages = context.bot_data.get("final_results_pages", {})
         all_results = all_pages.get(game_id)
-
-        # 🔥 fallback (THIS FIXES YOUR BUG)
-        if not all_results:
-            all_results = context.bot_data.get("last_results")
 
         if not all_results:
             await query.edit_message_text("Results not available.")
             return True
+
+        await clear_game(context, chat_id)
 
         text, has_next = format_final_results_page(all_results, page=1)
         markup = final_results_keyboard(game_id, 1, has_next)

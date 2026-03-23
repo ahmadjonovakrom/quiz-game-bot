@@ -372,7 +372,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         game["status"] = "setup"
         game["questions_per_game"] = None
 
-        # IMPORTANT: use chat_id consistently for return path
+        # use chat_id for reliable return path
         game["return_to_results"] = chat_id
 
         add_player_to_game(game, query.from_user)

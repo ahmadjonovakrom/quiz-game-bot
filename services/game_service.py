@@ -243,13 +243,10 @@ def build_final_results(game: dict) -> list[dict]:
     return final_results
 
 
-def build_results_text(final_results: list[dict]) -> str:
-    text = "🏆 Game Results\n\n"
+def build_results_text(results):
+    text = "🏆 Final Results\n\n"
 
-    if not final_results:
-        return text + "No players scored any points."
-
-    for row in final_results:
-        text += f"{row['position']}. {row['name']} — {row['score']} 🍋\n"
+    for row in results:
+        text += f"{row['position']}. {row['name']} — {row['points']} 🍋\n"
 
     return text

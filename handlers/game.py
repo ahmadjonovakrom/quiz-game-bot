@@ -1,4 +1,5 @@
 import asyncio
+import html
 import logging
 from datetime import date
 
@@ -122,7 +123,7 @@ def format_final_results_page(results, page=1):
         else:
             prefix = f"{index}."
 
-        lines.append(f"{prefix} {name} — {points}🍋")
+        lines.append(f"{prefix} {name} — {points} 🍋")
 
     if results:
         mvp = max(results, key=lambda x: x.get("points", 0))
@@ -137,13 +138,20 @@ def format_final_results_page(results, page=1):
 
             return (correct / total_answers) * 100
 
-        accuracy_king = max(
-            results,
-            key=lambda x: (
-                accuracy_value(x),
-                x.get("correct_answers", 0),
-            ),
-        )
+        valid_players = [
+            r for r in results
+            if (r.get("correct_answers", 0) + r.get("wrong_answers", 0)) > 0
+        ]
+
+        accuracy_king = None
+        if valid_players:
+            accuracy_king = max(
+                valid_players,
+                key=lambda x: (
+                    accuracy_value(x),
+                    x.get("correct_answers", 0),
+                ),
+            )
 
         mvp_name = (
             mvp.get("full_name")
@@ -152,27 +160,57 @@ def format_final_results_page(results, page=1):
             or "Unknown"
         )
 
-        accuracy_name = (
-            accuracy_king.get("full_name")
-            or accuracy_king.get("name")
-            or accuracy_king.get("username")
-            or "Unknown"
-        )
-
-        accuracy_score = accuracy_value(accuracy_king)
-
         lines.append("")
         lines.append(f"👑 MVP: {mvp_name}")
 
-        if accuracy_score < 0:
+        if not accuracy_king:
             lines.append("🎯 Accuracy Champion: No answers yet")
         else:
-            accuracy_percent = int(accuracy_score)
+            accuracy_name = (
+                accuracy_king.get("full_name")
+                or accuracy_king.get("name")
+                or accuracy_king.get("username")
+                or "Unknown"
+            )
+            accuracy_percent = round(accuracy_value(accuracy_king))
             lines.append(f"🎯 Accuracy Champion: {accuracy_name} ({accuracy_percent}%)")
 
-
-
     return "\n".join(lines), has_next
+
+
+async def show_saved_results(query, context, result_id: int):
+    all_results = context.bot_data.get("final_results_pages", {}).get(result_id)
+    if not all_results:
+        await query.edit_message_text("Results not available.")
+        return True
+
+    text, has_next = format_final_results_page(all_results, page=1)
+    markup = final_results_keyboard(result_id, 1, has_next)
+
+    await query.edit_message_text(
+        text=text,
+        reply_markup=markup,
+        parse_mode="HTML",
+    )
+    return True
+
+
+async def block_group_menu_during_game(query, context, action_name: str) -> bool:
+    chat = query.message.chat
+    if chat.type not in ("group", "supergroup"):
+        return False
+
+    lock = get_game_lock(chat.id)
+    async with lock:
+        game = active_games.get(chat.id)
+        if game and game.get("status") in ("setup", "joining", "running"):
+            await query.answer(
+                f"You cannot open {action_name} during setup or an active game.",
+                show_alert=True,
+            )
+            return True
+
+    return False
 
 
 async def final_results_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -461,14 +499,20 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
     if data == "menu_leaderboard":
+        if await block_group_menu_during_game(query, context, "leaderboard"):
+            return
         await leaderboard(update, context)
         return
 
     if data == "menu_profile":
+        if await block_group_menu_during_game(query, context, "profile"):
+            return
         await profile(update, context)
         return
 
     if data == "menu_help":
+        if await block_group_menu_during_game(query, context, "help"):
+            return
         await query.edit_message_text(
             "English Lemon Commands:\n\n"
             "/start - open the main menu\n"
@@ -754,51 +798,17 @@ async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFA
             await query.answer("Error.", show_alert=True)
             return True
 
-        # ✅ NOW INSIDE THE BLOCK
-        all_pages = context.bot_data.get("final_results_pages", {})
-        all_results = all_pages.get(game_id)
-
-        if not all_results:
-            await query.edit_message_text("Results not available.")
-            return True
-
         await clear_game(context, chat_id)
+        return await show_saved_results(query, context, game_id)
 
-        text, has_next = format_final_results_page(all_results, page=1)
-        markup = final_results_keyboard(game_id, 1, has_next)
-
-        await query.edit_message_text(
-            text=text,
-            reply_markup=markup,
-            parse_mode="HTML",
-        )
-        return True
-
-    # default back/menu behavior
     if data in ("menu_back", "menu_main"):
         game = active_games.get(chat_id)
 
-        # 🔥 If came from results → go BACK to results instead of menu
         if game and game.get("return_to_results"):
             game_id = game["return_to_results"]
+            await clear_game(context, chat_id)
+            return await show_saved_results(query, context, game_id)
 
-            all_pages = context.bot_data.get("final_results_pages", {})
-            all_results = all_pages.get(game_id)
-
-            if all_results:
-                await clear_game(context, chat_id)
-
-                text, has_next = format_final_results_page(all_results, page=1)
-                markup = final_results_keyboard(game_id, 1, has_next)
-
-                await query.edit_message_text(
-                    text=text,
-                    reply_markup=markup,
-                    parse_mode="HTML",
-                )
-                return True
-
-        # ✅ normal behavior
         await clear_game(context, chat_id)
         await query.edit_message_text(
             "Welcome to English Lemon !\n\n"
@@ -1021,7 +1031,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     data = query.data
 
-    # 🔥 IMPORTANT FIX
     if (
         data.startswith("setup_")
         or data in ("menu_back", "menu_main")
@@ -1338,7 +1347,7 @@ async def end_game(chat_id, context):
                 or "Unknown"
             )
 
-            safe_name = str(raw_name).replace("<", "&lt;").replace(">", "&gt;")
+            safe_name = html.escape(str(raw_name))
             name = f'<a href="tg://user?id={user_id}">{safe_name}</a>'
 
             normalized_results.append({
@@ -1362,11 +1371,9 @@ async def end_game(chat_id, context):
         if normalized_results:
             winner_user_id = normalized_results[0].get("user_id")
 
-        game_id = chat_id
+        result_id = db_game_id or chat_id
         context.bot_data.setdefault("final_results_pages", {})
-        context.bot_data["final_results_pages"][chat_id] = normalized_results
-
-        # 🔥 ALSO STORE LAST RESULT
+        context.bot_data["final_results_pages"][result_id] = normalized_results
         context.bot_data["last_results"] = normalized_results
 
         active_games.pop(chat_id, None)
@@ -1412,7 +1419,7 @@ async def end_game(chat_id, context):
 
     if normalized_results:
         text, has_next = format_final_results_page(normalized_results, page=1)
-        markup = final_results_keyboard(game_id, 1, has_next)
+        markup = final_results_keyboard(result_id, 1, has_next)
 
         await context.bot.send_message(
             chat_id=chat_id,

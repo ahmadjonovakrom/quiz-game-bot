@@ -165,6 +165,23 @@ def create_tables():
             )
         """)
 
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS bot_group_invites (
+                chat_id INTEGER PRIMARY KEY,
+                inviter_user_id INTEGER NOT NULL,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS group_bonus_claims (
+            user_id INTEGER PRIMARY KEY,
+            claimed INTEGER DEFAULT 0,
+            claimed_chat_id INTEGER,
+            claimed_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+        """)
+
         defaults = {
             "min_players": "1",
             "join_seconds": "60",

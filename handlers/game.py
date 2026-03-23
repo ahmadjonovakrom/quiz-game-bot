@@ -187,11 +187,20 @@ async def show_saved_results(query, context, result_id: int):
     text, has_next = format_final_results_page(all_results, page=1)
     markup = final_results_keyboard(result_id, 1, has_next)
 
-    await query.edit_message_text(
-        text=text,
-        reply_markup=markup,
-        parse_mode="HTML",
-    )
+    try:
+        await query.edit_message_text(
+            text=text,
+            reply_markup=markup,
+            parse_mode="HTML",
+        )
+    except Exception:
+        await context.bot.send_message(
+            chat_id=query.message.chat.id,
+            text=text,
+            reply_markup=markup,
+            parse_mode="HTML",
+        )
+
     return True
 
 
@@ -798,7 +807,16 @@ async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFA
             await query.answer("Error.", show_alert=True)
             return True
 
-        await clear_game(context, chat_id)
+        # only clear active game state, do not touch the current message first
+        game = active_games.get(chat_id)
+        if game:
+            current_poll_id = game.get("current_poll_id")
+            if current_poll_id:
+                poll_map.pop(current_poll_id, None)
+
+            active_games.pop(chat_id, None)
+            cleanup_game_lock(chat_id)
+
         return await show_saved_results(query, context, game_id)
 
     if data in ("menu_back", "menu_main"):
@@ -806,7 +824,14 @@ async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFA
 
         if game and game.get("return_to_results"):
             game_id = game["return_to_results"]
-            await clear_game(context, chat_id)
+
+            current_poll_id = game.get("current_poll_id")
+            if current_poll_id:
+                poll_map.pop(current_poll_id, None)
+
+            active_games.pop(chat_id, None)
+            cleanup_game_lock(chat_id)
+
             return await show_saved_results(query, context, game_id)
 
         await clear_game(context, chat_id)

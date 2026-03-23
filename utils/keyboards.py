@@ -113,7 +113,18 @@ def leaderboard_pagination_keyboard(
     return InlineKeyboardMarkup(rows)
 
 
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+
+
 def final_results_keyboard(game_id: int, page: int, has_next: bool) -> InlineKeyboardMarkup:
+    rows = []
+
+    # 🔁 MAIN ACTION BUTTONS (your design)
+    rows.append([InlineKeyboardButton("🍋 Play Again", callback_data="menu_play")])
+    rows.append([InlineKeyboardButton("🏆 Leaderboard", callback_data="menu_leaderboard")])
+    rows.append([InlineKeyboardButton("🏠 Menu", callback_data="menu_main")])
+
+    # 📄 NAVIGATION (keep this for pagination)
     nav_row = []
 
     if page > 1:
@@ -132,11 +143,10 @@ def final_results_keyboard(game_id: int, page: int, has_next: bool) -> InlineKey
             )
         )
 
-    rows = []
     if nav_row:
         rows.append(nav_row)
 
-    return InlineKeyboardMarkup(rows) if rows else None
+    return InlineKeyboardMarkup(rows)
 
 
 def game_setup_questions_keyboard() -> InlineKeyboardMarkup:

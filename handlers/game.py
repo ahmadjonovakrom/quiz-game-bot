@@ -170,8 +170,7 @@ def format_final_results_page(results, page=1):
             accuracy_percent = int(accuracy_score)
             lines.append(f"🎯 Accuracy Champion: {accuracy_name} ({accuracy_percent}%)")
 
-    lines.append("")
-    lines.append(f"📄 Page {page}/{total_pages}")
+
 
     return "\n".join(lines), has_next
 

@@ -403,6 +403,11 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
 
     data = query.data
+
+    # Do not let menu handler touch setup-return callbacks
+    if data.startswith("setup_") or data.startswith("setup_back_to_results:"):
+        return
+
     back_kb = InlineKeyboardMarkup(
         [[InlineKeyboardButton("⬅️ Back", callback_data="menu_back")]]
     )
@@ -807,7 +812,6 @@ async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFA
             await query.answer("Error.", show_alert=True)
             return True
 
-        # only clear active game state, do not touch the current message first
         game = active_games.get(chat_id)
         if game:
             current_poll_id = game.get("current_poll_id")
@@ -817,11 +821,13 @@ async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFA
             active_games.pop(chat_id, None)
             cleanup_game_lock(chat_id)
 
-        return await show_saved_results(query, context, game_id)
+        await show_saved_results(query, context, game_id)
+        return True
 
     if data in ("menu_back", "menu_main"):
         game = active_games.get(chat_id)
 
+        # Priority: return to saved results if this setup came from Play Again
         if game and game.get("return_to_results"):
             game_id = game["return_to_results"]
 
@@ -832,7 +838,8 @@ async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFA
             active_games.pop(chat_id, None)
             cleanup_game_lock(chat_id)
 
-            return await show_saved_results(query, context, game_id)
+            await show_saved_results(query, context, game_id)
+            return True
 
         await clear_game(context, chat_id)
         await query.edit_message_text(
@@ -939,7 +946,7 @@ async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFA
                 await query.answer("Failed to start registration.", show_alert=True)
                 return True
 
-        return False
+        return True
 
 
 async def begin_game_after_join(chat_id, context):

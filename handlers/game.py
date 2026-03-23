@@ -751,7 +751,13 @@ async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFA
 
         await clear_game(context, chat_id)
 
-        all_results = context.bot_data.get("final_results_pages", {}).get(game_id)
+        all_pages = context.bot_data.get("final_results_pages", {})
+        all_results = all_pages.get(game_id)
+
+        # 🔥 fallback (THIS FIXES YOUR BUG)
+        if not all_results:
+            all_results = context.bot_data.get("last_results")
+
         if not all_results:
             await query.edit_message_text("Results not available.")
             return True
@@ -1332,7 +1338,11 @@ async def end_game(chat_id, context):
             winner_user_id = normalized_results[0].get("user_id")
 
         game_id = chat_id
-        context.bot_data.setdefault("final_results_pages", {})[game_id] = normalized_results
+        context.bot_data.setdefault("final_results_pages", {})
+        context.bot_data["final_results_pages"][chat_id] = normalized_results
+
+        # 🔥 ALSO STORE LAST RESULT
+        context.bot_data["last_results"] = normalized_results
 
         active_games.pop(chat_id, None)
         cleanup_game_lock(chat_id)

@@ -8,6 +8,7 @@ from telegram.ext import (
     PollAnswerHandler,
     ConversationHandler,
     MessageHandler,
+    ChatMemberHandler,
     filters,
 )
 
@@ -36,7 +37,6 @@ from handlers.profile import (
     profile_callback_handler,
 )
 
-from telegram.ext import ChatMemberHandler
 from handlers.group_bonus import bot_added_to_group_handler
 
 from handlers.admin import (
@@ -120,11 +120,11 @@ def main():
             CommandHandler("admin", admin_panel),
             CallbackQueryHandler(
                 admin_button_handler,
-                pattern=r"^(admin_|edit_|settings_)"
+                pattern=r"^(admin_|edit_|settings_)",
             ),
             CallbackQueryHandler(
                 import_questions_entry,
-                pattern=r"^admin_import_questions$"
+                pattern=r"^admin_import_questions$",
             ),
         ],
         states={
@@ -146,7 +146,6 @@ def main():
             EDIT_CATEGORY: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_category_step)],
             EDIT_DIFFICULTY: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_difficulty_step)],
 
-            # NEW EDIT SYSTEM
             EDIT_TEXT_ONLY: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_text_only_step)],
             EDIT_OPTION_ONLY: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_option_only_step)],
             EDIT_CORRECT_ONLY: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_correct_only_step)],
@@ -161,7 +160,7 @@ def main():
             ADMIN_MENU: [
                 CallbackQueryHandler(
                     admin_button_handler,
-                    pattern=r"^(admin_|edit_|settings_)"
+                    pattern=r"^(admin_|edit_|settings_)",
                 )
             ],
 
@@ -192,22 +191,31 @@ def main():
     app.add_handler(CommandHandler("myid", myid))
 
     # ================= CALLBACKS =================
+    # Final results pagination first
+    app.add_handler(
+        CallbackQueryHandler(
+            final_results_callback_handler,
+            pattern=r"^final_results:",
+        )
+    )
+
+    # Setup / join / back callbacks that must stay inside game flow
     app.add_handler(
         CallbackQueryHandler(
             button_handler,
-            pattern=r"^(setup_|setup_back_to_results:|join\|)"
+            pattern=r"^(setup_|setup_back_to_results:|menu_back$|menu_main$|join\|)",
         )
     )
 
+    # Main menu + play again
     app.add_handler(
         CallbackQueryHandler(
             menu_handler,
-            pattern=r"^(menu_|results_play_again:)"
+            pattern=r"^(menu_|results_play_again:)",
         )
     )
-    app.add_handler(CallbackQueryHandler(final_results_callback_handler, pattern=r"^final_results:"))
 
-    # MAIN LEADERBOARD HANDLER
+    # Leaderboard / profile callbacks
     app.add_handler(
         CallbackQueryHandler(
             profile_callback_handler,
@@ -220,7 +228,7 @@ def main():
     app.add_handler(
         ChatMemberHandler(
             bot_added_to_group_handler,
-            ChatMemberHandler.MY_CHAT_MEMBER
+            ChatMemberHandler.MY_CHAT_MEMBER,
         )
     )
 

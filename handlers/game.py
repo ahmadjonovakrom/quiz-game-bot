@@ -1331,7 +1331,7 @@ async def end_game(chat_id, context):
         if normalized_results:
             winner_user_id = normalized_results[0].get("user_id")
 
-        game_id = db_game_id or chat_id
+        game_id = chat_id
         context.bot_data.setdefault("final_results_pages", {})[game_id] = normalized_results
 
         active_games.pop(chat_id, None)

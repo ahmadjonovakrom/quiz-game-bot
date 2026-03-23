@@ -35,8 +35,10 @@ from database import (
     has_played_daily_quiz,
     record_daily_quiz_attempt,
     get_game_settings,
+    has_claimed_group_bonus,
 )
 from handlers.profile import profile, leaderboard
+from handlers.group_bonus import try_give_group_bonus
 from utils.helpers import (
     safe_task,
     safe_delete_message,
@@ -70,7 +72,6 @@ from services.game_service import (
 
 logger = logging.getLogger(__name__)
 
-from handlers.group_bonus import try_give_group_bonus
 
 def load_dynamic_settings():
     settings = get_game_settings()
@@ -367,9 +368,43 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await start_game(update, context)
             return
         else:
+            user_id = query.from_user.id
+            bot_username = context.bot.username
+            already_claimed = has_claimed_group_bonus(user_id)
+
+            if not already_claimed:
+                text = (
+                    "🍋 Play Quiz in Groups!\n\n"
+                    "Add English Lemon to your group and give it admin rights.\n\n"
+                    "🎯 Bonus: Earn +1000 🍋 after your first completed game!\n\n"
+                    "✅ Rules:\n"
+                    "• One-time reward only\n"
+                    "• Bot must have admin rights\n"
+                    "• You must complete at least 1 game\n\n"
+                    "👇 Start here:"
+                )
+            else:
+                text = (
+                    "🍋 Play Quiz in Groups!\n\n"
+                    "Add English Lemon to your group and start playing with friends.\n\n"
+                    "👇 Start here:"
+                )
+
+            keyboard = InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton(
+                        "➕ Add to Group",
+                        url=f"https://t.me/{bot_username}?startgroup=true"
+                    )
+                ],
+                [
+                    InlineKeyboardButton("⬅️ Back", callback_data="menu_back")
+                ],
+            ])
+
             await query.edit_message_text(
-                "To start a quiz game, add me to a group and use:\n\n/startgame",
-                reply_markup=back_kb,
+                text,
+                reply_markup=keyboard,
             )
             return
 
@@ -1267,5 +1302,4 @@ async def end_game(chat_id, context):
             text="🏁 Game finished.",
         )
 
-    # ✅ GIVE BONUS HERE
     await try_give_group_bonus(chat_id, {"players": players}, context)

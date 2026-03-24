@@ -228,8 +228,6 @@ async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFA
     ):
         return False
 
-    await query.answer()
-
     user = query.from_user
     chat_id = query.message.chat.id
 
@@ -301,7 +299,17 @@ async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFA
     async with lock:
         game = active_games.get(chat_id)
 
-        if game:
+        if not game or game.get("status") not in ("setup", "joining"):
+            await query.edit_message_text("No active game setup found.")
+            return True
+
+        restricted_actions = {
+            "setup_start_game",
+            "setup_back_to_questions",
+            "setup_back_to_categories",
+        }
+
+        if data in restricted_actions:
             status = game.get("status")
 
             if status == "running":
@@ -320,10 +328,6 @@ async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFA
                         show_alert=True,
                     )
                     return True
-
-        if not game or game.get("status") not in ("setup", "joining"):
-            await query.edit_message_text("No active game setup found.")
-            return True
 
         if game["status"] == "joining" and data.startswith("setup_"):
             await query.answer("Game already started.", show_alert=True)
@@ -410,6 +414,7 @@ async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFA
                 await query.answer("Failed to start registration.", show_alert=True)
                 return True
 
+        await query.answer()
         return True
 
 

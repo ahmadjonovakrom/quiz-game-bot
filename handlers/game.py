@@ -86,11 +86,13 @@ def row_value(row, key, default=None):
     except Exception:
         return default
 
+
 from handlers.game_setup import (
     load_dynamic_settings,
     refresh_join_message,
     game_setup_callback_handler,
 )
+
 
 def get_question_points(difficulty: str) -> int:
     settings = load_dynamic_settings()
@@ -191,7 +193,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if handled is True:
             return
 
-    # Handle join button
     parts = data.split("|")
     if parts[0] == "join":
         await query.answer()
@@ -235,6 +236,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     await query.answer()
+
 
 async def send_question(chat_id, context):
     settings = load_dynamic_settings()

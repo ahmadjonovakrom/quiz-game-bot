@@ -233,7 +233,7 @@ async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFA
 
     if data.startswith("setup_back_to_results:"):
         try:
-            _, _, game_id_str = data.split(":")
+            _, game_id_str = data.split(":")
             game_id = int(game_id_str)
         except Exception:
             await query.answer("Error.", show_alert=True)

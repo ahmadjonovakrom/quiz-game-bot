@@ -203,9 +203,18 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = get_question_count_keyboard()
 
     if query:
+        await query.answer()
         await query.edit_message_text(text, reply_markup=keyboard)
+        setup_message_id = query.message.message_id
     else:
-        await message.reply_text(text, reply_markup=keyboard)
+        msg = await message.reply_text(text, reply_markup=keyboard)
+        setup_message_id = msg.message_id
+
+    lock = get_game_lock(chat.id)
+    async with lock:
+        game = active_games.get(chat.id)
+        if game:
+            game["setup_message_id"] = setup_message_id
 
 
 async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -217,7 +226,6 @@ async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFA
 
     data = query.data
     chat_id = query.message.chat.id
-    user = query.from_user
 
     if (
         not data.startswith("setup_")
@@ -264,6 +272,7 @@ async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFA
                 format_setup_step_2_text(count),
                 reply_markup=get_category_keyboard(),
             )
+            game["setup_message_id"] = query.message.message_id
             return True
 
         if data == "setup_back_to_questions":
@@ -271,6 +280,7 @@ async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFA
                 format_setup_step_1_text(),
                 reply_markup=get_question_count_keyboard(back_callback="menu_main"),
             )
+            game["setup_message_id"] = query.message.message_id
             return True
 
         if data.startswith("setup_category_"):
@@ -290,6 +300,7 @@ async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFA
                 ),
                 reply_markup=get_setup_confirmation_keyboard(),
             )
+            game["setup_message_id"] = query.message.message_id
             return True
 
         if data == "setup_back_to_categories":
@@ -297,6 +308,7 @@ async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFA
                 format_setup_step_2_text(game["questions_per_game"]),
                 reply_markup=get_category_keyboard(),
             )
+            game["setup_message_id"] = query.message.message_id
             return True
 
         if data == "setup_start_game":
@@ -315,6 +327,7 @@ async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFA
                 )
 
                 game["join_message_id"] = query.message.message_id
+                game["setup_message_id"] = query.message.message_id
 
                 safe_task(begin_game_after_join(chat_id, context))
                 return True

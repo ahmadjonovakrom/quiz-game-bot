@@ -18,12 +18,15 @@ from database import create_tables
 from handlers.game import (
     start,
     start_game,
-    stop_game,
     button_handler,
     receive_poll_answer,
     menu_handler,
     daily_quiz,
     myid,
+)
+
+from handlers.game_results import (
+    stop_game,
     final_results_callback_handler,
 )
 

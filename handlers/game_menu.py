@@ -69,7 +69,6 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     data = query.data
 
-    # Do not let menu handler touch setup-return callbacks
     if data.startswith("setup_") or data.startswith("setup_back_to_results:"):
         return
 
@@ -87,19 +86,26 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         chat_id = query.message.chat.id
 
-        game = create_new_game_data(
-            started_by=query.from_user.id,
-            questions_per_game=DEFAULT_QUESTIONS_PER_GAME,
-            category=DEFAULT_CATEGORY,
-            difficulty="mixed",
-        )
+        lock = get_game_lock(chat_id)
+        async with lock:
+            existing_game = active_games.get(chat_id)
+            if existing_game and existing_game.get("status") in ("setup", "joining", "running"):
+                await query.answer(
+                    get_existing_game_message(existing_game),
+                    show_alert=True,
+                )
+                return
 
-        game["status"] = "setup"
-        game["questions_per_game"] = None
-        game["return_to_results"] = source_game_id
+            game = create_new_game_data(
+                started_by=query.from_user.id,
+                questions_per_game=DEFAULT_QUESTIONS_PER_GAME,
+                category=DEFAULT_CATEGORY,
+                difficulty="mixed",
+            )
+            game["return_to_results"] = source_game_id
 
-        add_player_to_game(game, query.from_user)
-        active_games[chat_id] = game
+            add_player_to_game(game, query.from_user)
+            active_games[chat_id] = game
 
         from handlers.game_setup import format_setup_step_1_text, get_question_count_keyboard
 
@@ -112,7 +118,6 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     from handlers.game_setup import start_game, has_active_game
-    from services.game_service import active_games, get_existing_game_message, get_game_lock
 
     if data == "menu_play":
         if query.message.chat.type in ("group", "supergroup"):

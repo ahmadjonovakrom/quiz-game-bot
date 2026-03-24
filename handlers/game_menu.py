@@ -101,7 +101,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         add_player_to_game(game, query.from_user)
         active_games[chat_id] = game
 
-        from handlers.game import format_setup_step_1_text, get_question_count_keyboard
+        from handlers.game_setup import format_setup_step_1_text, get_question_count_keyboard
 
         await query.edit_message_text(
             format_setup_step_1_text(),
@@ -137,7 +137,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         )
                         return
 
-            from handlers.game import start_game
+            from handlers.game_setup import start_game
             await start_game(update, context)
             return
         else:

@@ -111,33 +111,21 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
+    from handlers.game_setup import start_game, has_active_game
+    from services.game_service import active_games, get_existing_game_message, get_game_lock
+
     if data == "menu_play":
         if query.message.chat.type in ("group", "supergroup"):
-            allowed = is_admin(query.from_user.id) or await is_group_admin(
-                context,
-                query.message.chat.id,
-                query.from_user.id,
-            )
-
-            if not allowed:
-                await query.edit_message_text(
-                    "❌ Admin only.\n\nOnly a group admin can start a quiz game.",
-                    reply_markup=back_kb,
-                )
-                return
-
             lock = get_game_lock(query.message.chat.id)
             async with lock:
-                if query.message.chat.id in active_games:
+                if has_active_game(query.message.chat.id):
                     existing_game = active_games.get(query.message.chat.id)
-                    if existing_game and existing_game.get("status") in ("setup", "joining", "running"):
-                        await query.answer(
-                            get_existing_game_message(existing_game),
-                            show_alert=True,
-                        )
-                        return
+                    await query.answer(
+                        get_existing_game_message(existing_game),
+                        show_alert=True,
+                    )
+                    return
 
-            from handlers.game_setup import start_game
             await start_game(update, context)
             return
         else:

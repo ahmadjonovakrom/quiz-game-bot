@@ -222,7 +222,7 @@ async def show_group_period_menu(update: Update, context: ContextTypes.DEFAULT_T
         await _send_or_edit(
             update,
             "👥 This Group leaderboard is only available in groups.",
-            back_keyboard("leaderboard_menu"),
+            back_keyboard("menu_back"),
         )
         return
 
@@ -324,7 +324,7 @@ async def show_global_leaderboard(update: Update, context: ContextTypes.DEFAULT_
         await _send_or_edit(
             update,
             "❌ Global leaderboard is temporarily unavailable.",
-            back_keyboard("leaderboard_scope_global"),
+            back_keyboard("menu_back"),
         )
 
 
@@ -337,7 +337,7 @@ async def show_group_leaderboard(update: Update, context: ContextTypes.DEFAULT_T
             await _send_or_edit(
                 update,
                 "👥 This Group leaderboard is only available in groups.",
-                back_keyboard("leaderboard_menu"),
+                back_keyboard("menu_back"),
             )
             return
 
@@ -364,7 +364,7 @@ async def show_group_leaderboard(update: Update, context: ContextTypes.DEFAULT_T
         await _send_or_edit(
             update,
             "❌ Group leaderboard is temporarily unavailable.",
-            back_keyboard("leaderboard_scope_group"),
+            back_keyboard("menu_back"),
         )
 
 
@@ -395,7 +395,7 @@ async def show_daily_leaderboard(update: Update, context: ContextTypes.DEFAULT_T
         await _send_or_edit(
             update,
             "❌ Daily leaderboard is temporarily unavailable.",
-            back_keyboard("leaderboard_scope_global"),
+            back_keyboard("menu_back"),
         )
 
 
@@ -426,7 +426,7 @@ async def show_weekly_leaderboard(update: Update, context: ContextTypes.DEFAULT_
         await _send_or_edit(
             update,
             "❌ Weekly leaderboard is temporarily unavailable.",
-            back_keyboard("leaderboard_scope_global"),
+            back_keyboard("menu_back"),
         )
 
 
@@ -457,7 +457,7 @@ async def show_monthly_leaderboard(update: Update, context: ContextTypes.DEFAULT
         await _send_or_edit(
             update,
             "❌ Monthly leaderboard is temporarily unavailable.",
-            back_keyboard("leaderboard_scope_global"),
+            back_keyboard("menu_back"),
         )
 
 
@@ -470,7 +470,7 @@ async def show_group_daily_leaderboard(update: Update, context: ContextTypes.DEF
             await _send_or_edit(
                 update,
                 "👥 This Group leaderboard is only available in groups.",
-                back_keyboard("leaderboard_menu"),
+                back_keyboard("menu_back"),
             )
             return
 
@@ -501,7 +501,7 @@ async def show_group_daily_leaderboard(update: Update, context: ContextTypes.DEF
         await _send_or_edit(
             update,
             "❌ Group daily leaderboard is temporarily unavailable.",
-            back_keyboard("leaderboard_scope_group"),
+            back_keyboard("menu_back"),
         )
 
 
@@ -514,7 +514,7 @@ async def show_group_weekly_leaderboard(update: Update, context: ContextTypes.DE
             await _send_or_edit(
                 update,
                 "👥 This Group leaderboard is only available in groups.",
-                back_keyboard("leaderboard_menu"),
+                back_keyboard("menu_back"),
             )
             return
 
@@ -545,7 +545,7 @@ async def show_group_weekly_leaderboard(update: Update, context: ContextTypes.DE
         await _send_or_edit(
             update,
             "❌ Group weekly leaderboard is temporarily unavailable.",
-            back_keyboard("leaderboard_scope_group"),
+            back_keyboard("menu_back"),
         )
 
 
@@ -558,7 +558,7 @@ async def show_group_monthly_leaderboard(update: Update, context: ContextTypes.D
             await _send_or_edit(
                 update,
                 "👥 This Group leaderboard is only available in groups.",
-                back_keyboard("leaderboard_menu"),
+                back_keyboard("menu_back"),
             )
             return
 
@@ -589,7 +589,7 @@ async def show_group_monthly_leaderboard(update: Update, context: ContextTypes.D
         await _send_or_edit(
             update,
             "❌ Group monthly leaderboard is temporarily unavailable.",
-            back_keyboard("leaderboard_scope_group"),
+            back_keyboard("menu_back"),
         )
 
 
@@ -702,7 +702,7 @@ async def profile_callback_handler(update: Update, context: ContextTypes.DEFAULT
             await _send_or_edit(
                 update,
                 "❌ Could not open that leaderboard page.",
-                back_keyboard("leaderboard_menu"),
+                back_keyboard("menu_back"),
             )
             return
 

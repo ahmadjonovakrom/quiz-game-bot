@@ -16,10 +16,13 @@ from config import BOT_TOKEN
 from database import create_tables
 
 from handlers.game import (
-    start_game,
     button_handler,
     receive_poll_answer,
     daily_quiz,
+)
+
+from handlers.game_setup import (
+    start_game,
 )
 
 from handlers.game_menu import (

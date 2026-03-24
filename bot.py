@@ -209,7 +209,7 @@ def main():
     app.add_handler(
         CallbackQueryHandler(
             button_handler,
-            pattern=r"^(setup_|setup_back_to_results:|menu_back$|menu_main$|join\|)",
+            pattern=r"^(setup_|setup_back_to_results:|join\|)",
         )
     )
 

@@ -303,17 +303,13 @@ async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFA
             await query.edit_message_text("No active game setup found.")
             return True
 
-        restricted_actions = {
-            "setup_start_game",
-            "setup_back_to_questions",
-            "setup_back_to_categories",
-        }
+        restricted_actions = set()  # no restrictions in setup
 
         if data in restricted_actions:
             status = game.get("status")
 
             if status == "running":
-                allowed = await is_running_game_controller(context, chat_id, user.id)
+                allowed = await is_game_controller(context, chat_id, user.id, game)
                 if not allowed:
                     await query.answer(
                         "Only a group admin can control a running game.",

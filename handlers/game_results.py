@@ -4,7 +4,7 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from database import finish_game
-from utils.helpers import safe_delete_message, is_admin, is_group_admin
+from utils.helpers import safe_delete_message, is_game_controller
 from utils.keyboards import final_results_keyboard, FINAL_RESULTS_PAGE_SIZE
 from services.game_service import (
     active_games,
@@ -244,15 +244,14 @@ async def stop_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
 
     if not user:
-        await update.message.reply_text("Admin only.")
+        await update.message.reply_text("Only the game starter or a group admin can stop this game.")
         return
 
-    allowed = is_admin(user.id)
-    if chat.type in ("group", "supergroup"):
-        allowed = allowed or await is_group_admin(context, chat.id, user.id)
+    game = active_games.get(chat.id)
+    allowed = await is_game_controller(context, chat.id, user.id, game)
 
     if not allowed:
-        await update.message.reply_text("Admin only.")
+        await update.message.reply_text("Only the game starter or a group admin can stop this game.")
         return
 
     lock = get_game_lock(chat.id)

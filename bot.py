@@ -154,25 +154,21 @@ def main():
             EDIT_CORRECT: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_correct_step)],
             EDIT_CATEGORY: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_category_step)],
             EDIT_DIFFICULTY: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_difficulty_step)],
-
             EDIT_TEXT_ONLY: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_text_only_step)],
             EDIT_OPTION_ONLY: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_option_only_step)],
             EDIT_CORRECT_ONLY: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_correct_only_step)],
             EDIT_CATEGORY_ONLY: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_category_only_step)],
             EDIT_DIFFICULTY_ONLY: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_difficulty_only_step)],
-
             BROADCAST_MESSAGE: [MessageHandler(filters.ALL & ~filters.COMMAND, broadcast_message_step)],
             BROADCAST_CONFIRM: [CallbackQueryHandler(broadcast_confirm_step)],
             IMPORT_FILE: [MessageHandler(filters.Document.ALL, import_questions_file_step)],
             SEARCH_KEYWORD: [MessageHandler(filters.TEXT & ~filters.COMMAND, search_keyword_step)],
-
             ADMIN_MENU: [
                 CallbackQueryHandler(
                     admin_button_handler,
                     pattern=r"^(admin_|edit_|settings_)",
                 )
             ],
-
             1000: [MessageHandler(filters.TEXT & ~filters.COMMAND, settings_update_step)],
         },
         fallbacks=[
@@ -200,6 +196,7 @@ def main():
     app.add_handler(CommandHandler("myid", myid))
 
     # ================= CALLBACKS =================
+
     # Final results pagination first
     app.add_handler(
         CallbackQueryHandler(
@@ -208,19 +205,19 @@ def main():
         )
     )
 
-    # Setup / join / back callbacks that must stay inside game flow
+    # All game-flow callbacks must go here
     app.add_handler(
         CallbackQueryHandler(
             button_handler,
-            pattern=r"^(setup_|setup_back_to_results:|join\|)",
+            pattern=r"^(setup_|setup_back_to_results:|join\||results_play_again:)",
         )
     )
 
-    # Main menu + play again
+    # Menu only
     app.add_handler(
         CallbackQueryHandler(
             menu_handler,
-            pattern=r"^(menu_|results_play_again:)",
+            pattern=r"^menu_",
         )
     )
 

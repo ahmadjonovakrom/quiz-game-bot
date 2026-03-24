@@ -221,17 +221,15 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 difficulty="mixed",
             )
 
-            game["return_to_results"] = game_id
-
             add_player_to_game(game, user)
             active_games[chat_id] = game
 
-        await query.edit_message_text(
-            "🎮 Game Setup\n\nStep 1 of 2 — Choose number of questions",
-            reply_markup=game_setup_questions_keyboard(
-                back_callback=f"setup_back_to_results:{game_id}"
-            ),
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="🎮 Game Setup\n\nStep 1 of 2 — Choose number of questions",
+            reply_markup=game_setup_questions_keyboard(),
         )
+        await query.answer()
         return
 
     parts = data.split("|")

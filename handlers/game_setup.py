@@ -19,8 +19,6 @@ from utils.helpers import (
     safe_task,
     safe_delete_message,
     build_join_text,
-    is_game_controller,
-    is_running_game_controller,
 )
 from utils.keyboards import (
     game_setup_questions_keyboard,
@@ -39,8 +37,6 @@ from services.game_service import (
     add_player_to_game,
     mark_game_joining,
 )
-
-from handlers.game_results import show_saved_results
 
 logger = logging.getLogger(__name__)
 
@@ -220,74 +216,18 @@ async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFA
     logger.warning("SETUP CALLBACK: %s", query.data)
 
     data = query.data
+    chat_id = query.message.chat.id
+    user = query.from_user
 
     if (
         not data.startswith("setup_")
         and data not in ("menu_back", "menu_main")
-        and not data.startswith("setup_back_to_results:")
     ):
         return False
 
-    user = query.from_user
-    chat_id = query.message.chat.id
-
-    if data.startswith("setup_back_to_results:"):
-        try:
-            _, game_id_str = data.split(":")
-            game_id = int(game_id_str)
-        except Exception:
-            await query.answer("Error.", show_alert=True)
-            return True
-
-        game = active_games.get(chat_id)
-        if game:
-            current_poll_id = game.get("current_poll_id")
-            if current_poll_id:
-                poll_map.pop(current_poll_id, None)
-
-            active_games.pop(chat_id, None)
-            cleanup_game_lock(chat_id)
-
-        await show_saved_results(query, context, game_id)
-        return True
-
     if data in ("menu_back", "menu_main"):
-        game = active_games.get(chat_id)
-
-        if game and game.get("return_to_results"):
-            game_id = game["return_to_results"]
-
-            current_poll_id = game.get("current_poll_id")
-            if current_poll_id:
-                poll_map.pop(current_poll_id, None)
-
-            active_games.pop(chat_id, None)
-            cleanup_game_lock(chat_id)
-
-            await show_saved_results(query, context, game_id)
-            return True
-
-        if game:
-            status = game.get("status")
-
-            if status == "running":
-                allowed = await is_running_game_controller(context, chat_id, user.id)
-                if not allowed:
-                    await query.answer(
-                        "Only a group admin can control a running game.",
-                        show_alert=True,
-                    )
-                    return True
-            else:
-                allowed = await is_game_controller(context, chat_id, user.id, game)
-                if not allowed:
-                    await query.answer(
-                        "Only the game starter or a group admin can do this.",
-                        show_alert=True,
-                    )
-                    return True
-
         await clear_game(context, chat_id)
+
         await query.edit_message_text(
             "Welcome to English Lemon !\n\n"
             "Practice vocabulary, play quiz games, and climb the leaderboard.",
@@ -302,28 +242,6 @@ async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFA
         if not game or game.get("status") not in ("setup", "joining"):
             await query.edit_message_text("No active game setup found.")
             return True
-
-        restricted_actions = set()  # no restrictions in setup
-
-        if data in restricted_actions:
-            status = game.get("status")
-
-            if status == "running":
-                allowed = await is_game_controller(context, chat_id, user.id, game)
-                if not allowed:
-                    await query.answer(
-                        "Only a group admin can control a running game.",
-                        show_alert=True,
-                    )
-                    return True
-            else:
-                allowed = await is_game_controller(context, chat_id, user.id, game)
-                if not allowed:
-                    await query.answer(
-                        "Only the game starter or a group admin can do this.",
-                        show_alert=True,
-                    )
-                    return True
 
         if game["status"] == "joining" and data.startswith("setup_"):
             await query.answer("Game already started.", show_alert=True)
@@ -349,13 +267,9 @@ async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFA
             return True
 
         if data == "setup_back_to_questions":
-            back_callback = "menu_main"
-            if game.get("return_to_results"):
-                back_callback = f"setup_back_to_results:{game['return_to_results']}"
-
             await query.edit_message_text(
                 format_setup_step_1_text(),
-                reply_markup=get_question_count_keyboard(back_callback=back_callback),
+                reply_markup=get_question_count_keyboard(back_callback="menu_main"),
             )
             return True
 

@@ -122,8 +122,6 @@ def final_results_keyboard(game_id: int, page: int, has_next: bool) -> InlineKey
             callback_data=f"results_play_again:{game_id}"
         )
     ])
-    rows.append([InlineKeyboardButton("🏆 Leaderboard", callback_data="menu_leaderboard")])
-    rows.append([InlineKeyboardButton("🏠 Menu", callback_data="menu_main")])
 
     nav_row = []
 
@@ -147,7 +145,6 @@ def final_results_keyboard(game_id: int, page: int, has_next: bool) -> InlineKey
         rows.append(nav_row)
 
     return InlineKeyboardMarkup(rows)
-
 
 def game_setup_questions_keyboard(
     back_callback: str = "menu_main",

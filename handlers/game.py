@@ -234,46 +234,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer("Joined!")
         return
 
-    # Protect lobby/running controls
-    protected_actions = {
-        "start_now",
-        "cancel_game",
-        "restart_game",
-        "play_again",
-        "menu_back",
-        "menu_main",
-    }
-
-    if data in protected_actions and query.message and query.message.chat:
-        chat_id = query.message.chat.id
-        user_id = query.from_user.id
-
-        lock = get_game_lock(chat_id)
-        async with lock:
-            game = active_games.get(chat_id)
-
-            if game:
-                status = game.get("status")
-
-                if status == "running":
-                    allowed = await is_running_game_controller(context, chat_id, user_id)
-                    if not allowed:
-                        await query.answer(
-                            "Only a group admin can control a running game.",
-                            show_alert=True,
-                        )
-                        return
-                else:
-                    allowed = await is_game_controller(context, chat_id, user_id, game)
-                    if not allowed:
-                        await query.answer(
-                            "Only the game starter or a group admin can do this.",
-                            show_alert=True,
-                        )
-                        return
-
     await query.answer()
-
 
 async def send_question(chat_id, context):
     settings = load_dynamic_settings()

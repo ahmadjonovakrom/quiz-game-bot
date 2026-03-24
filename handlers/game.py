@@ -108,6 +108,18 @@ def format_question_text(question: str, points: int) -> str:
     return f"{question}\n🍋 +{points}"
 
 
+async def _send_play_again_setup_message(chat_id: int, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Send a brand new setup message for Play Again.
+    We keep the results message in chat and start setup in a fresh message.
+    """
+    return await context.bot.send_message(
+        chat_id=chat_id,
+        text="🎮 Game Setup\n\nStep 1 of 2 — Choose number of questions",
+        reply_markup=game_setup_questions_keyboard(),
+    )
+
+
 async def daily_quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
     settings = load_dynamic_settings()
     question_seconds = settings["QUESTION_SECONDS"]
@@ -204,6 +216,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.answer("Invalid game.", show_alert=True)
             return
 
+        await query.answer()
+
         lock = get_game_lock(chat_id)
         async with lock:
             if has_active_game(chat_id):
@@ -214,6 +228,17 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 return
 
+            # Clean reset before creating the new game
+            old_game = active_games.get(chat_id)
+            old_setup_message_id = None
+            old_join_message_id = None
+
+            if old_game:
+                old_setup_message_id = old_game.get("setup_message_id")
+                old_join_message_id = old_game.get("join_message_id")
+
+            await clear_game(context, chat_id)
+
             game = create_new_game_data(
                 started_by=user.id,
                 questions_per_game=DEFAULT_QUESTIONS_PER_GAME,
@@ -222,14 +247,28 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
 
             add_player_to_game(game, user)
+            game["results_message_id"] = query.message.message_id
+            game["setup_message_id"] = None
+            game["join_message_id"] = None
+
             active_games[chat_id] = game
 
-        await context.bot.send_message(
-            chat_id=chat_id,
-            text="🎮 Game Setup\n\nStep 1 of 2 — Choose number of questions",
-            reply_markup=game_setup_questions_keyboard(),
-        )
-        await query.answer()
+        # Best effort cleanup of any old setup/join messages.
+        # We keep the results message, but freshen the setup flow.
+        if old_setup_message_id:
+            await safe_delete_message(context.bot, chat_id, old_setup_message_id)
+
+        if old_join_message_id and old_join_message_id != old_setup_message_id:
+            await safe_delete_message(context.bot, chat_id, old_join_message_id)
+
+        setup_message = await _send_play_again_setup_message(chat_id, context)
+
+        lock = get_game_lock(chat_id)
+        async with lock:
+            game = active_games.get(chat_id)
+            if game:
+                game["setup_message_id"] = setup_message.message_id
+
         return
 
     parts = data.split("|")

@@ -19,8 +19,8 @@ from utils.helpers import (
     safe_task,
     safe_delete_message,
     build_join_text,
-    is_admin,
-    is_group_admin,
+    is_game_controller,
+    is_running_game_controller,
 )
 from utils.keyboards import (
     game_setup_questions_keyboard,
@@ -169,20 +169,9 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if not user:
         if query:
-            await query.edit_message_text("❌ Admin only.")
+            await query.edit_message_text("❌ Could not identify user.")
         else:
-            await message.reply_text("❌ Admin only.")
-        return
-
-    allowed = is_admin(user.id)
-    if chat.type in ("group", "supergroup"):
-        allowed = allowed or await is_group_admin(context, chat.id, user.id)
-
-    if not allowed:
-        if query:
-            await query.edit_message_text("❌ Only group admins can start a quiz game.")
-        else:
-            await message.reply_text("❌ Only group admins can start a quiz game.")
+            await message.reply_text("❌ Could not identify user.")
         return
 
     if chat.type == "private":
@@ -280,6 +269,26 @@ async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFA
             await show_saved_results(query, context, game_id)
             return True
 
+        if game:
+            status = game.get("status")
+
+            if status == "running":
+                allowed = await is_running_game_controller(context, chat_id, user.id)
+                if not allowed:
+                    await query.answer(
+                        "Only a group admin can control a running game.",
+                        show_alert=True,
+                    )
+                    return True
+            else:
+                allowed = await is_game_controller(context, chat_id, user.id, game)
+                if not allowed:
+                    await query.answer(
+                        "Only the game starter or a group admin can do this.",
+                        show_alert=True,
+                    )
+                    return True
+
         await clear_game(context, chat_id)
         await query.edit_message_text(
             "Welcome to English Lemon !\n\n"
@@ -288,14 +297,30 @@ async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFA
         )
         return True
 
-    allowed = is_admin(user.id) or await is_group_admin(context, chat_id, user.id)
-    if not allowed:
-        await query.answer("Admin only.", show_alert=True)
-        return True
-
     lock = get_game_lock(chat_id)
     async with lock:
         game = active_games.get(chat_id)
+
+        if game:
+            status = game.get("status")
+
+            if status == "running":
+                allowed = await is_running_game_controller(context, chat_id, user.id)
+                if not allowed:
+                    await query.answer(
+                        "Only a group admin can control a running game.",
+                        show_alert=True,
+                    )
+                    return True
+            else:
+                allowed = await is_game_controller(context, chat_id, user.id, game)
+                if not allowed:
+                    await query.answer(
+                        "Only the game starter or a group admin can do this.",
+                        show_alert=True,
+                    )
+                    return True
+
         if not game or game.get("status") not in ("setup", "joining"):
             await query.edit_message_text("No active game setup found.")
             return True

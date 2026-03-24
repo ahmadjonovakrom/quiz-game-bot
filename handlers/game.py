@@ -46,6 +46,8 @@ from utils.helpers import (
     build_join_text,
     is_admin,
     is_group_admin,
+    is_game_controller,
+    is_running_game_controller,
 )
 from utils.keyboards import (
     main_menu_keyboard,
@@ -189,48 +191,88 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if handled is True:
             return
 
+    # Handle join button
     parts = data.split("|")
-
-    if parts[0] != "join":
+    if parts[0] == "join":
         await query.answer()
+
+        try:
+            chat_id = int(parts[1])
+        except (IndexError, ValueError):
+            await query.answer("Invalid join request.")
+            return
+
+        if query.message and query.message.chat:
+            ensure_chat(query.message.chat)
+
+        lock = get_game_lock(chat_id)
+
+        async with lock:
+            game = active_games.get(chat_id)
+
+            if not game:
+                await query.answer("No active game")
+                return
+
+            if game["status"] != "joining":
+                await query.answer("Joining closed")
+                return
+
+            user = query.from_user
+            added = add_player_to_game(game, user)
+
+            if not added:
+                await query.answer("Already joined")
+                return
+
+        ensure_player(user)
+
+        if chat_id < 0:
+            ensure_group_player(chat_id, user)
+
+        await refresh_join_message(context, chat_id)
+        await query.answer("Joined!")
         return
 
-    try:
-        chat_id = int(parts[1])
-    except (IndexError, ValueError):
-        await query.answer("Invalid join request.")
-        return
+    # Protect lobby/running controls
+    protected_actions = {
+        "start_now",
+        "cancel_game",
+        "restart_game",
+        "play_again",
+        "menu_back",
+        "menu_main",
+    }
 
-    if query.message and query.message.chat:
-        ensure_chat(query.message.chat)
+    if data in protected_actions and query.message and query.message.chat:
+        chat_id = query.message.chat.id
+        user_id = query.from_user.id
 
-    lock = get_game_lock(chat_id)
+        lock = get_game_lock(chat_id)
+        async with lock:
+            game = active_games.get(chat_id)
 
-    async with lock:
-        game = active_games.get(chat_id)
+            if game:
+                status = game.get("status")
 
-        if not game:
-            await query.answer("No active game")
-            return
+                if status == "running":
+                    allowed = await is_running_game_controller(context, chat_id, user_id)
+                    if not allowed:
+                        await query.answer(
+                            "Only a group admin can control a running game.",
+                            show_alert=True,
+                        )
+                        return
+                else:
+                    allowed = await is_game_controller(context, chat_id, user_id, game)
+                    if not allowed:
+                        await query.answer(
+                            "Only the game starter or a group admin can do this.",
+                            show_alert=True,
+                        )
+                        return
 
-        if game["status"] != "joining":
-            await query.answer("Joining closed")
-            return
-
-        user = query.from_user
-        added = add_player_to_game(game, user)
-
-        if not added:
-            await query.answer("Already joined")
-            return
-
-    ensure_player(user)
-
-    if chat_id < 0:
-        ensure_group_player(chat_id, user)
-
-    await refresh_join_message(context, chat_id)
-    await query.answer("Joined!")
+    await query.answer()
 
 
 async def send_question(chat_id, context):

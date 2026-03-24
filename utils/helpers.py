@@ -29,6 +29,23 @@ async def is_group_admin(context, chat_id: int, user_id: int) -> bool:
         return False
 
 
+async def is_game_controller(context, chat_id: int, user_id: int, game: dict) -> bool:
+    if not game:
+        return False
+
+    starter_id = game.get("started_by") or game.get("started_by_user_id")
+
+    return (
+        user_id == starter_id
+        or is_admin(user_id)
+        or await is_group_admin(context, chat_id, user_id)
+    )
+
+
+async def is_running_game_controller(context, chat_id: int, user_id: int) -> bool:
+    return is_admin(user_id) or await is_group_admin(context, chat_id, user_id)
+
+
 def safe_task(coro):
     async def wrapper():
         try:

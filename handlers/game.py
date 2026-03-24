@@ -91,6 +91,7 @@ from handlers.game_setup import (
     load_dynamic_settings,
     refresh_join_message,
     game_setup_callback_handler,
+    has_active_game,
 )
 
 
@@ -192,6 +193,46 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         handled = await game_setup_callback_handler(update, context)
         if handled is True:
             return
+
+    if data.startswith("results_play_again:"):
+        chat_id = query.message.chat.id
+        user = query.from_user
+
+        try:
+            game_id = int(data.split(":")[1])
+        except (IndexError, ValueError):
+            await query.answer("Invalid game.", show_alert=True)
+            return
+
+        lock = get_game_lock(chat_id)
+        async with lock:
+            if has_active_game(chat_id):
+                existing_game = active_games.get(chat_id)
+                await query.answer(
+                    get_existing_game_message(existing_game),
+                    show_alert=True,
+                )
+                return
+
+            game = create_new_game_data(
+                started_by=user.id,
+                questions_per_game=DEFAULT_QUESTIONS_PER_GAME,
+                category=DEFAULT_CATEGORY,
+                difficulty="mixed",
+            )
+
+            game["return_to_results"] = game_id
+
+            add_player_to_game(game, user)
+            active_games[chat_id] = game
+
+        await query.edit_message_text(
+            "🎮 Game Setup\n\nStep 1 of 2 — Choose number of questions",
+            reply_markup=game_setup_questions_keyboard(
+                back_callback=f"setup_back_to_results:{game_id}"
+            ),
+        )
+        return
 
     parts = data.split("|")
     if parts[0] == "join":

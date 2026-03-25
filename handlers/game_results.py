@@ -205,6 +205,16 @@ async def end_game(chat_id, context):
         )
 
         winner_user_id = normalized_results[0]["user_id"] if normalized_results else None
+        from database import increment_games_played, increment_games_won
+
+        # ✅ Update stats for all players
+        for row in normalized_results:
+            user_id = row["user_id"]
+            increment_games_played(user_id)
+
+        # ✅ Update winner
+        if winner_user_id:
+            increment_games_won(winner_user_id)
 
         active_games.pop(chat_id, None)
         cleanup_game_lock(chat_id)

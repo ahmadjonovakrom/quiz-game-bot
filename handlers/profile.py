@@ -231,15 +231,24 @@ async def show_group_period_menu(update: Update, context: ContextTypes.DEFAULT_T
 
 
 async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
+    message = update.effective_message
+    requester = update.effective_user
     chat = update.effective_chat
 
-    profile_data, rank = get_player_profile(user.id)
+    if message and message.reply_to_message and message.reply_to_message.from_user:
+        target_user = message.reply_to_message.from_user
+    else:
+        target_user = requester
+
+    profile_data, rank = get_player_profile(target_user.id)
+
+    is_own_profile = requester and target_user.id == requester.id
+    title = "👤 My Profile" if is_own_profile else "👤 User Profile"
 
     if not profile_data:
         text = (
-            "👤 My Profile\n\n"
-            f"Name: {user.full_name}\n"
+            f"{title}\n\n"
+            f"Name: {target_user.full_name}\n"
             "🏆 Global Rank: Not ranked yet\n"
             "🍋 Lemons: 0\n"
             "🎮 Games Played: 0\n"
@@ -248,10 +257,29 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "❌ Wrong: 0\n"
             "🎯 Accuracy: 0%"
         )
+
+        if chat.type != "private":
+            group_rank = None
+            try:
+                group_rank, _ = get_player_group_rank_info(chat.id, target_user.id)
+            except Exception:
+                logger.exception("Failed to get group rank for profile fallback text")
+
+            if group_rank:
+                text = text.replace(
+                    "🍋 Lemons: 0",
+                    f"👥 Group Rank: #{group_rank}\n\n🍋 Lemons: 0"
+                )
+            else:
+                text = text.replace(
+                    "🍋 Lemons: 0",
+                    "👥 Group Rank: Not ranked yet\n\n🍋 Lemons: 0"
+                )
+
         await _send_or_edit(update, text, back_keyboard("menu_main"))
         return
 
-    full_name = _safe_get(profile_data, "full_name", user.full_name)
+    full_name = _safe_get(profile_data, "full_name", target_user.full_name)
     username = _safe_get(profile_data, "username")
 
     total_points = _safe_get(profile_data, "total_points", 0)
@@ -265,10 +293,10 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     group_rank = None
     if chat.type != "private":
-        group_rank, _ = get_player_group_rank_info(chat.id, user.id)
+        group_rank, _ = get_player_group_rank_info(chat.id, target_user.id)
 
     lines = [
-        "👤 My Profile",
+        title,
         "",
         f"Name: {full_name}",
     ]

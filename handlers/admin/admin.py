@@ -21,6 +21,9 @@ from utils.keyboards import (
     question_action_keyboard,
     questions_pagination_keyboard,
     admin_settings_keyboard,
+    bot_stats_keyboard,
+    bot_groups_keyboard,
+    bot_group_details_keyboard,
 )
 from utils.texts import (
     admin_only_text,
@@ -31,6 +34,8 @@ from utils.texts import (
     format_question_details_text,
     format_question_preview,
     format_questions_menu_text,
+    format_groups_list_text,
+    format_group_details_text,
 )
 from database import (
     get_question_by_id,
@@ -39,6 +44,12 @@ from database import (
     get_active_question_count,
     get_question_count_by_category,
     get_question_count_by_difficulty,
+    get_total_games,
+    get_total_groups,
+    get_total_players,
+    get_total_users_count,
+    get_all_groups,
+    get_group_stats,
 )
 
 from services.question_service import (
@@ -157,16 +168,29 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 
-async def bot_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    if not is_admin(user.id):
-        await update.effective_message.reply_text(admin_only_text())
-        return
+async def bot_stats_command(update, context):
+    stats = {
+        "total_users": get_total_users_count(),
+        "total_players": get_total_players(),
+        "total_questions": get_total_questions_count(),
+        "total_games": get_total_games(),
+        "total_groups": get_total_groups(),
+    }
 
-    stats = get_bot_stats_service()
     text = format_bot_stats_text(stats)
 
-    await update.effective_message.reply_text(text)
+    if update.callback_query:
+        query = update.callback_query
+        await query.answer()
+        await query.edit_message_text(
+            text=text,
+            reply_markup=bot_stats_keyboard(stats["total_groups"]),
+        )
+    else:
+        await update.message.reply_text(
+            text=text,
+            reply_markup=bot_stats_keyboard(stats["total_groups"]),
+        )
 
 
 async def reset_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -306,6 +330,39 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     if result is not None:
         return result
     
+    if data == "admin_botstats":
+        stats = {
+            "total_users": get_total_users_count(),
+            "total_players": get_total_players(),
+            "total_questions": get_total_questions_count(),
+            "total_games": get_total_games(),
+            "total_groups": get_total_groups(),
+        }
+
+        await query.edit_message_text(
+            text=format_bot_stats_text(stats),
+            reply_markup=bot_stats_keyboard(stats["total_groups"]),
+        )
+        return ADMIN_MENU
+
+    if data == "admin_stats_groups":
+        groups = get_all_groups()
+
+        await query.edit_message_text(
+            text=format_groups_list_text(groups),
+            reply_markup=bot_groups_keyboard(groups),
+        )
+        return ADMIN_MENU
+
+    if data.startswith("admin_stats_group_"):
+        chat_id = int(data.replace("admin_stats_group_", ""))
+        group_stats = get_group_stats(chat_id)
+
+        await query.edit_message_text(
+            text=format_group_details_text(group_stats),
+            reply_markup=bot_group_details_keyboard(),
+        )
+        return ADMIN_MENU
 
     if data.startswith("admin_return_"):
         source = data.replace("admin_return_", "").strip()

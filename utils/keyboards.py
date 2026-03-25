@@ -356,3 +356,37 @@ def edit_options_keyboard() -> InlineKeyboardMarkup:
         ],
         [InlineKeyboardButton("⬅️ Back", callback_data="edit_back_menu")],
     ])
+
+def bot_stats_keyboard(total_groups: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton(f"👥 Groups ({total_groups})", callback_data="admin_stats_groups")],
+        [InlineKeyboardButton("⬅️ Back", callback_data="admin_back")],
+        [InlineKeyboardButton("❌ Cancel", callback_data="admin_close")],
+    ])
+
+
+def bot_groups_keyboard(groups) -> InlineKeyboardMarkup:
+    rows = []
+
+    for group in groups[:50]:
+        title = group["title"] or group["username"] or str(group["chat_id"])
+        safe_title = str(title)[:40]
+        rows.append([
+            InlineKeyboardButton(
+                safe_title,
+                callback_data=f"admin_stats_group_{group['chat_id']}"
+            )
+        ])
+
+    rows.append([InlineKeyboardButton("⬅️ Back", callback_data="admin_botstats")])
+    rows.append([InlineKeyboardButton("❌ Cancel", callback_data="admin_close")])
+
+    return InlineKeyboardMarkup(rows)
+
+
+def bot_group_details_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("⬅️ Back to Groups", callback_data="admin_stats_groups")],
+        [InlineKeyboardButton("⬅️ Back to Stats", callback_data="admin_botstats")],
+        [InlineKeyboardButton("❌ Cancel", callback_data="admin_close")],
+    ])

@@ -55,6 +55,10 @@ from .questions import (
     get_question_count_by_category,
     get_question_count_by_difficulty,
     get_active_question_count,
+    ensure_chat,
+    deactivate_chat,
+    get_all_groups,
+    get_group_stats,
 )
 
 # games / group scores / daily quiz
@@ -148,6 +152,8 @@ __all__ = [
     # chats
     "ensure_chat",
     "deactivate_chat",
+    "get_all_groups",
+    "get_group_stats",
 
     # questions
     "add_question",

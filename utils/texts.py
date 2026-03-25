@@ -19,22 +19,63 @@ def format_questions_menu_text():
 
 
 def format_bot_stats_text(stats):
-    total_users = stats.get("total_users", 0)
-    total_players = stats.get("total_players", 0)
-    total_questions = stats.get("total_questions", 0)
-    total_games = stats.get("total_games", 0)
-    total_groups = stats.get("total_groups", 0)
+    users = stats.get("total_users", 0)
+    players = stats.get("total_players", 0)
+    questions = stats.get("total_questions", 0)
+    games = stats.get("total_games", 0)
+    groups = stats.get("total_groups", 0)
 
     return "\n".join([
         "📊 Bot Stats",
         "",
-        f"👤 Total Users: {total_users}",
-        f"🎮 Total Players: {total_players}",
-        f"📚 Total Questions: {total_questions}",
-        f"🕹 Total Games: {total_games}",
-        f"👥 Total Groups: {total_groups}",
+        f"👤 Users: {users}",
+        f"🎮 Players: {players}",
+        f"📚 Questions: {questions}",
+        f"🕹 Games: {games}",
+        f"👥 Groups: {groups}",
     ])
 
+def format_groups_list_text(groups):
+    if not groups:
+        return "\n".join([
+            "👥 Bot Groups",
+            "",
+            "No groups found.",
+        ])
+
+    return "\n".join([
+        "👥 Bot Groups",
+        "",
+        "Choose a group below:",
+    ])
+
+
+def format_group_details_text(group_stats):
+    chat = group_stats.get("chat")
+
+    if not chat:
+        return "\n".join([
+            "👥 Group Info",
+            "",
+            "Group not found.",
+        ])
+
+    title = chat["title"] or "No title"
+    username = f"@{chat['username']}" if chat["username"] else "—"
+    status = "Active" if chat["is_active"] else "Inactive"
+    game_count = group_stats.get("game_count", 0)
+    player_count = group_stats.get("player_count", 0)
+
+    return "\n".join([
+        "👥 Group Info",
+        "",
+        f"🏷 Name: {title}",
+        f"🆔 Chat ID: {chat['chat_id']}",
+        f"🔗 Username: {username}",
+        f"📌 Status: {status}",
+        f"🕹 Games: {game_count}",
+        f"🎮 Players: {player_count}",
+    ])
 
 def format_import_help_text(allowed_categories, allowed_difficulties):
     return "\n".join([

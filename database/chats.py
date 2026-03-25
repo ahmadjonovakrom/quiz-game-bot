@@ -41,3 +41,54 @@ def deactivate_chat(chat_id: int) -> None:
                 updated_at = CURRENT_TIMESTAMP
             WHERE chat_id = ?
         """, (chat_id,))
+
+
+def get_all_groups():
+    with closing(get_conn()) as conn:
+        return conn.execute("""
+            SELECT
+                chat_id,
+                chat_type,
+                title,
+                username,
+                is_active,
+                updated_at
+            FROM chats
+            WHERE chat_type IN ('group', 'supergroup')
+            ORDER BY
+                CASE WHEN is_active = 1 THEN 0 ELSE 1 END,
+                COALESCE(NULLIF(title, ''), username, CAST(chat_id AS TEXT)) COLLATE NOCASE
+        """).fetchall()
+
+
+def get_group_stats(chat_id: int):
+    with closing(get_conn()) as conn:
+        chat_row = conn.execute("""
+            SELECT
+                chat_id,
+                chat_type,
+                title,
+                username,
+                is_active,
+                updated_at
+            FROM chats
+            WHERE chat_id = ?
+        """, (chat_id,)).fetchone()
+
+        players_row = conn.execute("""
+            SELECT COUNT(*) AS player_count
+            FROM group_scores
+            WHERE chat_id = ?
+        """, (chat_id,)).fetchone()
+
+        games_row = conn.execute("""
+            SELECT COUNT(*) AS game_count
+            FROM games
+            WHERE chat_id = ?
+        """, (chat_id,)).fetchone()
+
+        return {
+            "chat": chat_row,
+            "player_count": players_row["player_count"] if players_row else 0,
+            "game_count": games_row["game_count"] if games_row else 0,
+        }

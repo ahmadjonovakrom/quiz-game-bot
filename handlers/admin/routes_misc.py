@@ -41,14 +41,7 @@ async def handle_misc_routes(
         return ADMIN_MENU
 
     if data == "admin_botstats":
-        stats = get_bot_stats_service()
-        text = format_bot_stats_text(stats)
-
-        await query.edit_message_text(
-            text,
-            reply_markup=nav_keyboard(),
-        )
-        return ADMIN_MENU
+        return None
 
     if data == "admin_settings":
         from database import get_all_settings

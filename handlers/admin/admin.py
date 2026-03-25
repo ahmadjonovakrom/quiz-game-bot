@@ -184,12 +184,12 @@ async def bot_stats_command(update, context):
         await query.answer()
         await query.edit_message_text(
             text=text,
-            reply_markup=bot_stats_keyboard(stats["total_groups"]),
+            reply_markup=bot_stats_keyboard(stats["total_groups"]),  # ✅ IMPORTANT
         )
     else:
         await update.message.reply_text(
             text=text,
-            reply_markup=bot_stats_keyboard(stats["total_groups"]),
+            reply_markup=bot_stats_keyboard(stats["total_groups"]),  # ✅ IMPORTANT
         )
 
 

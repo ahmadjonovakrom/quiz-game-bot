@@ -117,7 +117,7 @@ async def daily_quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
         q_id = question["id"]
         q_text = question["question_text"]
         difficulty = row_value(question, "difficulty", "easy")
-        points = get_question_points(difficulty)
+        points = 450
 
         options, correct_index = shuffle_question(question)
 

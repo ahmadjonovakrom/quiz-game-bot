@@ -68,6 +68,7 @@ from .questions import (
 from .states import *
 from .routes_edit import handle_edit_routes
 from .routes_questions import handle_question_routes
+from .routes_misc import handle_misc_routes
 
 async def show_question_details(target, qid: int, source: str = "questions"):
     q = get_question_by_id(qid)
@@ -290,6 +291,17 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         show_question_details,
         show_questions_menu,
         import_questions_entry,
+    )
+    if result is not None:
+        return result
+    
+    result = await handle_misc_routes(
+        query,
+        context,
+        update,
+        show_admin_panel_message,
+        show_questions_menu,
+        reset_stats,
     )
     if result is not None:
         return result

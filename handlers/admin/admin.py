@@ -320,6 +320,8 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
 
         return await show_admin_panel_message(query)
 
+    return ADMIN_MENU
+
 
 async def broadcast_message_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.message

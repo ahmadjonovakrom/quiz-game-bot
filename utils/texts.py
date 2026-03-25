@@ -1,3 +1,5 @@
+import html
+
 def admin_only_text():
     return "❌ Admin only."
 
@@ -35,16 +37,19 @@ def format_bot_stats_text(stats):
         f"👥 Groups: {groups}",
     ])
 
-def format_groups_list_text(groups):
-    if not groups:
-        return "\n".join([
-            "👥 Bot Groups",
-            "",
-            "No groups found.",
-        ])
+def format_groups_list_text(groups, page: int = 1, per_page: int = 10):
+    total = len(groups)
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    page = max(1, min(page, total_pages))
+
+    active_count = sum(1 for g in groups if g["is_active"])
 
     return "\n".join([
         "👥 Bot Groups",
+        "",
+        f"Total: {total}",
+        f"Active: {active_count}",
+        f"Page: {page}/{total_pages}",
         "",
         "Choose a group below:",
     ])
@@ -60,22 +65,46 @@ def format_group_details_text(group_stats):
             "Group not found.",
         ])
 
-    title = chat["title"] or "No title"
+    title = html.escape(chat["title"] or "No title")
     username = f"@{chat['username']}" if chat["username"] else "—"
-    status = "Active" if chat["is_active"] else "Inactive"
+    status = "🟢 Active" if chat["is_active"] else "🔴 Inactive"
     game_count = group_stats.get("game_count", 0)
     player_count = group_stats.get("player_count", 0)
+    top_players = group_stats.get("top_players", [])
 
-    return "\n".join([
-        "👥 Group Info",
+    lines = [
+        "👥 <b>Group Info</b>",
         "",
-        f"🏷 Name: {title}",
-        f"🆔 Chat ID: {chat['chat_id']}",
-        f"🔗 Username: {username}",
-        f"📌 Status: {status}",
-        f"🕹 Games: {game_count}",
-        f"🎮 Players: {player_count}",
-    ])
+        f"🏷 <b>Name:</b> {title}",
+        f"🆔 <b>Chat ID:</b> <code>{chat['chat_id']}</code>",
+        f"🔗 <b>Username:</b> {username}",
+        f"📌 <b>Status:</b> {status}",
+        f"🕹 <b>Games:</b> {game_count}",
+        f"🎮 <b>Players:</b> {player_count}",
+        "",
+        "🏆 <b>Top Players</b>",
+    ]
+
+    if top_players:
+        for index, player in enumerate(top_players, start=1):
+            raw_name = (
+                player["full_name"]
+                or player["username"]
+                or f"User {player['user_id']}"
+            )
+            safe_name = html.escape(str(raw_name))
+            user_link = f'<a href="tg://user?id={player["user_id"]}">{safe_name}</a>'
+            points = player["points"] or 0
+            correct = player["correct_answers"] or 0
+            wins = player["games_won"] or 0
+
+            lines.append(
+                f"{index}. {user_link} — {points} pts | ✅ {correct} | 🏅 {wins}"
+            )
+    else:
+        lines.append("No players yet.")
+
+    return "\n".join(lines)
 
 def format_import_help_text(allowed_categories, allowed_difficulties):
     return "\n".join([

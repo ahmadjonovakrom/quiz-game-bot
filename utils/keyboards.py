@@ -357,36 +357,78 @@ def edit_options_keyboard() -> InlineKeyboardMarkup:
         [InlineKeyboardButton("⬅️ Back", callback_data="edit_back_menu")],
     ])
 
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+
+
 def bot_stats_keyboard(total_groups: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton(f"👥 Groups ({total_groups})", callback_data="admin_stats_groups")],
+        [InlineKeyboardButton(f"👥 Groups ({total_groups})", callback_data="admin_stats_groups_page_1")],
         [InlineKeyboardButton("⬅️ Back", callback_data="admin_back")],
         [InlineKeyboardButton("❌ Cancel", callback_data="admin_close")],
     ])
 
 
-def bot_groups_keyboard(groups) -> InlineKeyboardMarkup:
+def bot_groups_keyboard(groups, page: int = 1, per_page: int = 10) -> InlineKeyboardMarkup:
     rows = []
 
-    for group in groups[:50]:
+    total = len(groups)
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    page = max(1, min(page, total_pages))
+
+    start = (page - 1) * per_page
+    end = start + per_page
+    page_groups = groups[start:end]
+
+    for group in page_groups:
         title = group["title"] or group["username"] or str(group["chat_id"])
-        safe_title = str(title)[:40]
+        prefix = "🟢 " if group["is_active"] else "🔴 "
+        safe_title = (prefix + str(title))[:50]
+
         rows.append([
             InlineKeyboardButton(
                 safe_title,
-                callback_data=f"admin_stats_group_{group['chat_id']}"
+                callback_data=f"admin_stats_group_{group['chat_id']}_page_{page}"
             )
         ])
 
+    nav_row = []
+    if page > 1:
+        nav_row.append(
+            InlineKeyboardButton("⬅ Prev", callback_data=f"admin_stats_groups_page_{page - 1}")
+        )
+
+    nav_row.append(
+        InlineKeyboardButton(f"{page}/{total_pages}", callback_data="admin_page_info")
+    )
+
+    if page < total_pages:
+        nav_row.append(
+            InlineKeyboardButton("Next ➡", callback_data=f"admin_stats_groups_page_{page + 1}")
+        )
+
+    rows.append(nav_row)
     rows.append([InlineKeyboardButton("⬅️ Back", callback_data="admin_botstats")])
     rows.append([InlineKeyboardButton("❌ Cancel", callback_data="admin_close")])
 
     return InlineKeyboardMarkup(rows)
 
 
-def bot_group_details_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("⬅️ Back to Groups", callback_data="admin_stats_groups")],
-        [InlineKeyboardButton("⬅️ Back to Stats", callback_data="admin_botstats")],
-        [InlineKeyboardButton("❌ Cancel", callback_data="admin_close")],
+def bot_group_details_keyboard(username: str | None = None, page: int = 1) -> InlineKeyboardMarkup:
+    rows = []
+
+    if username:
+        rows.append([
+            InlineKeyboardButton("🔗 Open Group", url=f"https://t.me/{username}")
+        ])
+
+    rows.append([
+        InlineKeyboardButton("⬅️ Back to Groups", callback_data=f"admin_stats_groups_page_{page}")
     ])
+    rows.append([
+        InlineKeyboardButton("⬅️ Back to Stats", callback_data="admin_botstats")
+    ])
+    rows.append([
+        InlineKeyboardButton("❌ Cancel", callback_data="admin_close")
+    ])
+
+    return InlineKeyboardMarkup(rows)

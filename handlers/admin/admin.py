@@ -80,6 +80,7 @@ from .states import *
 from .routes_edit import handle_edit_routes
 from .routes_questions import handle_question_routes
 from .routes_misc import handle_misc_routes
+from telegram.constants import ParseMode
 
 async def show_question_details(target, qid: int, source: str = "questions"):
     q = get_question_by_id(qid)
@@ -184,12 +185,12 @@ async def bot_stats_command(update, context):
         await query.answer()
         await query.edit_message_text(
             text=text,
-            reply_markup=bot_stats_keyboard(stats["total_groups"]),  # ✅ IMPORTANT
+            reply_markup=bot_stats_keyboard(stats["total_groups"]),
         )
     else:
         await update.message.reply_text(
             text=text,
-            reply_markup=bot_stats_keyboard(stats["total_groups"]),  # ✅ IMPORTANT
+            reply_markup=bot_stats_keyboard(stats["total_groups"]),
         )
 
 
@@ -347,22 +348,46 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         )
         return ADMIN_MENU
 
-    if data == "admin_stats_groups":
+    if data.startswith("admin_stats_groups_page_"):
+        page = int(data.replace("admin_stats_groups_page_", ""))
         groups = get_all_groups()
 
         await query.edit_message_text(
-            text=format_groups_list_text(groups),
-            reply_markup=bot_groups_keyboard(groups),
+            text=format_groups_list_text(groups, page=page, per_page=10),
+            reply_markup=bot_groups_keyboard(groups, page=page, per_page=10),
+        )
+        return ADMIN_MENU
+
+    if data == "admin_stats_groups":
+        page = 1
+        groups = get_all_groups()
+
+        await query.edit_message_text(
+            text=format_groups_list_text(groups, page=page, per_page=10),
+            reply_markup=bot_groups_keyboard(groups, page=page, per_page=10),
         )
         return ADMIN_MENU
 
     if data.startswith("admin_stats_group_"):
-        chat_id = int(data.replace("admin_stats_group_", ""))
+        raw = data.replace("admin_stats_group_", "")
+
+        if "_page_" in raw:
+            chat_id_str, page_str = raw.split("_page_")
+            chat_id = int(chat_id_str)
+            page = int(page_str)
+        else:
+            chat_id = int(raw)
+            page = 1
+
         group_stats = get_group_stats(chat_id)
+        chat = group_stats.get("chat")
+        username = chat["username"] if chat and chat["username"] else None
 
         await query.edit_message_text(
             text=format_group_details_text(group_stats),
-            reply_markup=bot_group_details_keyboard(),
+            reply_markup=bot_group_details_keyboard(username=username, page=page),
+            parse_mode="HTML",
+            disable_web_page_preview=True,
         )
         return ADMIN_MENU
 

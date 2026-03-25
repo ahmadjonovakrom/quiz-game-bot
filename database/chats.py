@@ -87,8 +87,23 @@ def get_group_stats(chat_id: int):
             WHERE chat_id = ?
         """, (chat_id,)).fetchone()
 
+        top_players = conn.execute("""
+            SELECT
+                user_id,
+                username,
+                full_name,
+                total_points AS points,
+                correct_answers,
+                games_won
+            FROM group_scores
+            WHERE chat_id = ?
+            ORDER BY total_points DESC, correct_answers DESC, games_won DESC, user_id ASC
+            LIMIT 5
+        """, (chat_id,)).fetchall()
+
         return {
             "chat": chat_row,
             "player_count": players_row["player_count"] if players_row else 0,
             "game_count": games_row["game_count"] if games_row else 0,
+            "top_players": top_players,
         }

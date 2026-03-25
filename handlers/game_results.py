@@ -1,3 +1,4 @@
+import html
 import logging
 
 from telegram import Update
@@ -16,6 +17,22 @@ from services.game_service import (
 logger = logging.getLogger(__name__)
 
 
+def make_clickable_name(row):
+    raw_name = (
+        row.get("full_name")
+        or row.get("name")
+        or row.get("username")
+        or "Unknown"
+    )
+    safe_name = html.escape(str(raw_name))
+    user_id = row.get("user_id")
+
+    if user_id:
+        return f'<a href="tg://user?id={user_id}">{safe_name}</a>'
+
+    return safe_name
+
+
 def format_final_results_page(results, page=1):
     total = len(results)
     total_pages = max(1, (total + FINAL_RESULTS_PAGE_SIZE - 1) // FINAL_RESULTS_PAGE_SIZE)
@@ -29,12 +46,7 @@ def format_final_results_page(results, page=1):
     lines = ["🍋 ENGLISH LEMON RESULTS", "", "🏆 Final Leaderboard:"]
 
     for index, row in enumerate(chunk, start=start + 1):
-        name = (
-            row.get("full_name")
-            or row.get("name")
-            or row.get("username")
-            or "Unknown"
-        )
+        name = make_clickable_name(row)
         points = row.get("points", 0)
 
         if index == 1:
@@ -76,12 +88,7 @@ def format_final_results_page(results, page=1):
                 ),
             )
 
-        mvp_name = (
-            mvp.get("full_name")
-            or mvp.get("name")
-            or mvp.get("username")
-            or "Unknown"
-        )
+        mvp_name = make_clickable_name(mvp)
 
         lines.append("")
         lines.append(f"👑 MVP: {mvp_name}")
@@ -89,12 +96,7 @@ def format_final_results_page(results, page=1):
         if not accuracy_king:
             lines.append("🎯 Accuracy Champion: No answers yet")
         else:
-            accuracy_name = (
-                accuracy_king.get("full_name")
-                or accuracy_king.get("name")
-                or accuracy_king.get("username")
-                or "Unknown"
-            )
+            accuracy_name = make_clickable_name(accuracy_king)
             accuracy_percent = round(accuracy_value(accuracy_king))
             lines.append(f"🎯 Accuracy Champion: {accuracy_name} ({accuracy_percent}%)")
 

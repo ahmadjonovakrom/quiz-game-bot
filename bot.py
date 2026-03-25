@@ -51,7 +51,7 @@ from handlers.profile import (
 
 from handlers.group_bonus import bot_added_to_group_handler
 
-from handlers.admin.admin import (
+from handlers.admin import (
     admin_panel,
     admin_button_handler,
     bot_stats_command,

@@ -305,9 +305,11 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
 
     await query.answer()
     data = query.data
+
     result = await handle_edit_routes(query, context)
     if result is not None:
         return result
+
     result = await handle_question_routes(
         query,
         context,
@@ -318,7 +320,7 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     )
     if result is not None:
         return result
-    
+
     result = await handle_misc_routes(
         query,
         context,
@@ -329,7 +331,7 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     )
     if result is not None:
         return result
-    
+
     if data == "admin_botstats":
         stats = {
             "total_users": get_total_users_count(),

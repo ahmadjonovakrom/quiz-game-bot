@@ -17,8 +17,11 @@ from database import create_tables
 
 from handlers.game import (
     button_handler,
-    receive_poll_answer,
     daily_quiz,
+)
+
+from handlers.game_play import (
+    receive_poll_answer,
 )
 
 from handlers.game_setup import (
@@ -209,7 +212,7 @@ def main():
     app.add_handler(
         CallbackQueryHandler(
             button_handler,
-            pattern=r"^(setup_|setup_back_to_results:|join\||results_play_again:)",
+            pattern=r"^(setup_|setup_back_to_results:|join\||results_play_again:|menu_)",
         )
     )
 

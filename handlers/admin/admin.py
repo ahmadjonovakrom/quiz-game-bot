@@ -59,19 +59,7 @@ from services.question_service import (
 from services.stats_service import get_bot_stats_service
 from services.broadcast_service import broadcast_copied_message_service
 
-ADMIN_MENU, QUESTION, A, B, C, D, CORRECT = range(7)
-DELETE_ID, DELETE_CONFIRM = range(7, 9)
-EDIT_ID, EDIT_QUESTION, EDIT_A, EDIT_B, EDIT_C, EDIT_D, EDIT_CORRECT, EDIT_CATEGORY, EDIT_DIFFICULTY = range(9, 18)
-BROADCAST_MESSAGE, BROADCAST_CONFIRM = range(18, 20)
-IMPORT_FILE = 20
-SEARCH_KEYWORD = 21
-EDIT_TEXT_ONLY = 22
-EDIT_OPTION_ONLY = 23
-EDIT_CORRECT_ONLY = 24
-EDIT_CATEGORY_ONLY = 25
-EDIT_DIFFICULTY_ONLY = 26
-
-
+from .states import *
 def nav_keyboard(back_callback: str = "admin_back") -> InlineKeyboardMarkup:
     return back_cancel_keyboard(back_callback)
 
@@ -799,7 +787,7 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             f"✏️ Update Setting\n\nSend new value for:\n{key}",
             reply_markup=nav_keyboard("admin_settings"),
         )
-        return 1000
+        return SETTING_VALUE
 
     if data == "admin_danger_zone":
         await query.edit_message_text(

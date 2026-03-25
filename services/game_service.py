@@ -1,6 +1,7 @@
 import asyncio
 import math
 import time
+from collections import defaultdict, deque
 from typing import Dict
 
 from telegram.ext import ContextTypes
@@ -15,6 +16,11 @@ poll_map: Dict[str, dict] = {}
 daily_quiz_players: Dict[int, dict] = {}
 _game_locks: Dict[int, asyncio.Lock] = {}
 
+RECENT_QUESTION_HISTORY_SIZE = 40
+recent_questions_by_chat = defaultdict(
+    lambda: deque(maxlen=RECENT_QUESTION_HISTORY_SIZE)
+)
+
 
 def get_game_lock(chat_id: int) -> asyncio.Lock:
     lock = _game_locks.get(chat_id)
@@ -26,6 +32,16 @@ def get_game_lock(chat_id: int) -> asyncio.Lock:
 
 def cleanup_game_lock(chat_id: int) -> None:
     _game_locks.pop(chat_id, None)
+
+
+def get_recent_question_ids(chat_id: int):
+    return list(recent_questions_by_chat.get(chat_id, []))
+
+
+def remember_question(chat_id: int, question_id: int):
+    if chat_id is None or question_id is None:
+        return
+    recent_questions_by_chat[chat_id].append(question_id)
 
 
 def format_difficulty_name(value: str) -> str:
@@ -67,6 +83,7 @@ def create_new_game_data(
         "category": category,
         "difficulty": difficulty,
         "min_players": MIN_PLAYERS,
+        "chat_id": None,
     }
 
 
@@ -103,12 +120,42 @@ async def clear_game(context: ContextTypes.DEFAULT_TYPE, chat_id: int):
 
 
 def get_unused_question(game: dict):
-    exclude_ids = list(game["used_question_ids"])
-    return get_random_question(
+    used_ids = list(game["used_question_ids"])
+    chat_id = game.get("chat_id")
+
+    recent_ids = get_recent_question_ids(chat_id) if chat_id is not None else []
+
+    exclude_ids = list(dict.fromkeys(used_ids + recent_ids))
+
+    question = get_random_question(
         exclude_ids=exclude_ids,
         category=game.get("category"),
         difficulty=game.get("difficulty"),
     )
+
+    # Fallback 1: ignore recent chat history, but still avoid repeats in current game
+    if not question:
+        question = get_random_question(
+            exclude_ids=used_ids,
+            category=game.get("category"),
+            difficulty=game.get("difficulty"),
+        )
+
+    # Fallback 2: if pool is too small, allow any matching question
+    if not question:
+        question = get_random_question(
+            category=game.get("category"),
+            difficulty=game.get("difficulty"),
+        )
+
+    if question:
+        q_id = question["id"]
+        game["used_question_ids"].add(q_id)
+
+        if chat_id is not None:
+            remember_question(chat_id, q_id)
+
+    return question
 
 
 def get_join_remaining_seconds(game: dict) -> int:

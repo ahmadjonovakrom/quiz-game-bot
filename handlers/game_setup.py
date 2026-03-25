@@ -195,7 +195,7 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
             category=DEFAULT_CATEGORY,
             difficulty="mixed",
         )
-
+        game["chat_id"] = chat.id
         add_player_to_game(game, user)
         active_games[chat.id] = game
 

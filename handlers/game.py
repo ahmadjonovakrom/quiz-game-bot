@@ -212,7 +212,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 category=DEFAULT_CATEGORY,
                 difficulty="mixed",
             )
-
+            game["chat_id"] = chat_id
             add_player_to_game(game, user)
             game["results_message_id"] = query.message.message_id
             game["setup_message_id"] = None

@@ -200,7 +200,7 @@ def main():
 
     # ================= CALLBACKS =================
 
-    # Final results pagination first
+    # 1. Results pagination
     app.add_handler(
         CallbackQueryHandler(
             final_results_callback_handler,
@@ -208,15 +208,15 @@ def main():
         )
     )
 
-    # All game-flow callbacks must go here
+    # 2. Game setup / join / play again
     app.add_handler(
         CallbackQueryHandler(
             button_handler,
-            pattern=r"^(setup_|setup_back_to_results:|join\||results_play_again:|menu_)",
+            pattern=r"^(setup_|setup_back_to_results:|join\||results_play_again:)",
         )
     )
 
-    # Menu only
+    # 3. Menu buttons (SEPARATE!)
     app.add_handler(
         CallbackQueryHandler(
             menu_handler,
@@ -224,7 +224,7 @@ def main():
         )
     )
 
-    # Leaderboard / profile callbacks
+    # 4. Profile / leaderboard
     app.add_handler(
         CallbackQueryHandler(
             profile_callback_handler,
@@ -232,8 +232,10 @@ def main():
         )
     )
 
+    # Poll answers
     app.add_handler(PollAnswerHandler(receive_poll_answer))
 
+    # Bot added to group
     app.add_handler(
         ChatMemberHandler(
             bot_added_to_group_handler,

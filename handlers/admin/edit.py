@@ -5,10 +5,51 @@ from config import ALLOWED_CATEGORIES, ALLOWED_DIFFICULTIES
 from utils.keyboards import edit_question_menu_keyboard
 from utils.texts import format_question_preview
 
+from database import get_question_by_id
 from services.question_service import update_question_service
 
 from .questions import nav_keyboard, questions_keyboard
 from .states import *
+
+
+async def edit_id_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text.strip()
+    if not text.isdigit():
+        await update.message.reply_text(
+            "Please send a valid numeric question ID.",
+            reply_markup=nav_keyboard("admin_questions"),
+        )
+        return EDIT_ID
+
+    qid = int(text)
+    q = get_question_by_id(qid)
+    if not q:
+        await update.message.reply_text(
+            "Question not found.",
+            reply_markup=nav_keyboard("admin_questions"),
+        )
+        return EDIT_ID
+
+    context.user_data["edit_qid"] = qid
+    context.user_data["edit_question"] = {
+        "question_text": q[1],
+        "option_a": q[2],
+        "option_b": q[3],
+        "option_c": q[4],
+        "option_d": q[5],
+        "correct_option": q[6],
+        "category": q[7],
+        "difficulty": q[8],
+    }
+
+    await update.message.reply_text(
+        "✏️ Edit Question\n\n"
+        f"{format_question_preview(q)}\n\n"
+        "Choose what you want to edit:",
+        reply_markup=edit_question_menu_keyboard(),
+    )
+    await update.message.delete()
+    return ADMIN_MENU
 
 
 async def edit_text_only_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -173,6 +214,7 @@ async def edit_difficulty_only_step(update: Update, context: ContextTypes.DEFAUL
         reply_markup=edit_question_menu_keyboard(),
     )
     return ADMIN_MENU
+
 
 async def edit_question_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["edit_question"]["question_text"] = update.message.text

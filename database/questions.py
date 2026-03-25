@@ -104,6 +104,8 @@ def get_random_question(
     category: Optional[str] = None,
     difficulty: Optional[str] = None,
 ):
+    exclude_ids = exclude_ids or []
+
     query = """
         SELECT *
         FROM questions
@@ -127,17 +129,23 @@ def get_random_question(
         query += f" AND id NOT IN ({placeholders})"
         params.extend(exclude_ids)
 
-    query += " ORDER BY times_used ASC, RANDOM() LIMIT 1"
-
-    logger.warning(
-        "GET_RANDOM_QUESTION category=%s difficulty=%s exclude_count=%s",
-        normalized_category or None,
-        normalized_difficulty or None,
-        len(exclude_ids or []),
-    )
+    # 🔥 IMPORTANT CHANGE HERE
+    query += " ORDER BY RANDOM() LIMIT 1"
 
     with closing(get_conn()) as conn, conn:
         row = conn.execute(query, params).fetchone()
+
+        # 🔁 FALLBACK if nothing found (pool too small)
+        if not row:
+            logger.warning("Fallback: ignoring exclude_ids")
+            query = """
+                SELECT *
+                FROM questions
+                WHERE is_active = 1
+                ORDER BY RANDOM()
+                LIMIT 1
+            """
+            row = conn.execute(query).fetchone()
 
         if row:
             conn.execute("""
@@ -145,18 +153,6 @@ def get_random_question(
                 SET times_used = times_used + 1
                 WHERE id = ?
             """, (row["id"],))
-            logger.warning(
-                "QUESTION FOUND id=%s category=%s difficulty=%s",
-                row["id"],
-                row["category"],
-                row["difficulty"],
-            )
-        else:
-            logger.warning(
-                "NO QUESTION FOUND query=%s params=%s",
-                " ".join(query.split()),
-                params,
-            )
 
         return row
 

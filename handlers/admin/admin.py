@@ -345,13 +345,13 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             "total_groups": get_total_groups(),
         }
 
-    top_groups = get_top_groups(limit=5)
+        top_groups = get_top_groups(limit=5)
 
-    await query.edit_message_text(
+        await query.edit_message_text(
         text=format_bot_stats_text(stats, top_groups=top_groups),
         reply_markup=bot_stats_keyboard(stats["total_groups"]),
     )
-    return ADMIN_MENU
+        return ADMIN_MENU
 
     if data.startswith("admin_stats_groups_page_"):
         page = int(data.replace("admin_stats_groups_page_", ""))

@@ -6,7 +6,7 @@ from telegram import (
     InputFile,
 )
 from telegram.ext import ContextTypes, ConversationHandler
-
+from database import get_top_groups
 from config import ALLOWED_CATEGORIES, ALLOWED_DIFFICULTIES
 from utils.helpers import is_admin
 from utils.keyboards import (
@@ -178,7 +178,8 @@ async def bot_stats_command(update, context):
         "total_groups": get_total_groups(),
     }
 
-    text = format_bot_stats_text(stats)
+    top_groups = get_top_groups(limit=5)
+    text = format_bot_stats_text(stats, top_groups=top_groups)
 
     if update.callback_query:
         query = update.callback_query

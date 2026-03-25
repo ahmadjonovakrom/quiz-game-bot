@@ -381,8 +381,9 @@ def bot_groups_keyboard(groups, page: int = 1, per_page: int = 10) -> InlineKeyb
 
     for group in page_groups:
         title = group["title"] or group["username"] or str(group["chat_id"])
+        games = group["game_count"] or 0
         prefix = "🟢 " if group["is_active"] else "🔴 "
-        safe_title = (prefix + str(title))[:50]
+        safe_title = (f"{prefix}{title} ({games})")[:50]
 
         rows.append([
             InlineKeyboardButton(

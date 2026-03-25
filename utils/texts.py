@@ -19,15 +19,14 @@ def format_questions_menu_text():
         "Choose an action:",
     ])
 
-
-def format_bot_stats_text(stats):
+def format_bot_stats_text(stats, top_groups=None):
     users = stats.get("total_users", 0)
     players = stats.get("total_players", 0)
     questions = stats.get("total_questions", 0)
     games = stats.get("total_games", 0)
     groups = stats.get("total_groups", 0)
 
-    return "\n".join([
+    lines = [
         "📊 Bot Stats",
         "",
         f"👤 Users: {users}",
@@ -35,7 +34,25 @@ def format_bot_stats_text(stats):
         f"📚 Questions: {questions}",
         f"🕹 Games: {games}",
         f"👥 Groups: {groups}",
-    ])
+    ]
+
+    if top_groups:
+        lines.extend([
+            "",
+            "🔥 Top Groups",
+        ])
+
+        for index, group in enumerate(top_groups, start=1):
+            title = group["title"] or group["username"] or str(group["chat_id"])
+            title = html.escape(str(title))
+            games_count = group["game_count"] or 0
+            players_count = group["player_count"] or 0
+            status = "🟢" if group["is_active"] else "🔴"
+            lines.append(
+                f"{index}. {status} {title} — {games_count} games | {players_count} players"
+            )
+
+    return "\n".join(lines)
 
 def format_groups_list_text(groups, page: int = 1, per_page: int = 10):
     total = len(groups)

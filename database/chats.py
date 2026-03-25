@@ -47,17 +47,31 @@ def get_all_groups():
     with closing(get_conn()) as conn:
         return conn.execute("""
             SELECT
-                chat_id,
-                chat_type,
-                title,
-                username,
-                is_active,
-                updated_at
-            FROM chats
-            WHERE chat_type IN ('group', 'supergroup')
+                c.chat_id,
+                c.chat_type,
+                c.title,
+                c.username,
+                c.is_active,
+                c.updated_at,
+                COALESCE(g.game_count, 0) AS game_count,
+                COALESCE(p.player_count, 0) AS player_count
+            FROM chats c
+            LEFT JOIN (
+                SELECT chat_id, COUNT(*) AS game_count
+                FROM games
+                GROUP BY chat_id
+            ) g ON g.chat_id = c.chat_id
+            LEFT JOIN (
+                SELECT chat_id, COUNT(*) AS player_count
+                FROM group_scores
+                GROUP BY chat_id
+            ) p ON p.chat_id = c.chat_id
+            WHERE c.chat_type IN ('group', 'supergroup')
             ORDER BY
-                CASE WHEN is_active = 1 THEN 0 ELSE 1 END,
-                COALESCE(NULLIF(title, ''), username, CAST(chat_id AS TEXT)) COLLATE NOCASE
+                CASE WHEN c.is_active = 1 THEN 0 ELSE 1 END,
+                COALESCE(g.game_count, 0) DESC,
+                COALESCE(p.player_count, 0) DESC,
+                COALESCE(NULLIF(c.title, ''), c.username, CAST(c.chat_id AS TEXT)) COLLATE NOCASE
         """).fetchall()
 
 
@@ -107,3 +121,33 @@ def get_group_stats(chat_id: int):
             "game_count": games_row["game_count"] if games_row else 0,
             "top_players": top_players,
         }
+    
+def get_top_groups(limit: int = 5):
+    with closing(get_conn()) as conn:
+        return conn.execute("""
+            SELECT
+                c.chat_id,
+                c.title,
+                c.username,
+                c.is_active,
+                COALESCE(g.game_count, 0) AS game_count,
+                COALESCE(p.player_count, 0) AS player_count
+            FROM chats c
+            LEFT JOIN (
+                SELECT chat_id, COUNT(*) AS game_count
+                FROM games
+                GROUP BY chat_id
+            ) g ON g.chat_id = c.chat_id
+            LEFT JOIN (
+                SELECT chat_id, COUNT(*) AS player_count
+                FROM group_scores
+                GROUP BY chat_id
+            ) p ON p.chat_id = c.chat_id
+            WHERE c.chat_type IN ('group', 'supergroup')
+            ORDER BY
+                COALESCE(g.game_count, 0) DESC,
+                COALESCE(p.player_count, 0) DESC,
+                CASE WHEN c.is_active = 1 THEN 0 ELSE 1 END,
+                COALESCE(NULLIF(c.title, ''), c.username, CAST(c.chat_id AS TEXT)) COLLATE NOCASE
+            LIMIT ?
+        """, (limit,)).fetchall()

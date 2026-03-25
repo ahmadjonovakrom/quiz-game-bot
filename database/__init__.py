@@ -155,6 +155,7 @@ __all__ = [
     "deactivate_chat",
     "get_all_groups",
     "get_group_stats",
+    "get_top_groups",
 
     # questions
     "add_question",

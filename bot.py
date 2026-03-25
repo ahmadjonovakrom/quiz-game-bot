@@ -185,6 +185,7 @@ def main():
     # ================= COMMANDS =================
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("play", start_game))
+    app.add_handler(CommandHandler("startgame", start_game))
     app.add_handler(CommandHandler("stopgame", stop_game))
 
     app.add_handler(CommandHandler("leaderboard", leaderboard))

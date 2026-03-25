@@ -9,6 +9,7 @@ from telegram.ext import ContextTypes, ConversationHandler
 from database import get_top_groups
 from config import ALLOWED_CATEGORIES, ALLOWED_DIFFICULTIES
 from utils.helpers import is_admin
+from database import get_top_groups
 from utils.keyboards import (
     admin_main_keyboard,
     admin_questions_keyboard,
@@ -343,11 +344,13 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             "total_groups": get_total_groups(),
         }
 
-        await query.edit_message_text(
-            text=format_bot_stats_text(stats),
-            reply_markup=bot_stats_keyboard(stats["total_groups"]),
-        )
-        return ADMIN_MENU
+    top_groups = get_top_groups(limit=5)
+
+    await query.edit_message_text(
+        text=format_bot_stats_text(stats, top_groups=top_groups),
+        reply_markup=bot_stats_keyboard(stats["total_groups"]),
+    )
+    return ADMIN_MENU
 
     if data.startswith("admin_stats_groups_page_"):
         page = int(data.replace("admin_stats_groups_page_", ""))

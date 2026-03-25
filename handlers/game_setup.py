@@ -444,7 +444,7 @@ async def begin_game_after_join(chat_id, context):
             "Game started! Get ready for the first question."
         )
 
-        from handlers.game import send_question
+        from handlers.game_play import send_question
         await send_question(chat_id, context)
 
     except Exception:

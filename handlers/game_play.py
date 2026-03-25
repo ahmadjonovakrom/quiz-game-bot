@@ -1,7 +1,8 @@
 import asyncio
 import logging
 
-from telegram.ext import ContextTypes, Update
+from telegram import Update
+from telegram.ext import ContextTypes
 
 from config import CORRECT_POINTS
 from database import (

@@ -121,7 +121,8 @@ def get_group_stats(chat_id: int):
             "game_count": games_row["game_count"] if games_row else 0,
             "top_players": top_players,
         }
-    
+
+
 def get_top_groups(limit: int = 5):
     with closing(get_conn()) as conn:
         return conn.execute("""

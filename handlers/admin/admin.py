@@ -51,6 +51,7 @@ from database import (
     get_total_users_count,
     get_all_groups,
     get_group_stats,
+    get_top_groups,
 )
 
 from services.question_service import (

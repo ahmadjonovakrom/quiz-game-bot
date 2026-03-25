@@ -105,7 +105,7 @@ from .stats import (
     get_group_user_rank,
 )
 
-#settings
+# settings
 from .settings import (
     get_setting,
     set_setting,
@@ -205,7 +205,7 @@ __all__ = [
     "get_group_top_players",
     "get_group_user_rank",
 
-    #settings
+    # settings
     "get_setting",
     "set_setting",
     "get_all_settings",

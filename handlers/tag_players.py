@@ -14,13 +14,14 @@ logger = logging.getLogger(__name__)
 
 CALL_COOLDOWN = 60
 MAX_PLAYERS = 10
+CANDIDATE_LIMIT = 30
 
 _last_call = {}
 
 
-def is_joining(chat_id: int):
+def is_joining(chat_id: int) -> bool:
     game = active_games.get(chat_id)
-    return game and game.get("status") == "joining"
+    return bool(game and game.get("status") == "joining")
 
 
 def can_call(chat_id: int):
@@ -34,7 +35,7 @@ def can_call(chat_id: int):
     return True, 0
 
 
-async def is_member(context, chat_id: int, user_id: int):
+async def is_member(context: ContextTypes.DEFAULT_TYPE, chat_id: int, user_id: int) -> bool:
     try:
         member = await context.bot.get_chat_member(chat_id, user_id)
         return member.status in (
@@ -43,12 +44,19 @@ async def is_member(context, chat_id: int, user_id: int):
             ChatMemberStatus.OWNER,
         )
     except Exception:
+        logger.exception(
+            "Failed to check member status for user %s in chat %s",
+            user_id,
+            chat_id,
+        )
         return False
 
 
-def build_mention(row):
+def build_mention(row) -> str:
     username = (row["username"] or "").strip()
-    full_name = html.escape((row["full_name"] or "").strip() or f"User {row['user_id']}")
+    full_name = html.escape(
+        (row["full_name"] or "").strip() or f"User {row['user_id']}"
+    )
 
     if username:
         if not username.startswith("@"):
@@ -58,32 +66,30 @@ def build_mention(row):
     return f'<a href="tg://user?id={row["user_id"]}">{full_name}</a>'
 
 
-def build_message(mentions):
+def build_message(mentions: list[str]) -> str:
     first = ", ".join(mentions[:5])
     second = ", ".join(mentions[5:10])
 
-    parts = [
-        "🟡 Players called!",
-        "",
-        f"> {first}",
-    ]
-
+    quote_lines = []
+    if first:
+        quote_lines.append(first)
     if second:
-        parts.append(f"> {second}")
+        quote_lines.append(second)
 
-    parts += [
-        "",
-        "🎮 Join now!",
-    ]
+    quote_text = "\n".join(quote_lines)
 
-    return "\n".join(parts)
+    return (
+        "🟡 Players called!\n\n"
+        f"<blockquote expandable>{quote_text}</blockquote>\n\n"
+        "🎮 Join now!"
+    )
 
 
 async def callplayers(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.effective_message
     chat = update.effective_chat
 
-    if not chat or chat.type not in ("group", "supergroup"):
+    if not message or not chat or chat.type not in ("group", "supergroup"):
         return
 
     if not is_joining(chat.id):
@@ -95,7 +101,7 @@ async def callplayers(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await message.reply_text(f"Wait {wait}s before calling again.")
         return
 
-    candidates = pick_random_group_tag_candidates(chat.id, limit=30)
+    candidates = pick_random_group_tag_candidates(chat.id, limit=CANDIDATE_LIMIT)
 
     if not candidates:
         await message.reply_text("No players found.")
@@ -122,8 +128,7 @@ async def callplayers(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     random.shuffle(valid)
-    mentions = [build_mention(r) for r in valid[:MAX_PLAYERS]]
-
+    mentions = [build_mention(row) for row in valid[:MAX_PLAYERS]]
     text = build_message(mentions)
 
     await message.reply_text(

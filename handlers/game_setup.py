@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import math
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
@@ -28,7 +29,6 @@ from utils.keyboards import (
 )
 from services.game_service import (
     active_games,
-    poll_map,
     get_game_lock,
     cleanup_game_lock,
     clear_game,
@@ -85,9 +85,14 @@ def get_setup_confirmation_keyboard():
     return game_setup_confirm_keyboard()
 
 
-def get_join_keyboard(chat_id: int):
+def get_join_keyboard(chat_id: int, seconds_left: int | None = None):
+    if seconds_left is not None:
+        button_text = f"✅ Join Game {seconds_left}s"
+    else:
+        button_text = "✅ Join Game"
+
     return InlineKeyboardMarkup(
-        [[InlineKeyboardButton("✅ Join", callback_data=f"join|{chat_id}")]]
+        [[InlineKeyboardButton(button_text, callback_data=f"join|{chat_id}")]]
     )
 
 
@@ -125,10 +130,11 @@ def format_setup_summary(question_count: int, category: str) -> str:
     )
 
 
-async def refresh_join_message(context: ContextTypes.DEFAULT_TYPE, chat_id: int):
-    settings = load_dynamic_settings()
-    join_seconds = settings["JOIN_SECONDS"]
-
+async def refresh_join_message(
+    context: ContextTypes.DEFAULT_TYPE,
+    chat_id: int,
+    seconds_left: int,
+):
     game = active_games.get(chat_id)
     if not game or game.get("status") != "joining":
         return
@@ -137,15 +143,14 @@ async def refresh_join_message(context: ContextTypes.DEFAULT_TYPE, chat_id: int)
     if not join_message_id:
         return
 
-    display_remaining = game.get("display_remaining", join_seconds)
-    blink = game.get("display_blink", False)
+    blink = seconds_left <= 10 and seconds_left % 2 == 0
 
     try:
         await context.bot.edit_message_text(
             chat_id=chat_id,
             message_id=join_message_id,
-            text=build_join_text(game, display_remaining, blink=blink),
-            reply_markup=get_join_keyboard(chat_id),
+            text=build_join_text(game, seconds_left, blink=blink),
+            reply_markup=get_join_keyboard(chat_id, seconds_left),
             parse_mode="HTML",
         )
     except Exception as e:
@@ -322,12 +327,13 @@ async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFA
 
                 await query.edit_message_text(
                     text=build_join_text(game, join_seconds),
-                    reply_markup=get_join_keyboard(chat_id),
+                    reply_markup=get_join_keyboard(chat_id, join_seconds),
                     parse_mode="HTML",
                 )
 
                 game["join_message_id"] = query.message.message_id
                 game["setup_message_id"] = query.message.message_id
+                game["join_end_time"] = None
 
                 safe_task(begin_game_after_join(chat_id, context))
                 return True
@@ -349,7 +355,7 @@ async def begin_game_after_join(chat_id, context):
     logger.warning("BEGIN GAME AFTER JOIN: %s", chat_id)
 
     try:
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
 
         lock = get_game_lock(chat_id)
         async with lock:
@@ -358,11 +364,8 @@ async def begin_game_after_join(chat_id, context):
                 return
 
             game["join_end_time"] = loop.time() + join_seconds
-            game["display_remaining"] = join_seconds
-            game["display_blink"] = False
 
-        last_display_value = None
-        last_blink = None
+        last_shown = None
 
         while True:
             lock = get_game_lock(chat_id)
@@ -375,28 +378,24 @@ async def begin_game_after_join(chat_id, context):
                 if end_time is None:
                     return
 
-                actual_remaining = max(0, int(end_time - loop.time()))
+                actual_remaining = max(0, math.ceil(end_time - loop.time()))
 
-                if actual_remaining > 10:
-                    display_value = ((actual_remaining + 9) // 10) * 10
-                    display_value = min(display_value, join_seconds)
-                    blink = False
-                else:
-                    display_value = actual_remaining
-                    blink = (actual_remaining % 2 == 0)
+            if actual_remaining > 20:
+                shown_remaining = ((actual_remaining + 4) // 5) * 5
+                shown_remaining = min(shown_remaining, join_seconds)
+                sleep_for = 1
+            else:
+                shown_remaining = actual_remaining
+                sleep_for = 1
 
-                game["display_remaining"] = display_value
-                game["display_blink"] = blink
-
-            if display_value != last_display_value or blink != last_blink:
-                await refresh_join_message(context, chat_id)
-                last_display_value = display_value
-                last_blink = blink
+            if shown_remaining != last_shown:
+                await refresh_join_message(context, chat_id, shown_remaining)
+                last_shown = shown_remaining
 
             if actual_remaining <= 0:
                 break
 
-            await asyncio.sleep(1)
+            await asyncio.sleep(sleep_for)
 
         lock = get_game_lock(chat_id)
         async with lock:

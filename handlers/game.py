@@ -281,7 +281,10 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if chat_id < 0:
             ensure_group_player(chat_id, user)
 
-        await refresh_join_message(context, chat_id)
+        from services.game_service import get_join_remaining_seconds
+
+        remaining = get_join_remaining_seconds(game)
+        await refresh_join_message(context, chat_id, remaining)
         await query.answer("Joined!")
         return
 

@@ -1,6 +1,6 @@
 import asyncio
 import logging
-import math
+import time
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
@@ -85,14 +85,9 @@ def get_setup_confirmation_keyboard():
     return game_setup_confirm_keyboard()
 
 
-def get_join_keyboard(chat_id: int, seconds_left: int | None = None):
-    if seconds_left is not None:
-        button_text = f"✅ Join Game {seconds_left}s"
-    else:
-        button_text = "✅ Join Game"
-
+def get_join_keyboard(chat_id: int):
     return InlineKeyboardMarkup(
-        [[InlineKeyboardButton(button_text, callback_data=f"join|{chat_id}")]]
+        [[InlineKeyboardButton("✅ Join Game", callback_data=f"join|{chat_id}")]]
     )
 
 
@@ -133,8 +128,13 @@ def format_setup_summary(question_count: int, category: str) -> str:
 async def refresh_join_message(
     context: ContextTypes.DEFAULT_TYPE,
     chat_id: int,
-    seconds_left: int,
+    seconds_left: int | None = None,
 ):
+    """
+    Keep this compatible with handlers/game.py which may call it
+    without seconds_left. We do NOT change the main registration
+    button text in this version.
+    """
     game = active_games.get(chat_id)
     if not game or game.get("status") != "joining":
         return
@@ -143,18 +143,101 @@ async def refresh_join_message(
     if not join_message_id:
         return
 
-    blink = seconds_left <= 10 and seconds_left % 2 == 0
-
     try:
+        remaining = seconds_left
+        if remaining is None:
+            end_time = game.get("join_end_time")
+            if end_time is not None:
+                remaining = max(0, int(end_time - time.monotonic()))
+
         await context.bot.edit_message_text(
             chat_id=chat_id,
             message_id=join_message_id,
-            text=build_join_text(game, seconds_left, blink=blink),
-            reply_markup=get_join_keyboard(chat_id, seconds_left),
+            text=build_join_text(game, remaining),
+            reply_markup=get_join_keyboard(chat_id),
             parse_mode="HTML",
         )
     except Exception as e:
         logger.warning("Failed to refresh join message in chat %s: %s", chat_id, e)
+
+
+async def cleanup_join_reminder(chat_id: int, context: ContextTypes.DEFAULT_TYPE):
+    game = active_games.get(chat_id)
+    if not game:
+        return
+
+    task = game.get("reminder_task")
+    if task and not task.done():
+        task.cancel()
+
+    reminder_message_id = game.get("reminder_message_id")
+    if reminder_message_id:
+        await safe_delete_message(context.bot, chat_id, reminder_message_id)
+
+    game["reminder_task"] = None
+    game["reminder_message_id"] = None
+
+
+async def send_join_reminders(chat_id: int, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Keeps the main registration message unchanged.
+    Sends:
+    1) one reminder around halfway through join time
+    2) one final reminder when 20s are left
+    The first reminder is deleted before sending the second.
+    The final reminder is deleted when the game starts/cancels.
+    """
+    try:
+        game = active_games.get(chat_id)
+        if not game:
+            return
+
+        settings = load_dynamic_settings()
+        join_seconds = int(settings["JOIN_SECONDS"])
+
+        if join_seconds <= 20:
+            first_wait = max(1, join_seconds - 20)
+        else:
+            first_wait = max(1, join_seconds // 2)
+
+        await asyncio.sleep(first_wait)
+
+        game = active_games.get(chat_id)
+        if not game or game.get("status") != "joining":
+            return
+
+        first_msg = await context.bot.send_message(
+            chat_id=chat_id,
+            text="🚀 Join now before it starts!",
+            reply_markup=get_join_keyboard(chat_id),
+        )
+        game["reminder_message_id"] = first_msg.message_id
+
+        if join_seconds <= 20:
+            return
+
+        time_until_final = max(0, join_seconds - first_wait - 20)
+        await asyncio.sleep(time_until_final)
+
+        game = active_games.get(chat_id)
+        if not game or game.get("status") != "joining":
+            return
+
+        old_reminder_id = game.get("reminder_message_id")
+        if old_reminder_id:
+            await safe_delete_message(context.bot, chat_id, old_reminder_id)
+
+        final_msg = await context.bot.send_message(
+            chat_id=chat_id,
+            text="⚡ Last chance to join!",
+            reply_markup=get_join_keyboard(chat_id),
+        )
+        game["reminder_message_id"] = final_msg.message_id
+
+    except asyncio.CancelledError:
+        logger.info("Join reminders cancelled for chat %s", chat_id)
+    except Exception:
+        logger.exception("Reminder error in chat %s", chat_id)
 
 
 async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -201,6 +284,12 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
             difficulty="mixed",
         )
         game["chat_id"] = chat.id
+        game["setup_message_id"] = None
+        game["join_message_id"] = None
+        game["join_end_time"] = None
+        game["reminder_task"] = None
+        game["reminder_message_id"] = None
+
         add_player_to_game(game, user)
         active_games[chat.id] = game
 
@@ -239,6 +328,7 @@ async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFA
         return False
 
     if data in ("menu_back", "menu_main"):
+        await cleanup_join_reminder(chat_id, context)
         await clear_game(context, chat_id)
 
         await query.edit_message_text(
@@ -323,17 +413,21 @@ async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFA
 
             try:
                 game["min_players"] = settings["MIN_PLAYERS"]
+                game["join_seconds"] = join_seconds
                 mark_game_joining(game, join_seconds)
 
                 await query.edit_message_text(
                     text=build_join_text(game, join_seconds),
-                    reply_markup=get_join_keyboard(chat_id, join_seconds),
+                    reply_markup=get_join_keyboard(chat_id),
                     parse_mode="HTML",
                 )
 
                 game["join_message_id"] = query.message.message_id
                 game["setup_message_id"] = query.message.message_id
-                game["join_end_time"] = None
+                game["join_end_time"] = time.monotonic() + join_seconds
+
+                reminder_task = safe_task(send_join_reminders(chat_id, context))
+                game["reminder_task"] = reminder_task
 
                 safe_task(begin_game_after_join(chat_id, context))
                 return True
@@ -355,47 +449,7 @@ async def begin_game_after_join(chat_id, context):
     logger.warning("BEGIN GAME AFTER JOIN: %s", chat_id)
 
     try:
-        loop = asyncio.get_running_loop()
-
-        lock = get_game_lock(chat_id)
-        async with lock:
-            game = active_games.get(chat_id)
-            if not game or game["status"] != "joining":
-                return
-
-            game["join_end_time"] = loop.time() + join_seconds
-
-        last_shown = None
-
-        while True:
-            lock = get_game_lock(chat_id)
-            async with lock:
-                game = active_games.get(chat_id)
-                if not game or game["status"] != "joining":
-                    return
-
-                end_time = game.get("join_end_time")
-                if end_time is None:
-                    return
-
-                actual_remaining = max(0, math.ceil(end_time - loop.time()))
-
-            if actual_remaining > 20:
-                shown_remaining = ((actual_remaining + 4) // 5) * 5
-                shown_remaining = min(shown_remaining, join_seconds)
-                sleep_for = 1
-            else:
-                shown_remaining = actual_remaining
-                sleep_for = 1
-
-            if shown_remaining != last_shown:
-                await refresh_join_message(context, chat_id, shown_remaining)
-                last_shown = shown_remaining
-
-            if actual_remaining <= 0:
-                break
-
-            await asyncio.sleep(sleep_for)
+        await asyncio.sleep(join_seconds)
 
         lock = get_game_lock(chat_id)
         async with lock:
@@ -404,6 +458,7 @@ async def begin_game_after_join(chat_id, context):
                 return
 
             join_message_id = game.get("join_message_id")
+            reminder_message_id = game.get("reminder_message_id")
 
             if len(game["players"]) < min_players:
                 active_games.pop(chat_id, None)
@@ -412,6 +467,9 @@ async def begin_game_after_join(chat_id, context):
             else:
                 game["status"] = "running"
                 not_enough_players = False
+
+        if reminder_message_id:
+            await safe_delete_message(context.bot, chat_id, reminder_message_id)
 
         await safe_delete_message(context.bot, chat_id, join_message_id)
 
@@ -427,6 +485,9 @@ async def begin_game_after_join(chat_id, context):
             game = active_games.get(chat_id)
             if not game or game["status"] != "running":
                 return
+
+            game["reminder_task"] = None
+            game["reminder_message_id"] = None
 
             try:
                 game["db_game_id"] = create_game(

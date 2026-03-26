@@ -110,8 +110,13 @@ async def callplayers(update: Update, context: ContextTypes.DEFAULT_TYPE):
     valid = []
     seen = set()
 
+    caller_id = update.effective_user.id
+
     for row in candidates:
         uid = row["user_id"]
+
+        if uid == caller_id:
+            continue
 
         if uid in seen:
             continue

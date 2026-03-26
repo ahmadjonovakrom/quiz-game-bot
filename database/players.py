@@ -261,7 +261,9 @@ def get_player_profile(user_id: int):
                 username,
                 total_points,
                 games_played,
-                correct_answers
+                games_won,
+                correct_answers,
+                wrong_answers
             FROM players
             WHERE user_id = ?
         """, (user_id,)).fetchone()

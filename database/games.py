@@ -1,3 +1,4 @@
+import random
 from contextlib import closing
 from typing import List, Optional
 
@@ -526,3 +527,33 @@ def record_daily_quiz_attempt(user_id: int, quiz_date: str):
             """,
             (user_id, quiz_date),
         )
+        
+def get_group_tag_candidates(chat_id: int, limit: int = 30):
+    with closing(get_conn()) as conn:
+        return conn.execute(
+            """
+            SELECT
+                user_id,
+                username,
+                full_name,
+                last_played_at
+            FROM group_scores
+            WHERE chat_id = ?
+            ORDER BY
+                CASE WHEN last_played_at IS NULL THEN 1 ELSE 0 END,
+                last_played_at DESC,
+                user_id ASC
+            LIMIT ?
+            """,
+            (chat_id, limit),
+        ).fetchall()
+
+
+def pick_random_group_tag_candidates(chat_id: int, limit: int = 30):
+    rows = list(get_group_tag_candidates(chat_id, limit=limit))
+
+    if not rows:
+        return []
+
+    random.shuffle(rows)
+    return rows

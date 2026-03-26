@@ -14,7 +14,7 @@ from telegram.ext import (
 
 from config import BOT_TOKEN
 from database import create_tables
-
+from handlers.tag_players import callplayers
 from handlers.game import (
     button_handler,
     daily_quiz,
@@ -200,6 +200,7 @@ def main():
     app.add_handler(CommandHandler("fixwins", fixwins))
     app.add_handler(CommandHandler("dailyquiz", daily_quiz))
     app.add_handler(CommandHandler("myid", myid))
+    app.add_handler(CommandHandler("callplayers", callplayers))
 
     # ================= CALLBACKS =================
 

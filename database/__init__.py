@@ -89,6 +89,8 @@ from .games import (
     has_played_daily_quiz,
     record_daily_quiz_attempt,
     get_broadcast_chat_ids,
+    get_group_tag_candidates,
+    pick_random_group_tag_candidates,
 )
 
 from .group_bonus import (
@@ -199,6 +201,8 @@ __all__ = [
     "has_played_daily_quiz",
     "record_daily_quiz_attempt",
     "get_broadcast_chat_ids",
+    "get_group_tag_candidates",
+    "pick_random_group_tag_candidates",
 
     # stats
     "get_question_count",

@@ -8,8 +8,6 @@ from database import (
     finish_game,
     increment_games_played,
     increment_games_won,
-    record_correct_answer,
-    record_wrong_answer,
 )
 from utils.helpers import safe_delete_message, is_game_controller
 from utils.keyboards import final_results_keyboard, FINAL_RESULTS_PAGE_SIZE
@@ -220,19 +218,6 @@ async def end_game(chat_id, context):
         # Update winner
         if winner_user_id:
             increment_games_won(winner_user_id)
-
-        # Save correct and wrong answers to DB
-        for row in normalized_results:
-            user_id = row["user_id"]
-
-            correct = row.get("correct_answers", 0)
-            wrong = row.get("wrong_answers", 0)
-
-            for _ in range(correct):
-                record_correct_answer(user_id)
-
-            for _ in range(wrong):
-                record_wrong_answer(user_id)
 
         active_games.pop(chat_id, None)
         cleanup_game_lock(chat_id)

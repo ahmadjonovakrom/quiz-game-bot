@@ -21,6 +21,7 @@ from .admin import (
     cancel,
     admin_button_handler,
     bot_stats_command,
+    fixwins,
     reset_stats,
     import_questions_entry,
     broadcast_message_step,

@@ -338,6 +338,24 @@ def _period_rows_sql(where_clause: str):
         {PERIOD_ORDER_BY}
     """
 
+def recalculate_all_player_wins():
+    with closing(get_conn()) as conn, conn:
+        # reset
+        conn.execute("""
+            UPDATE players
+            SET games_won = 0
+        """)
+
+        # recalculate from games table
+        conn.execute("""
+            UPDATE players
+            SET games_won = (
+                SELECT COUNT(*)
+                FROM games
+                WHERE games.winner_user_id = players.user_id
+                  AND games.status = 'finished'
+            )
+        """)
 
 def get_daily_leaderboard_page(limit: int = 10, offset: int = 0):
     with closing(get_conn()) as conn:

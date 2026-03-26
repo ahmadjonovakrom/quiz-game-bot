@@ -10,6 +10,7 @@ from database import get_top_groups
 from config import ALLOWED_CATEGORIES, ALLOWED_DIFFICULTIES
 from utils.helpers import is_admin
 from database import get_top_groups
+from database import recalculate_all_player_wins
 from utils.keyboards import (
     admin_main_keyboard,
     admin_questions_keyboard,
@@ -152,6 +153,18 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     return ADMIN_MENU
 
+async def fixwins(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+
+    if not is_admin(user.id):
+        await update.message.reply_text("❌ Admin only")
+        return
+
+    try:
+        recalculate_all_player_wins()
+        await update.message.reply_text("✅ Wins recalculated for ALL users!")
+    except Exception as e:
+        await update.message.reply_text(f"❌ Error: {e}")
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()

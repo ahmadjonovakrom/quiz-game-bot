@@ -34,6 +34,7 @@ from .players import (
     claim_daily_reward,
     reset_daily_streak_if_missed,
     get_player_streak_info,
+    recalculate_all_player_wins,
 )
 
 # chats
@@ -215,4 +216,6 @@ __all__ = [
     "get_inviter_for_group",
     "has_claimed_group_bonus",
     "mark_group_bonus_claimed",
+
+    "recalculate_all_player_wins",
 ]

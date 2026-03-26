@@ -78,6 +78,7 @@ from handlers.admin import (
     import_questions_entry,
     import_questions_file_step,
     cancel,
+    fixwins,
     ADMIN_MENU,
     QUESTION,
     A,
@@ -196,6 +197,7 @@ def main():
     app.add_handler(CommandHandler("profile", profile))
 
     app.add_handler(CommandHandler("botstats", bot_stats_command))
+    app.add_handler(CommandHandler("fixwins", fixwins))
     app.add_handler(CommandHandler("dailyquiz", daily_quiz))
     app.add_handler(CommandHandler("myid", myid))
 

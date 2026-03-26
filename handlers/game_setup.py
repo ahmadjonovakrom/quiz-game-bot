@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import math
 import time
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -70,7 +71,10 @@ def has_active_game(chat_id: int) -> bool:
 
 
 def format_category_name(category: str) -> str:
-    return CATEGORY_LABELS.get(str(category).lower(), str(category).replace("_", " ").title())
+    return CATEGORY_LABELS.get(
+        str(category).lower(),
+        str(category).replace("_", " ").title(),
+    )
 
 
 def get_question_count_keyboard(back_callback: str = "menu_main"):
@@ -125,16 +129,16 @@ def format_setup_summary(question_count: int, category: str) -> str:
     )
 
 
+def render_join_text(game: dict, remaining: int) -> str:
+    blink = remaining <= 10 and remaining % 2 == 0
+    return build_join_text(game, remaining, blink=blink)
+
+
 async def refresh_join_message(
     context: ContextTypes.DEFAULT_TYPE,
     chat_id: int,
     seconds_left: int | None = None,
 ):
-    """
-    Keep this compatible with handlers/game.py which may call it
-    without seconds_left. We do NOT change the main registration
-    button text in this version.
-    """
     game = active_games.get(chat_id)
     if not game or game.get("status") != "joining":
         return
@@ -148,17 +152,23 @@ async def refresh_join_message(
         if remaining is None:
             end_time = game.get("join_end_time")
             if end_time is not None:
-                remaining = max(0, int(end_time - time.monotonic()))
+                remaining = max(0, math.ceil(end_time - time.monotonic()))
+            else:
+                remaining = 0
 
         await context.bot.edit_message_text(
             chat_id=chat_id,
             message_id=join_message_id,
-            text=build_join_text(game, remaining),
+            text=render_join_text(game, remaining),
             reply_markup=get_join_keyboard(chat_id),
             parse_mode="HTML",
         )
     except Exception as e:
-        logger.warning("Failed to refresh join message in chat %s: %s", chat_id, e)
+        logger.warning(
+            "Failed to refresh join message in chat %s: %s",
+            chat_id,
+            e,
+        )
 
 
 async def cleanup_join_reminder(chat_id: int, context: ContextTypes.DEFAULT_TYPE):
@@ -179,14 +189,6 @@ async def cleanup_join_reminder(chat_id: int, context: ContextTypes.DEFAULT_TYPE
 
 
 async def send_join_reminders(chat_id: int, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Keeps the main registration message unchanged.
-    Sends:
-    1) one reminder around halfway through join time
-    2) one final reminder when 20s are left
-    The first reminder is deleted before sending the second.
-    The final reminder is deleted when the game starts/cancels.
-    """
     try:
         game = active_games.get(chat_id)
         if not game:
@@ -417,7 +419,7 @@ async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFA
                 mark_game_joining(game, join_seconds)
 
                 await query.edit_message_text(
-                    text=build_join_text(game, join_seconds),
+                    text=render_join_text(game, join_seconds),
                     reply_markup=get_join_keyboard(chat_id),
                     parse_mode="HTML",
                 )
@@ -449,7 +451,44 @@ async def begin_game_after_join(chat_id, context):
     logger.warning("BEGIN GAME AFTER JOIN: %s", chat_id)
 
     try:
-        await asyncio.sleep(join_seconds)
+        loop = asyncio.get_running_loop()
+
+        lock = get_game_lock(chat_id)
+        async with lock:
+            game = active_games.get(chat_id)
+            if not game or game["status"] != "joining":
+                return
+
+            game["join_end_time"] = loop.time() + join_seconds
+
+        last_shown = None
+
+        while True:
+            lock = get_game_lock(chat_id)
+            async with lock:
+                game = active_games.get(chat_id)
+                if not game or game["status"] != "joining":
+                    return
+
+                end_time = game.get("join_end_time")
+                if end_time is None:
+                    return
+
+                actual_remaining = max(0, math.ceil(end_time - loop.time()))
+
+            if actual_remaining > 10:
+                shown_remaining = ((actual_remaining + 9) // 10) * 10
+            else:
+                shown_remaining = actual_remaining
+
+            if shown_remaining != last_shown:
+                await refresh_join_message(context, chat_id, shown_remaining)
+                last_shown = shown_remaining
+
+            if actual_remaining <= 0:
+                break
+
+            await asyncio.sleep(1)
 
         lock = get_game_lock(chat_id)
         async with lock:

@@ -17,6 +17,7 @@ MAX_PLAYERS = 10
 CANDIDATE_LIMIT = 30
 
 _last_call = {}
+_last_candidates = {}
 
 
 def is_joining(chat_id: int) -> bool:
@@ -102,23 +103,28 @@ async def callplayers(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     candidates = pick_random_group_tag_candidates(chat.id, limit=CANDIDATE_LIMIT)
-    logger.warning("CALLPLAYERS chat_id=%s candidates_count=%s", chat.id, len(candidates))
-    for row in candidates:
-        logger.warning("candidate: %s", dict(row))
 
     if not candidates:
-        logger.warning("No candidates even after fallback")
-        await message.reply_text("No players available to tag.")
+        candidates = _last_candidates.get(chat.id, [])
+
+    if not candidates:
+        await message.reply_text("No players found.")
+        return
 
     valid = []
     seen = set()
-
     caller_id = update.effective_user.id
+
+    game = active_games.get(chat.id) or {}
+    joined_ids = set((game.get("players") or {}).keys())
 
     for row in candidates:
         uid = row["user_id"]
 
         if uid == caller_id:
+            continue
+
+        if uid in joined_ids:
             continue
 
         if uid in seen:
@@ -135,11 +141,12 @@ async def callplayers(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await message.reply_text("No current members to tag.")
         return
 
+    _last_candidates[chat.id] = list(valid)
+
     random.shuffle(valid)
     mentions = [build_mention(row) for row in valid[:MAX_PLAYERS]]
     text = build_message(mentions)
 
-    # 1️⃣ Send main message (not as reply)
     await context.bot.send_message(
         chat_id=chat.id,
         text=text,
@@ -147,19 +154,7 @@ async def callplayers(update: Update, context: ContextTypes.DEFAULT_TYPE):
         disable_web_page_preview=True,
     )
 
-    # 2️⃣ Delete /callplayers command message
     try:
         await message.delete()
-    except:
-        pass
-
-    from database.connection import get_conn
-    from contextlib import closing
-
-    with closing(get_conn()) as conn:
-        rows = conn.execute(
-            "SELECT * FROM group_scores WHERE chat_id = ?",
-            (chat.id,)
-        ).fetchall()
-
-    logger.warning("GROUP SCORES: %s", [dict(r) for r in rows])
+    except Exception:
+        logger.exception("Failed to delete /callplayers command message")

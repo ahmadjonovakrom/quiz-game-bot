@@ -551,20 +551,6 @@ def get_group_tag_candidates(chat_id: int, limit: int = 30):
 
 def pick_random_group_tag_candidates(chat_id: int, limit: int = 30):
     rows = get_group_tag_candidates(chat_id, limit=limit)
-
-    # 🔥 fallback if empty
-    if not rows:
-        with get_conn() as conn:
-            rows = conn.execute(
-                """
-                SELECT DISTINCT user_id, username, full_name
-                FROM players
-                ORDER BY RANDOM()
-                LIMIT ?
-                """,
-                (limit,),
-            ).fetchall()
-
     rows = list(rows)
     random.shuffle(rows)
     return rows

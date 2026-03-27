@@ -102,6 +102,9 @@ async def callplayers(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     candidates = pick_random_group_tag_candidates(chat.id, limit=CANDIDATE_LIMIT)
+    logger.warning("CALLPLAYERS chat_id=%s candidates_count=%s", chat.id, len(candidates))
+    for row in candidates:
+        logger.warning("candidate: %s", dict(row))
 
     if not candidates:
         await message.reply_text("No players found.")

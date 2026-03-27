@@ -152,3 +152,14 @@ async def callplayers(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await message.delete()
     except:
         pass
+
+    from database.connection import get_conn
+    from contextlib import closing
+
+    with closing(get_conn()) as conn:
+        rows = conn.execute(
+            "SELECT * FROM group_scores WHERE chat_id = ?",
+            (chat.id,)
+        ).fetchall()
+
+    logger.warning("GROUP SCORES: %s", [dict(r) for r in rows])

@@ -3,17 +3,6 @@ from contextlib import closing
 from .connection import get_conn
 
 
-REAL_GROUP_PLAYER_WHERE = """
-(
-    COALESCE(total_points, 0) > 0
-    OR COALESCE(correct_answers, 0) > 0
-    OR COALESCE(wrong_answers, 0) > 0
-    OR COALESCE(games_played, 0) > 0
-    OR COALESCE(games_won, 0) > 0
-)
-"""
-
-
 def ensure_chat(chat) -> None:
     chat_id = chat.id
     chat_type = chat.type
@@ -66,7 +55,7 @@ def deactivate_chat(chat_id: int) -> None:
 def get_all_groups():
     with closing(get_conn()) as conn:
         return conn.execute(
-            f"""
+            """
             SELECT
                 c.chat_id,
                 c.chat_type,
@@ -86,11 +75,11 @@ def get_all_groups():
             ) g ON g.chat_id = c.chat_id
             LEFT JOIN (
                 SELECT
-                    chat_id,
-                    COUNT(*) AS player_count
-                FROM group_scores
-                WHERE {REAL_GROUP_PLAYER_WHERE}
-                GROUP BY chat_id
+                    g.chat_id,
+                    COUNT(DISTINCT gr.user_id) AS player_count
+                FROM games g
+                JOIN game_results gr ON gr.game_id = g.id
+                GROUP BY g.chat_id
             ) p ON p.chat_id = c.chat_id
             WHERE c.chat_type IN ('group', 'supergroup')
             ORDER BY
@@ -120,11 +109,11 @@ def get_group_stats(chat_id: int):
         ).fetchone()
 
         players_row = conn.execute(
-            f"""
-            SELECT COUNT(*) AS player_count
-            FROM group_scores
-            WHERE chat_id = ?
-              AND {REAL_GROUP_PLAYER_WHERE}
+            """
+            SELECT COUNT(DISTINCT gr.user_id) AS player_count
+            FROM games g
+            JOIN game_results gr ON gr.game_id = g.id
+            WHERE g.chat_id = ?
             """,
             (chat_id,),
         ).fetchone()
@@ -139,7 +128,7 @@ def get_group_stats(chat_id: int):
         ).fetchone()
 
         top_players = conn.execute(
-            f"""
+            """
             SELECT
                 user_id,
                 username,
@@ -149,7 +138,6 @@ def get_group_stats(chat_id: int):
                 games_won
             FROM group_scores
             WHERE chat_id = ?
-              AND {REAL_GROUP_PLAYER_WHERE}
             ORDER BY total_points DESC, correct_answers DESC, games_won DESC, user_id ASC
             LIMIT 5
             """,
@@ -167,7 +155,7 @@ def get_group_stats(chat_id: int):
 def get_top_groups(limit: int = 5):
     with closing(get_conn()) as conn:
         return conn.execute(
-            f"""
+            """
             SELECT
                 c.chat_id,
                 c.title,
@@ -185,11 +173,11 @@ def get_top_groups(limit: int = 5):
             ) g ON g.chat_id = c.chat_id
             LEFT JOIN (
                 SELECT
-                    chat_id,
-                    COUNT(*) AS player_count
-                FROM group_scores
-                WHERE {REAL_GROUP_PLAYER_WHERE}
-                GROUP BY chat_id
+                    g.chat_id,
+                    COUNT(DISTINCT gr.user_id) AS player_count
+                FROM games g
+                JOIN game_results gr ON gr.game_id = g.id
+                GROUP BY g.chat_id
             ) p ON p.chat_id = c.chat_id
             WHERE c.chat_type IN ('group', 'supergroup')
             ORDER BY

@@ -118,6 +118,14 @@ def ensure_group_player(chat_id: int, user) -> None:
         )
 
 
+def touch_group_player(chat_id: int, user) -> None:
+    """
+    Save/update any active group user even if they have never played.
+    This is what /callplayers should rely on.
+    """
+    ensure_group_player(chat_id, user)
+
+
 def add_group_points(chat_id: int, user, points: int):
     user_id, username, full_name = _user_identity(user)
 
@@ -527,8 +535,9 @@ def record_daily_quiz_attempt(user_id: int, quiz_date: str):
             """,
             (user_id, quiz_date),
         )
-        
-def get_group_tag_candidates(chat_id: int, limit: int = 30):
+
+
+def get_group_tag_candidates(chat_id: int, limit: int = 100):
     with closing(get_conn()) as conn:
         return conn.execute(
             """
@@ -549,7 +558,7 @@ def get_group_tag_candidates(chat_id: int, limit: int = 30):
         ).fetchall()
 
 
-def pick_random_group_tag_candidates(chat_id: int, limit: int = 30):
+def pick_random_group_tag_candidates(chat_id: int, limit: int = 100):
     rows = get_group_tag_candidates(chat_id, limit=limit)
     rows = list(rows)
     random.shuffle(rows)

@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 CALL_COOLDOWN = 60
 MAX_PLAYERS = 10
-CANDIDATE_LIMIT = 10
+CANDIDATE_LIMIT = 100
 RECENT_TAG_COOLDOWN = 600  # 10 minutes
 
 _last_call = {}
@@ -57,6 +57,7 @@ async def is_member(context: ContextTypes.DEFAULT_TYPE, chat_id: int, user_id: i
             ChatMemberStatus.MEMBER,
             ChatMemberStatus.ADMINISTRATOR,
             ChatMemberStatus.OWNER,
+            ChatMemberStatus.RESTRICTED,
         )
     except Exception:
         logger.exception(
@@ -68,9 +69,14 @@ async def is_member(context: ContextTypes.DEFAULT_TYPE, chat_id: int, user_id: i
 
 
 def build_mention(row) -> str:
+    username = (row["username"] or "").strip()
     full_name = html.escape(
-        (row["full_name"] or "").strip() or f"User {row['user_id']}"
+        (row["full_name"] or "").strip() or username or f"User {row['user_id']}"
     )
+
+    if username:
+        return f"@{username}"
+
     return f'<a href="tg://user?id={row["user_id"]}">{full_name}</a>'
 
 
@@ -96,8 +102,9 @@ def build_message(mentions: list[str]) -> str:
 async def callplayers(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.effective_message
     chat = update.effective_chat
+    caller = update.effective_user
 
-    if not message or not chat or chat.type not in ("group", "supergroup"):
+    if not message or not chat or not caller or chat.type not in ("group", "supergroup"):
         return
 
     if not is_joining(chat.id):
@@ -109,17 +116,19 @@ async def callplayers(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await message.reply_text(f"Wait {wait}s before calling again.")
         return
 
-    candidates = pick_random_group_tag_candidates(chat.id, limit=CANDIDATE_LIMIT)
+    candidates = list(pick_random_group_tag_candidates(chat.id, limit=CANDIDATE_LIMIT))
 
     if not candidates:
-        await message.reply_text("No players found.")
+        await message.reply_text(
+            "No players found.\n\n"
+            "Ask people to send a message in the group first, then try again."
+        )
         return
 
     random.shuffle(candidates)
 
     valid = []
     seen = set()
-    caller_id = update.effective_user.id
 
     game = active_games.get(chat.id) or {}
     joined_ids = set((game.get("players") or {}).keys())
@@ -128,7 +137,7 @@ async def callplayers(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for row in candidates:
         uid = row["user_id"]
 
-        if uid == caller_id:
+        if uid == caller.id:
             continue
         if uid in joined_ids:
             continue
@@ -144,12 +153,12 @@ async def callplayers(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if len(valid) >= MAX_PLAYERS:
             break
 
-    # Second pass: if nothing found, allow recently called users too
+    # Second pass: allow recently called users too if needed
     if not valid:
         for row in candidates:
             uid = row["user_id"]
 
-            if uid == caller_id:
+            if uid == caller.id:
                 continue
             if uid in joined_ids:
                 continue

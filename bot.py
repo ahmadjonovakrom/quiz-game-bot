@@ -15,6 +15,8 @@ from telegram.ext import (
 from config import BOT_TOKEN
 from database import create_tables
 from handlers.tag_players import callplayers
+from handlers.group_activity import track_group_activity
+
 from handlers.game import (
     button_handler,
     daily_quiz,
@@ -183,6 +185,18 @@ def main():
     )
     app.add_handler(admin_conv)
 
+    # ================= GROUP ACTIVITY TRACKER =================
+    # Saves active users from normal group messages so /callplayers can tag them later
+    app.add_handler(
+        MessageHandler(
+            filters.ChatType.GROUPS
+            & filters.TEXT
+            & ~filters.COMMAND,
+            track_group_activity,
+        ),
+        group=0,
+    )
+
     # ================= COMMANDS =================
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("play", start_game))
@@ -220,7 +234,7 @@ def main():
         )
     )
 
-    # 3. Menu buttons (SEPARATE!)
+    # 3. Menu buttons
     app.add_handler(
         CallbackQueryHandler(
             menu_handler,

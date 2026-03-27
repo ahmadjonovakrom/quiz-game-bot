@@ -1,7 +1,7 @@
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from database import ensure_chat, touch_group_player
+from database import ensure_chat, ensure_group_player
 
 
 async def track_group_activity(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -18,4 +18,4 @@ async def track_group_activity(update: Update, context: ContextTypes.DEFAULT_TYP
         return
 
     ensure_chat(chat)
-    touch_group_player(chat.id, user)
+    ensure_group_player(chat.id, user)

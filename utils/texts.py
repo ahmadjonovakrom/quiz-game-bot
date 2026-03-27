@@ -1,5 +1,6 @@
 import html
 
+
 def admin_only_text():
     return "❌ Admin only."
 
@@ -19,6 +20,7 @@ def format_questions_menu_text():
         "Choose an action:",
     ])
 
+
 def format_bot_stats_text(stats, top_groups=None):
     users = stats.get("total_users", 0)
     players = stats.get("total_players", 0)
@@ -29,11 +31,11 @@ def format_bot_stats_text(stats, top_groups=None):
     lines = [
         "📊 Bot Stats",
         "",
-        f"👤 Users: {users}",
-        f"🎮 Players: {players}",
+        f"👤 Known Users: {users}",
+        f"🎮 Active Players: {players}",
         f"📚 Questions: {questions}",
         f"🕹 Games: {games}",
-        f"👥 Groups: {groups}",
+        f"👥 Active Groups: {groups}",
     ]
 
     if top_groups:
@@ -53,6 +55,7 @@ def format_bot_stats_text(stats, top_groups=None):
             )
 
     return "\n".join(lines)
+
 
 def format_groups_list_text(groups, page: int = 1, per_page: int = 10):
     total = len(groups)
@@ -122,6 +125,7 @@ def format_group_details_text(group_stats):
         lines.append("No players yet.")
 
     return "\n".join(lines)
+
 
 def format_import_help_text(allowed_categories, allowed_difficulties):
     return "\n".join([

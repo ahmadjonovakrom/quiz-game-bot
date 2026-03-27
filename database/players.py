@@ -16,7 +16,7 @@ WEEK_STREAK_BONUS_POINTS = 50
 WEEK_STREAK_STEP = 7
 
 
-def _normalize_user_input(user_or_id, username=None, full_name=None):
+def _normalize_user_input(user_or_id, username: str = None, full_name: str = None):
     if hasattr(user_or_id, "id"):
         return user_or_id.id, user_or_id.username, user_or_id.full_name
     return user_or_id, username, full_name
@@ -42,20 +42,27 @@ def ensure_player(user_or_id, username: str = None, full_name: str = None):
         ).fetchone()
 
         if existing:
-            conn.execute("""
+            conn.execute(
+                """
                 UPDATE players
                 SET username = ?, full_name = ?
                 WHERE user_id = ?
-            """, (username, full_name, user_id))
+                """,
+                (username, full_name, user_id),
+            )
             return
 
-        conn.execute("""
+        conn.execute(
+            """
             INSERT INTO players (
                 user_id,
                 username,
                 full_name
             ) VALUES (?, ?, ?)
-        """, (user_id, username, full_name))
+            """,
+            (user_id, username, full_name),
+        )
+
 
 def ensure_user(user_or_id, username: str = None, full_name: str = None):
     user_id, username, full_name = _normalize_user_input(user_or_id, username, full_name)
@@ -67,33 +74,44 @@ def ensure_user(user_or_id, username: str = None, full_name: str = None):
         ).fetchone()
 
         if existing:
-            conn.execute("""
+            conn.execute(
+                """
                 UPDATE users
                 SET username = ?, full_name = ?
                 WHERE user_id = ?
-            """, (username, full_name, user_id))
+                """,
+                (username, full_name, user_id),
+            )
             return
 
-        conn.execute("""
+        conn.execute(
+            """
             INSERT INTO users (
                 user_id,
                 username,
                 full_name
             ) VALUES (?, ?, ?)
-        """, (user_id, username, full_name))
+            """,
+            (user_id, username, full_name),
+        )
+
 
 def get_player(user_id: int):
     with closing(get_conn()) as conn:
-        return conn.execute("""
+        return conn.execute(
+            """
             SELECT *
             FROM players
             WHERE user_id = ?
-        """, (user_id,)).fetchone()
+            """,
+            (user_id,),
+        ).fetchone()
 
 
 def get_player_stats(user_id: int):
     with closing(get_conn()) as conn:
-        return conn.execute("""
+        return conn.execute(
+            """
             SELECT
                 user_id,
                 username,
@@ -112,22 +130,30 @@ def get_player_stats(user_id: int):
                 created_at
             FROM players
             WHERE user_id = ?
-        """, (user_id,)).fetchone()
+            """,
+            (user_id,),
+        ).fetchone()
 
 
 def add_points(user_id: int, points: int):
     with closing(get_conn()) as conn, conn:
-        conn.execute("""
+        conn.execute(
+            """
             UPDATE players
             SET total_points = COALESCE(total_points, 0) + ?,
                 last_played_at = CURRENT_TIMESTAMP
             WHERE user_id = ?
-        """, (points, user_id))
+            """,
+            (points, user_id),
+        )
 
-        conn.execute("""
+        conn.execute(
+            """
             INSERT INTO player_points_history (user_id, points)
             VALUES (?, ?)
-        """, (user_id, points))
+            """,
+            (user_id, points),
+        )
 
 
 def add_manual_points(user_id: int, points: int):
@@ -137,7 +163,8 @@ def add_manual_points(user_id: int, points: int):
 def record_correct_answer(user_id: int, answer_time=None):
     with closing(get_conn()) as conn, conn:
         if answer_time is None:
-            conn.execute("""
+            conn.execute(
+                """
                 UPDATE players
                 SET correct_answers = COALESCE(correct_answers, 0) + 1,
                     current_streak = COALESCE(current_streak, 0) + 1,
@@ -148,9 +175,12 @@ def record_correct_answer(user_id: int, answer_time=None):
                     END,
                     last_played_at = CURRENT_TIMESTAMP
                 WHERE user_id = ?
-            """, (user_id,))
+                """,
+                (user_id,),
+            )
         else:
-            conn.execute("""
+            conn.execute(
+                """
                 UPDATE players
                 SET correct_answers = COALESCE(correct_answers, 0) + 1,
                     current_streak = COALESCE(current_streak, 0) + 1,
@@ -166,38 +196,49 @@ def record_correct_answer(user_id: int, answer_time=None):
                     END,
                     last_played_at = CURRENT_TIMESTAMP
                 WHERE user_id = ?
-            """, (answer_time, answer_time, user_id))
+                """,
+                (answer_time, answer_time, user_id),
+            )
 
 
 def record_wrong_answer(user_id: int):
     with closing(get_conn()) as conn, conn:
-        conn.execute("""
+        conn.execute(
+            """
             UPDATE players
             SET wrong_answers = COALESCE(wrong_answers, 0) + 1,
                 current_streak = 0,
                 last_played_at = CURRENT_TIMESTAMP
             WHERE user_id = ?
-        """, (user_id,))
+            """,
+            (user_id,),
+        )
 
 
 def increment_games_played(user_id: int):
     with closing(get_conn()) as conn, conn:
-        conn.execute("""
+        conn.execute(
+            """
             UPDATE players
             SET games_played = COALESCE(games_played, 0) + 1,
                 last_played_at = CURRENT_TIMESTAMP
             WHERE user_id = ?
-        """, (user_id,))
+            """,
+            (user_id,),
+        )
 
 
 def increment_games_won(user_id: int):
     with closing(get_conn()) as conn, conn:
-        conn.execute("""
+        conn.execute(
+            """
             UPDATE players
             SET games_won = COALESCE(games_won, 0) + 1,
                 last_played_at = CURRENT_TIMESTAMP
             WHERE user_id = ?
-        """, (user_id,))
+            """,
+            (user_id,),
+        )
 
 
 def get_top_players(limit: int = 10, offset: int = 0):
@@ -225,7 +266,8 @@ def get_global_leaderboard(limit: int = 10):
 
 def get_global_leaderboard_page(limit: int = 10, offset: int = 0):
     with closing(get_conn()) as conn:
-        return conn.execute(f"""
+        return conn.execute(
+            f"""
             SELECT
                 user_id,
                 username,
@@ -236,16 +278,20 @@ def get_global_leaderboard_page(limit: int = 10, offset: int = 0):
             FROM players
             {GLOBAL_ORDER_BY}
             LIMIT ? OFFSET ?
-        """, (limit, offset)).fetchall()
+            """,
+            (limit, offset),
+        ).fetchall()
 
 
 def get_player_rank(user_id: int):
     with closing(get_conn()) as conn:
-        rows = conn.execute(f"""
+        rows = conn.execute(
+            f"""
             SELECT user_id
             FROM players
             {GLOBAL_ORDER_BY}
-        """).fetchall()
+            """
+        ).fetchall()
 
     for index, row in enumerate(rows, start=1):
         if row["user_id"] == user_id:
@@ -255,7 +301,8 @@ def get_player_rank(user_id: int):
 
 def get_player_profile(user_id: int):
     with closing(get_conn()) as conn:
-        player = conn.execute("""
+        player = conn.execute(
+            """
             SELECT
                 full_name,
                 username,
@@ -266,7 +313,9 @@ def get_player_profile(user_id: int):
                 wrong_answers
             FROM players
             WHERE user_id = ?
-        """, (user_id,)).fetchone()
+            """,
+            (user_id,),
+        ).fetchone()
 
     if not player:
         return None, None
@@ -277,7 +326,8 @@ def get_player_profile(user_id: int):
 
 def get_player_full_profile(user_id: int):
     with closing(get_conn()) as conn:
-        player = conn.execute("""
+        player = conn.execute(
+            """
             SELECT
                 full_name,
                 username,
@@ -294,7 +344,9 @@ def get_player_full_profile(user_id: int):
                 last_played_at
             FROM players
             WHERE user_id = ?
-        """, (user_id,)).fetchone()
+            """,
+            (user_id,),
+        ).fetchone()
 
     if not player:
         return None, None
@@ -305,11 +357,13 @@ def get_player_full_profile(user_id: int):
 
 def get_player_global_rank_info(user_id: int):
     with closing(get_conn()) as conn:
-        rows = conn.execute(f"""
+        rows = conn.execute(
+            f"""
             SELECT user_id, total_points
             FROM players
             {GLOBAL_ORDER_BY}
-        """).fetchall()
+            """
+        ).fetchall()
 
     for index, row in enumerate(rows, start=1):
         if row["user_id"] == user_id:
@@ -338,16 +392,18 @@ def _period_rows_sql(where_clause: str):
         {PERIOD_ORDER_BY}
     """
 
+
 def recalculate_all_player_wins():
     with closing(get_conn()) as conn, conn:
-        # reset
-        conn.execute("""
+        conn.execute(
+            """
             UPDATE players
             SET games_won = 0
-        """)
+            """
+        )
 
-        # recalculate from games table
-        conn.execute("""
+        conn.execute(
+            """
             UPDATE players
             SET games_won = (
                 SELECT COUNT(*)
@@ -355,12 +411,15 @@ def recalculate_all_player_wins():
                 WHERE games.winner_user_id = players.user_id
                   AND games.status = 'finished'
             )
-        """)
+            """
+        )
+
 
 def get_daily_leaderboard_page(limit: int = 10, offset: int = 0):
     with closing(get_conn()) as conn:
         return conn.execute(
-            _period_rows_sql("DATE(h.created_at, 'localtime') = DATE('now', 'localtime')") + "\nLIMIT ? OFFSET ?",
+            _period_rows_sql("DATE(h.created_at, 'localtime') = DATE('now', 'localtime')")
+            + "\nLIMIT ? OFFSET ?",
             (limit, offset),
         ).fetchall()
 
@@ -371,7 +430,8 @@ def get_weekly_leaderboard_page(limit: int = 10, offset: int = 0):
             _period_rows_sql(
                 "DATE(h.created_at, 'localtime') >= DATE('now', 'localtime', 'weekday 1', '-7 days') "
                 "AND DATE(h.created_at, 'localtime') <= DATE('now', 'localtime')"
-            ) + "\nLIMIT ? OFFSET ?",
+            )
+            + "\nLIMIT ? OFFSET ?",
             (limit, offset),
         ).fetchall()
 
@@ -381,7 +441,8 @@ def get_monthly_leaderboard_page(limit: int = 10, offset: int = 0):
         return conn.execute(
             _period_rows_sql(
                 "strftime('%Y-%m', h.created_at, 'localtime') = strftime('%Y-%m', 'now', 'localtime')"
-            ) + "\nLIMIT ? OFFSET ?",
+            )
+            + "\nLIMIT ? OFFSET ?",
             (limit, offset),
         ).fetchall()
 
@@ -411,28 +472,37 @@ def get_player_monthly_rank_info(user_id: int):
 def has_claimed_daily_reward(user_id: int):
     with closing(get_conn()) as conn:
         today = _get_local_today(conn)
-        row = conn.execute("""
+        row = conn.execute(
+            """
             SELECT 1
             FROM daily_reward_claims
             WHERE user_id = ? AND reward_date = ?
-        """, (user_id, today)).fetchone()
+            """,
+            (user_id, today),
+        ).fetchone()
         return bool(row)
 
 
 def get_daily_reward_status(user_id: int):
     with closing(get_conn()) as conn:
         today = _get_local_today(conn)
-        player = conn.execute("""
+        player = conn.execute(
+            """
             SELECT daily_streak, best_daily_streak
             FROM players
             WHERE user_id = ?
-        """, (user_id,)).fetchone()
+            """,
+            (user_id,),
+        ).fetchone()
 
-        claim = conn.execute("""
+        claim = conn.execute(
+            """
             SELECT reward_date, base_points, bonus_points, streak_after_claim
             FROM daily_reward_claims
             WHERE user_id = ? AND reward_date = ?
-        """, (user_id, today)).fetchone()
+            """,
+            (user_id, today),
+        ).fetchone()
 
         return {
             "claimed_today": bool(claim),
@@ -459,18 +529,24 @@ def claim_daily_reward(
         today = _get_local_today(conn)
         yesterday = _get_local_yesterday(conn)
 
-        already_claimed = conn.execute("""
+        already_claimed = conn.execute(
+            """
             SELECT 1
             FROM daily_reward_claims
             WHERE user_id = ? AND reward_date = ?
-        """, (user_id, today)).fetchone()
+            """,
+            (user_id, today),
+        ).fetchone()
 
         if already_claimed:
-            claim = conn.execute("""
+            claim = conn.execute(
+                """
                 SELECT base_points, bonus_points, streak_after_claim
                 FROM daily_reward_claims
                 WHERE user_id = ? AND reward_date = ?
-            """, (user_id, today)).fetchone()
+                """,
+                (user_id, today),
+            ).fetchone()
 
             return {
                 "claimed": False,
@@ -483,30 +559,39 @@ def claim_daily_reward(
                 "best_daily_streak": None,
             }
 
-        ensure_row = conn.execute("""
+        ensure_row = conn.execute(
+            """
             SELECT user_id, daily_streak, best_daily_streak
             FROM players
             WHERE user_id = ?
-        """, (user_id,)).fetchone()
+            """,
+            (user_id,),
+        ).fetchone()
 
         if not ensure_row:
-            conn.execute("""
+            conn.execute(
+                """
                 INSERT INTO players (user_id, total_points, daily_streak, best_daily_streak)
                 VALUES (?, 0, 0, 0)
-            """, (user_id,))
+                """,
+                (user_id,),
+            )
             current_daily_streak = 0
             best_daily_streak = 0
         else:
             current_daily_streak = ensure_row["daily_streak"] or 0
             best_daily_streak = ensure_row["best_daily_streak"] or 0
 
-        last_claim = conn.execute("""
+        last_claim = conn.execute(
+            """
             SELECT reward_date
             FROM daily_reward_claims
             WHERE user_id = ?
             ORDER BY reward_date DESC
             LIMIT 1
-        """, (user_id,)).fetchone()
+            """,
+            (user_id,),
+        ).fetchone()
 
         if last_claim and last_claim["reward_date"] == yesterday:
             new_daily_streak = current_daily_streak + 1
@@ -517,21 +602,28 @@ def claim_daily_reward(
         bonus_points = streak_bonus_points if new_daily_streak % streak_step == 0 else 0
         total_points = base_points + bonus_points
 
-        conn.execute("""
+        conn.execute(
+            """
             UPDATE players
             SET total_points = COALESCE(total_points, 0) + ?,
                 daily_streak = ?,
                 best_daily_streak = ?,
                 last_played_at = CURRENT_TIMESTAMP
             WHERE user_id = ?
-        """, (total_points, new_daily_streak, new_best_daily_streak, user_id))
+            """,
+            (total_points, new_daily_streak, new_best_daily_streak, user_id),
+        )
 
-        conn.execute("""
+        conn.execute(
+            """
             INSERT INTO player_points_history (user_id, points)
             VALUES (?, ?)
-        """, (user_id, total_points))
+            """,
+            (user_id, total_points),
+        )
 
-        conn.execute("""
+        conn.execute(
+            """
             INSERT INTO daily_reward_claims (
                 user_id,
                 reward_date,
@@ -539,7 +631,9 @@ def claim_daily_reward(
                 bonus_points,
                 streak_after_claim
             ) VALUES (?, ?, ?, ?, ?)
-        """, (user_id, today, base_points, bonus_points, new_daily_streak))
+            """,
+            (user_id, today, base_points, bonus_points, new_daily_streak),
+        )
 
         return {
             "claimed": True,
@@ -557,28 +651,37 @@ def reset_daily_streak_if_missed(user_id: int):
     with closing(get_conn()) as conn, conn:
         yesterday = _get_local_yesterday(conn)
 
-        last_claim = conn.execute("""
+        last_claim = conn.execute(
+            """
             SELECT reward_date
             FROM daily_reward_claims
             WHERE user_id = ?
             ORDER BY reward_date DESC
             LIMIT 1
-        """, (user_id,)).fetchone()
+            """,
+            (user_id,),
+        ).fetchone()
 
         if not last_claim:
-            conn.execute("""
+            conn.execute(
+                """
                 UPDATE players
                 SET daily_streak = 0
                 WHERE user_id = ?
-            """, (user_id,))
+                """,
+                (user_id,),
+            )
             return True
 
         if last_claim["reward_date"] != yesterday:
-            conn.execute("""
+            conn.execute(
+                """
                 UPDATE players
                 SET daily_streak = 0
                 WHERE user_id = ?
-            """, (user_id,))
+                """,
+                (user_id,),
+            )
             return True
 
         return False
@@ -586,7 +689,8 @@ def reset_daily_streak_if_missed(user_id: int):
 
 def get_player_streak_info(user_id: int):
     with closing(get_conn()) as conn:
-        row = conn.execute("""
+        row = conn.execute(
+            """
             SELECT
                 current_streak,
                 best_streak,
@@ -594,7 +698,9 @@ def get_player_streak_info(user_id: int):
                 best_daily_streak
             FROM players
             WHERE user_id = ?
-        """, (user_id,)).fetchone()
+            """,
+            (user_id,),
+        ).fetchone()
 
         if not row:
             return {
@@ -614,27 +720,38 @@ def get_player_streak_info(user_id: int):
 
 def get_all_user_ids():
     with closing(get_conn()) as conn:
-        rows = conn.execute("""
+        rows = conn.execute(
+            """
             SELECT user_id
             FROM players
-        """).fetchall()
+            """
+        ).fetchall()
     return [row["user_id"] for row in rows]
 
 
 def get_total_players():
     with closing(get_conn()) as conn:
-        row = conn.execute("""
+        row = conn.execute(
+            """
             SELECT COUNT(*) AS count
             FROM players
-            WHERE games_played > 0
-        """).fetchone()
+            WHERE
+                COALESCE(games_played, 0) > 0
+                OR COALESCE(correct_answers, 0) > 0
+                OR COALESCE(wrong_answers, 0) > 0
+                OR COALESCE(total_points, 0) > 0
+                OR COALESCE(games_won, 0) > 0
+            """
+        ).fetchone()
     return row["count"] if row else 0
 
 
 def get_total_users_count():
     with closing(get_conn()) as conn:
-        row = conn.execute("""
+        row = conn.execute(
+            """
             SELECT COUNT(*) AS count
             FROM users
-        """).fetchone()
+            """
+        ).fetchone()
     return row["count"] if row else 0

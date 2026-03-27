@@ -1,3 +1,4 @@
+import asyncio
 import html
 import logging
 import random
@@ -99,6 +100,32 @@ def build_message(mentions: list[str]) -> str:
     )
 
 
+async def delete_message_safely(msg, log_text: str):
+    if not msg:
+        return
+
+    try:
+        await msg.delete()
+    except Exception:
+        logger.exception(log_text)
+
+
+async def send_temp_reply(message, text: str, seconds: int = 3):
+    sent = await message.reply_text(text)
+
+    await delete_message_safely(
+        message,
+        "Failed to delete /callplayers command message",
+    )
+
+    await asyncio.sleep(seconds)
+
+    await delete_message_safely(
+        sent,
+        "Failed to delete temporary /callplayers reply",
+    )
+
+
 async def callplayers(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.effective_message
     chat = update.effective_chat
@@ -108,20 +135,21 @@ async def callplayers(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if not is_joining(chat.id):
-        await message.reply_text("No active game to join.")
+        await send_temp_reply(message, "No active game to join.", 3)
         return
 
     ok, wait = can_call(chat.id)
     if not ok:
-        await message.reply_text(f"Wait {wait}s before calling again.")
+        await send_temp_reply(message, f"Wait {wait}s before calling again.", 3)
         return
 
     candidates = list(pick_random_group_tag_candidates(chat.id, limit=CANDIDATE_LIMIT))
 
     if not candidates:
-        await message.reply_text(
-            "No players found.\n\n"
-            "Ask people to send a message in the group first, then try again."
+        await send_temp_reply(
+            message,
+            "No players found.\n\nAsk people to send a message in the group first, then try again.",
+            4,
         )
         return
 
@@ -173,7 +201,7 @@ async def callplayers(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 break
 
     if not valid:
-        await message.reply_text("No current members to tag.")
+        await send_temp_reply(message, "No current members to tag.", 3)
         return
 
     picked = valid[:MAX_PLAYERS]
@@ -189,7 +217,7 @@ async def callplayers(update: Update, context: ContextTypes.DEFAULT_TYPE):
         disable_web_page_preview=True,
     )
 
-    try:
-        await message.delete()
-    except Exception:
-        logger.exception("Failed to delete /callplayers command message")
+    await delete_message_safely(
+        message,
+        "Failed to delete /callplayers command message",
+    )

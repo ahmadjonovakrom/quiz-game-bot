@@ -102,10 +102,12 @@ async def callplayers(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await message.reply_text(f"Wait {wait}s before calling again.")
         return
 
-    candidates = pick_random_group_tag_candidates(chat.id, limit=CANDIDATE_LIMIT)
+    fresh_candidates = pick_random_group_tag_candidates(chat.id, limit=CANDIDATE_LIMIT)
 
-    if not candidates:
-        candidates = _last_candidates.get(chat.id, [])
+    if fresh_candidates:
+        _last_candidates[chat.id] = list(fresh_candidates)
+
+    candidates = fresh_candidates or _last_candidates.get(chat.id, [])
 
     if not candidates:
         await message.reply_text("No players found.")
@@ -140,8 +142,6 @@ async def callplayers(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not valid:
         await message.reply_text("No current members to tag.")
         return
-
-    _last_candidates[chat.id] = list(valid)
 
     random.shuffle(valid)
     mentions = [build_mention(row) for row in valid[:MAX_PLAYERS]]

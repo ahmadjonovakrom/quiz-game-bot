@@ -3,6 +3,17 @@ from contextlib import closing
 from .connection import get_conn
 
 
+REAL_GROUP_PLAYER_WHERE = """
+(
+    COALESCE(total_points, 0) > 0
+    OR COALESCE(correct_answers, 0) > 0
+    OR COALESCE(wrong_answers, 0) > 0
+    OR COALESCE(games_played, 0) > 0
+    OR COALESCE(games_won, 0) > 0
+)
+"""
+
+
 def ensure_chat(chat) -> None:
     chat_id = chat.id
     chat_type = chat.type
@@ -16,7 +27,8 @@ def ensure_chat(chat) -> None:
         ).fetchone()
 
         if row:
-            conn.execute("""
+            conn.execute(
+                """
                 UPDATE chats
                 SET chat_type = ?,
                     title = ?,
@@ -24,28 +36,37 @@ def ensure_chat(chat) -> None:
                     is_active = 1,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE chat_id = ?
-            """, (chat_type, title, username, chat_id))
+                """,
+                (chat_type, title, username, chat_id),
+            )
         else:
-            conn.execute("""
+            conn.execute(
+                """
                 INSERT INTO chats (
                     chat_id, chat_type, title, username, is_active, updated_at
                 ) VALUES (?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
-            """, (chat_id, chat_type, title, username))
+                """,
+                (chat_id, chat_type, title, username),
+            )
 
 
 def deactivate_chat(chat_id: int) -> None:
     with closing(get_conn()) as conn, conn:
-        conn.execute("""
+        conn.execute(
+            """
             UPDATE chats
             SET is_active = 0,
                 updated_at = CURRENT_TIMESTAMP
             WHERE chat_id = ?
-        """, (chat_id,))
+            """,
+            (chat_id,),
+        )
 
 
 def get_all_groups():
     with closing(get_conn()) as conn:
-        return conn.execute("""
+        return conn.execute(
+            f"""
             SELECT
                 c.chat_id,
                 c.chat_type,
@@ -57,13 +78,18 @@ def get_all_groups():
                 COALESCE(p.player_count, 0) AS player_count
             FROM chats c
             LEFT JOIN (
-                SELECT chat_id, COUNT(*) AS game_count
+                SELECT
+                    chat_id,
+                    COUNT(*) AS game_count
                 FROM games
                 GROUP BY chat_id
             ) g ON g.chat_id = c.chat_id
             LEFT JOIN (
-                SELECT chat_id, COUNT(*) AS player_count
+                SELECT
+                    chat_id,
+                    COUNT(*) AS player_count
                 FROM group_scores
+                WHERE {REAL_GROUP_PLAYER_WHERE}
                 GROUP BY chat_id
             ) p ON p.chat_id = c.chat_id
             WHERE c.chat_type IN ('group', 'supergroup')
@@ -72,12 +98,14 @@ def get_all_groups():
                 COALESCE(g.game_count, 0) DESC,
                 COALESCE(p.player_count, 0) DESC,
                 COALESCE(NULLIF(c.title, ''), c.username, CAST(c.chat_id AS TEXT)) COLLATE NOCASE
-        """).fetchall()
+            """
+        ).fetchall()
 
 
 def get_group_stats(chat_id: int):
     with closing(get_conn()) as conn:
-        chat_row = conn.execute("""
+        chat_row = conn.execute(
+            """
             SELECT
                 chat_id,
                 chat_type,
@@ -87,21 +115,31 @@ def get_group_stats(chat_id: int):
                 updated_at
             FROM chats
             WHERE chat_id = ?
-        """, (chat_id,)).fetchone()
+            """,
+            (chat_id,),
+        ).fetchone()
 
-        players_row = conn.execute("""
+        players_row = conn.execute(
+            f"""
             SELECT COUNT(*) AS player_count
             FROM group_scores
             WHERE chat_id = ?
-        """, (chat_id,)).fetchone()
+              AND {REAL_GROUP_PLAYER_WHERE}
+            """,
+            (chat_id,),
+        ).fetchone()
 
-        games_row = conn.execute("""
+        games_row = conn.execute(
+            """
             SELECT COUNT(*) AS game_count
             FROM games
             WHERE chat_id = ?
-        """, (chat_id,)).fetchone()
+            """,
+            (chat_id,),
+        ).fetchone()
 
-        top_players = conn.execute("""
+        top_players = conn.execute(
+            f"""
             SELECT
                 user_id,
                 username,
@@ -111,9 +149,12 @@ def get_group_stats(chat_id: int):
                 games_won
             FROM group_scores
             WHERE chat_id = ?
+              AND {REAL_GROUP_PLAYER_WHERE}
             ORDER BY total_points DESC, correct_answers DESC, games_won DESC, user_id ASC
             LIMIT 5
-        """, (chat_id,)).fetchall()
+            """,
+            (chat_id,),
+        ).fetchall()
 
         return {
             "chat": chat_row,
@@ -125,7 +166,8 @@ def get_group_stats(chat_id: int):
 
 def get_top_groups(limit: int = 5):
     with closing(get_conn()) as conn:
-        return conn.execute("""
+        return conn.execute(
+            f"""
             SELECT
                 c.chat_id,
                 c.title,
@@ -135,13 +177,18 @@ def get_top_groups(limit: int = 5):
                 COALESCE(p.player_count, 0) AS player_count
             FROM chats c
             LEFT JOIN (
-                SELECT chat_id, COUNT(*) AS game_count
+                SELECT
+                    chat_id,
+                    COUNT(*) AS game_count
                 FROM games
                 GROUP BY chat_id
             ) g ON g.chat_id = c.chat_id
             LEFT JOIN (
-                SELECT chat_id, COUNT(*) AS player_count
+                SELECT
+                    chat_id,
+                    COUNT(*) AS player_count
                 FROM group_scores
+                WHERE {REAL_GROUP_PLAYER_WHERE}
                 GROUP BY chat_id
             ) p ON p.chat_id = c.chat_id
             WHERE c.chat_type IN ('group', 'supergroup')
@@ -151,4 +198,6 @@ def get_top_groups(limit: int = 5):
                 CASE WHEN c.is_active = 1 THEN 0 ELSE 1 END,
                 COALESCE(NULLIF(c.title, ''), c.username, CAST(c.chat_id AS TEXT)) COLLATE NOCASE
             LIMIT ?
-        """, (limit,)).fetchall()
+            """,
+            (limit,),
+        ).fetchall()

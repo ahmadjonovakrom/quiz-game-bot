@@ -136,8 +136,16 @@ async def callplayers(update: Update, context: ContextTypes.DEFAULT_TYPE):
     mentions = [build_mention(row) for row in valid[:MAX_PLAYERS]]
     text = build_message(mentions)
 
-    await message.reply_text(
-        text,
+    # 1️⃣ Send main message (not as reply)
+    await context.bot.send_message(
+        chat_id=chat.id,
+        text=text,
         parse_mode="HTML",
         disable_web_page_preview=True,
     )
+
+    # 2️⃣ Delete /callplayers command message
+    try:
+        await message.delete()
+    except:
+        pass

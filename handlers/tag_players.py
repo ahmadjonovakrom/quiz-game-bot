@@ -107,8 +107,8 @@ async def callplayers(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.warning("candidate: %s", dict(row))
 
     if not candidates:
-        await message.reply_text("No players found.")
-        return
+        logger.warning("No candidates even after fallback")
+        await message.reply_text("No players available to tag.")
 
     valid = []
     seen = set()

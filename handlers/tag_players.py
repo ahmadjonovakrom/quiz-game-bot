@@ -14,10 +14,11 @@ logger = logging.getLogger(__name__)
 
 CALL_COOLDOWN = 60
 MAX_PLAYERS = 10
-CANDIDATE_LIMIT = 30
+CANDIDATE_LIMIT = 10
+RECENT_TAG_COOLDOWN = 600  # 10 minutes
 
 _last_call = {}
-_last_candidates = {}
+_recent_called = {}
 
 
 def is_joining(chat_id: int) -> bool:
@@ -34,6 +35,19 @@ def can_call(chat_id: int):
 
     _last_call[chat_id] = now
     return True, 0
+
+
+def was_recently_called(chat_id: int, user_id: int) -> bool:
+    chat_map = _recent_called.get(chat_id, {})
+    last = chat_map.get(user_id, 0)
+    return time.time() - last < RECENT_TAG_COOLDOWN
+
+
+def mark_called(chat_id: int, user_ids: list[int]) -> None:
+    chat_map = _recent_called.setdefault(chat_id, {})
+    now = time.time()
+    for uid in user_ids:
+        chat_map[uid] = now
 
 
 async def is_member(context: ContextTypes.DEFAULT_TYPE, chat_id: int, user_id: int) -> bool:
@@ -54,16 +68,9 @@ async def is_member(context: ContextTypes.DEFAULT_TYPE, chat_id: int, user_id: i
 
 
 def build_mention(row) -> str:
-    username = (row["username"] or "").strip()
     full_name = html.escape(
         (row["full_name"] or "").strip() or f"User {row['user_id']}"
     )
-
-    if username:
-        if not username.startswith("@"):
-            username = f"@{username}"
-        return html.escape(username)
-
     return f'<a href="tg://user?id={row["user_id"]}">{full_name}</a>'
 
 
@@ -102,16 +109,13 @@ async def callplayers(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await message.reply_text(f"Wait {wait}s before calling again.")
         return
 
-    fresh_candidates = pick_random_group_tag_candidates(chat.id, limit=CANDIDATE_LIMIT)
-
-    if fresh_candidates:
-        _last_candidates[chat.id] = list(fresh_candidates)
-
-    candidates = fresh_candidates or _last_candidates.get(chat.id, [])
+    candidates = pick_random_group_tag_candidates(chat.id, limit=CANDIDATE_LIMIT)
 
     if not candidates:
         await message.reply_text("No players found.")
         return
+
+    random.shuffle(candidates)
 
     valid = []
     seen = set()
@@ -120,16 +124,17 @@ async def callplayers(update: Update, context: ContextTypes.DEFAULT_TYPE):
     game = active_games.get(chat.id) or {}
     joined_ids = set((game.get("players") or {}).keys())
 
+    # First pass: avoid recently called users
     for row in candidates:
         uid = row["user_id"]
 
         if uid == caller_id:
             continue
-
         if uid in joined_ids:
             continue
-
         if uid in seen:
+            continue
+        if was_recently_called(chat.id, uid):
             continue
 
         if await is_member(context, chat.id, uid):
@@ -139,12 +144,33 @@ async def callplayers(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if len(valid) >= MAX_PLAYERS:
             break
 
+    # Second pass: if nothing found, allow recently called users too
+    if not valid:
+        for row in candidates:
+            uid = row["user_id"]
+
+            if uid == caller_id:
+                continue
+            if uid in joined_ids:
+                continue
+            if uid in seen:
+                continue
+
+            if await is_member(context, chat.id, uid):
+                valid.append(row)
+                seen.add(uid)
+
+            if len(valid) >= MAX_PLAYERS:
+                break
+
     if not valid:
         await message.reply_text("No current members to tag.")
         return
 
-    random.shuffle(valid)
-    mentions = [build_mention(row) for row in valid[:MAX_PLAYERS]]
+    picked = valid[:MAX_PLAYERS]
+    mark_called(chat.id, [row["user_id"] for row in picked])
+
+    mentions = [build_mention(row) for row in picked]
     text = build_message(mentions)
 
     await context.bot.send_message(

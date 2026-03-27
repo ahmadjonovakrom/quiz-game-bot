@@ -14,7 +14,7 @@ from database import recalculate_all_player_wins
 from utils.keyboards import (
     admin_main_keyboard,
     admin_questions_keyboard,
-    admin_danger_keyboard,          
+    admin_danger_keyboard,
     admin_reset_confirm_keyboard,
     broadcast_confirm_keyboard,
     edit_question_menu_keyboard,
@@ -85,6 +85,7 @@ from .routes_questions import handle_question_routes
 from .routes_misc import handle_misc_routes
 from telegram.constants import ParseMode
 
+
 async def show_question_details(target, qid: int, source: str = "questions"):
     q = get_question_by_id(qid)
     if not q:
@@ -153,6 +154,7 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     return ADMIN_MENU
 
+
 async def fixwins(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
 
@@ -165,6 +167,7 @@ async def fixwins(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("✅ Wins recalculated for ALL users!")
     except Exception as e:
         await update.message.reply_text(f"❌ Error: {e}")
+
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
@@ -210,7 +213,7 @@ async def bot_stats_command(update, context):
         )
 
 
-async def reset_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def reset_all_time_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
 
     if not is_admin(user.id):
@@ -232,58 +235,175 @@ async def reset_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
                 set_parts = []
 
-                if "points" in player_columns:
-                    set_parts.append("points = 0")
-                if "games_played" in player_columns:
-                    set_parts.append("games_played = 0")
-                if "games_won" in player_columns:
-                    set_parts.append("games_won = 0")
-                if "correct_answers" in player_columns:
-                    set_parts.append("correct_answers = 0")
-                if "wrong_answers" in player_columns:
-                    set_parts.append("wrong_answers = 0")
-                if "total_points" in player_columns:
-                    set_parts.append("total_points = 0")
-                if "score" in player_columns:
-                    set_parts.append("score = 0")
+                for col in (
+                    "points",
+                    "total_points",
+                    "games_played",
+                    "games_won",
+                    "correct_answers",
+                    "wrong_answers",
+                    "current_streak",
+                    "best_streak",
+                    "daily_streak",
+                    "best_daily_streak",
+                    "wins",
+                    "losses",
+                    "correct",
+                    "wrong",
+                ):
+                    if col in player_columns:
+                        set_parts.append(f"{col} = 0")
+
+                if "fastest_answer_time" in player_columns:
+                    set_parts.append("fastest_answer_time = NULL")
+                if "last_played_at" in player_columns:
+                    set_parts.append("last_played_at = NULL")
 
                 if set_parts:
                     conn.execute(f"UPDATE players SET {', '.join(set_parts)}")
 
-            if "group_stats" in table_names:
+            if "group_scores" in table_names:
                 group_columns = {
                     row[1]
-                    for row in conn.execute("PRAGMA table_info(group_stats)").fetchall()
+                    for row in conn.execute("PRAGMA table_info(group_scores)").fetchall()
                 }
 
                 set_parts = []
 
-                if "points" in group_columns:
-                    set_parts.append("points = 0")
-                if "games_played" in group_columns:
-                    set_parts.append("games_played = 0")
-                if "games_won" in group_columns:
-                    set_parts.append("games_won = 0")
-                if "correct_answers" in group_columns:
-                    set_parts.append("correct_answers = 0")
-                if "wrong_answers" in group_columns:
-                    set_parts.append("wrong_answers = 0")
-                if "total_points" in group_columns:
-                    set_parts.append("total_points = 0")
-                if "score" in group_columns:
-                    set_parts.append("score = 0")
+                for col in (
+                    "total_points",
+                    "correct_answers",
+                    "wrong_answers",
+                    "games_played",
+                    "games_won",
+                    "score",
+                    "points",
+                    "wins",
+                    "losses",
+                    "correct",
+                    "wrong",
+                ):
+                    if col in group_columns:
+                        set_parts.append(f"{col} = 0")
+
+                if "last_played_at" in group_columns:
+                    set_parts.append("last_played_at = NULL")
 
                 if set_parts:
-                    conn.execute(f"UPDATE group_stats SET {', '.join(set_parts)}")
+                    conn.execute(f"UPDATE group_scores SET {', '.join(set_parts)}")
 
-            for table_name in ["games", "game_results", "answers"]:
-                if table_name in table_names:
-                    conn.execute(f"DELETE FROM {table_name}")
-
-        await update.effective_message.reply_text("✅ Stats reset completed.")
+        await update.effective_message.reply_text(
+            "✅ All-time leaderboard stats reset completed.\n"
+            "Daily, weekly, and monthly rankings were not cleared."
+        )
 
     except Exception as e:
         await update.effective_message.reply_text(f"❌ Reset failed: {e}")
+
+
+async def full_reset_all_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+
+    if not is_admin(user.id):
+        await update.effective_message.reply_text(admin_only_text())
+        return
+
+    try:
+        with get_conn() as conn:
+            table_rows = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            ).fetchall()
+            table_names = {row[0] for row in table_rows}
+
+            delete_tables = [
+                "answers",
+                "game_results",
+                "games",
+                "group_points_history",
+                "player_points_history",
+                "daily_quiz_attempts",
+                "daily_reward_claims",
+                "group_bonus_claims",
+                "bot_group_invites",
+            ]
+
+            for table in delete_tables:
+                if table in table_names:
+                    conn.execute(f"DELETE FROM {table}")
+
+            if "players" in table_names:
+                player_columns = {
+                    row[1]
+                    for row in conn.execute("PRAGMA table_info(players)").fetchall()
+                }
+
+                set_parts = []
+
+                for col in (
+                    "points",
+                    "total_points",
+                    "games_played",
+                    "games_won",
+                    "correct_answers",
+                    "wrong_answers",
+                    "current_streak",
+                    "best_streak",
+                    "daily_streak",
+                    "best_daily_streak",
+                    "wins",
+                    "losses",
+                    "correct",
+                    "wrong",
+                ):
+                    if col in player_columns:
+                        set_parts.append(f"{col} = 0")
+
+                if "fastest_answer_time" in player_columns:
+                    set_parts.append("fastest_answer_time = NULL")
+                if "last_played_at" in player_columns:
+                    set_parts.append("last_played_at = NULL")
+
+                if set_parts:
+                    conn.execute(f"UPDATE players SET {', '.join(set_parts)}")
+
+            if "group_scores" in table_names:
+                group_columns = {
+                    row[1]
+                    for row in conn.execute("PRAGMA table_info(group_scores)").fetchall()
+                }
+
+                set_parts = []
+
+                for col in (
+                    "total_points",
+                    "correct_answers",
+                    "wrong_answers",
+                    "games_played",
+                    "games_won",
+                    "score",
+                    "points",
+                    "wins",
+                    "losses",
+                    "correct",
+                    "wrong",
+                ):
+                    if col in group_columns:
+                        set_parts.append(f"{col} = 0")
+
+                if "last_played_at" in group_columns:
+                    set_parts.append("last_played_at = NULL")
+
+                if set_parts:
+                    conn.execute(f"UPDATE group_scores SET {', '.join(set_parts)}")
+
+        await update.effective_message.reply_text(
+            "💥 Full reset completed.\n"
+            "Gameplay data was cleared.\n"
+            "Questions and settings were kept."
+        )
+
+    except Exception as e:
+        await update.effective_message.reply_text(f"❌ Full reset failed: {e}")
 
 
 async def import_questions_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -344,7 +464,8 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         update,
         show_admin_panel_message,
         show_questions_menu,
-        reset_stats,
+        reset_all_time_leaderboard,
+        full_reset_all_data,
     )
     if result is not None:
         return result
@@ -361,9 +482,9 @@ async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         top_groups = get_top_groups(limit=5)
 
         await query.edit_message_text(
-        text=format_bot_stats_text(stats, top_groups=top_groups),
-        reply_markup=bot_stats_keyboard(stats["total_groups"]),
-    )
+            text=format_bot_stats_text(stats, top_groups=top_groups),
+            reply_markup=bot_stats_keyboard(stats["total_groups"]),
+        )
         return ADMIN_MENU
 
     if data.startswith("admin_stats_groups_page_"):
@@ -437,6 +558,7 @@ async def broadcast_message_step(update: Update, context: ContextTypes.DEFAULT_T
     )
     return BROADCAST_CONFIRM
 
+
 async def settings_update_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
     from database import set_setting
 
@@ -459,6 +581,7 @@ async def settings_update_step(update: Update, context: ContextTypes.DEFAULT_TYP
 
     context.user_data.clear()
     return ConversationHandler.END
+
 
 async def broadcast_confirm_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query

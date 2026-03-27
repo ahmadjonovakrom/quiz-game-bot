@@ -324,10 +324,23 @@ def search_results_keyboard(results) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(rows)
 
 
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+
+
 def admin_danger_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("♻️ Reset Stats", callback_data="admin_reset_stats_confirm")],
+        [InlineKeyboardButton("♻️ Reset All-Time Leaderboard", callback_data="admin_reset_all_time_confirm")],
+        [InlineKeyboardButton("💥 Full Reset (All Data)", callback_data="admin_full_reset_confirm")],
         [InlineKeyboardButton("⬅️ Back", callback_data="admin_back")],
+    ])
+
+
+def admin_reset_confirm_keyboard(yes_callback: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("✅ Yes, Reset", callback_data=yes_callback),
+            InlineKeyboardButton("❌ Cancel", callback_data="admin_danger_zone"),
+        ]
     ])
 
 

@@ -520,7 +520,7 @@ async def duel_question_timeout(context: ContextTypes.DEFAULT_TYPE, duel_id: str
     await asyncio.sleep(18)
 
     duel = active_duels.get(duel_id)
-    if not duel or duel["status"] != "running":
+    if not duel:
         return
 
     if duel["current_question"] != q_index:

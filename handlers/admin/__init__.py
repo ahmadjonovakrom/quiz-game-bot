@@ -46,3 +46,8 @@ from .edit import (
     edit_category_step,
     edit_difficulty_step,
 )
+
+from .challenge import (
+    challenge_menu,
+    duel_button_handler,
+)

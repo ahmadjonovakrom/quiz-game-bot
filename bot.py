@@ -1,4 +1,3 @@
-# bot.py
 import logging
 
 from telegram.ext import (
@@ -53,6 +52,10 @@ from handlers.profile import (
 )
 
 from handlers.group_bonus import bot_added_to_group_handler
+
+from handlers.challenge import (
+    duel_button_handler,
+)
 
 from handlers.admin import (
     admin_panel,
@@ -231,6 +234,13 @@ def main():
         CallbackQueryHandler(
             button_handler,
             pattern=r"^(setup_|setup_back_to_results:|join\||results_play_again:)",
+        )
+    )
+
+    app.add_handler(
+        CallbackQueryHandler(
+            duel_button_handler,
+            pattern=r"^duel_",
         )
     )
 

@@ -6,6 +6,7 @@ from telegram.ext import ContextTypes
 from config import DEFAULT_QUESTIONS_PER_GAME, DEFAULT_CATEGORY
 from database import ensure_player, ensure_user, ensure_chat, has_claimed_group_bonus
 from handlers.profile import profile, leaderboard
+from handlers.challenge import challenge_menu  # ✅ NEW
 from services.game_service import (
     active_games,
     get_game_lock,
@@ -75,6 +76,15 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     back_kb = InlineKeyboardMarkup(
         [[InlineKeyboardButton("⬅️ Back", callback_data="menu_back")]]
     )
+
+    # ================= 🔥 NEW: CHALLENGE =================
+    if data == "menu_challenge":
+        if await block_group_menu_during_game(query, context, "challenge"):
+            return
+
+        await challenge_menu(update, context)
+        return
+    # ====================================================
 
     if data.startswith("results_play_again:"):
         try:

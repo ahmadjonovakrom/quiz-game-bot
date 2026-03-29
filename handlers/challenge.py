@@ -8,6 +8,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
 from database import get_random_question
+from handlers.game_setup import load_dynamic_settings
 
 logger = logging.getLogger(__name__)
 
@@ -516,8 +517,13 @@ async def handle_duel_poll_answer(update: Update, context: ContextTypes.DEFAULT_
             await send_next_duel_question(context, duel_id)
 
 
-async def duel_question_timeout(context: ContextTypes.DEFAULT_TYPE, duel_id: str, q_index: int):
-    await asyncio.sleep(18)
+async def duel_question_timeout(
+    context: ContextTypes.DEFAULT_TYPE,
+    duel_id: str,
+    q_index: int,
+    question_seconds: int,
+):
+    await asyncio.sleep(question_seconds + 1)
 
     duel = active_duels.get(duel_id)
     if not duel:
@@ -565,6 +571,9 @@ async def send_next_duel_question(context: ContextTypes.DEFAULT_TYPE, duel_id: s
     if not duel:
         return
 
+    settings = load_dynamic_settings()
+    question_seconds = settings["QUESTION_SECONDS"]
+
     q_index = duel["current_question"]
     question_number = q_index + 1
     q = duel["questions"][q_index]
@@ -589,8 +598,11 @@ async def send_next_duel_question(context: ContextTypes.DEFAULT_TYPE, duel_id: s
         type="quiz",
         correct_option_id=q["correct_option"] - 1,
         is_anonymous=False,
+        open_period=question_seconds,
     )
 
     duel["current_poll_id"] = poll.poll.id
 
-    asyncio.create_task(duel_question_timeout(context, duel_id, q_index))
+    asyncio.create_task(
+        duel_question_timeout(context, duel_id, q_index, question_seconds)
+    )

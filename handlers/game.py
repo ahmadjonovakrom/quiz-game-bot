@@ -283,8 +283,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         from services.game_service import get_join_remaining_seconds
 
-        remaining = get_join_remaining_seconds(game)
-        await refresh_join_message(context, chat_id, remaining)
+        await refresh_join_message(context, chat_id)
         await query.answer("Joined!")
         return
 

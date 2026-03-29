@@ -25,10 +25,6 @@ from handlers.game_play import (
     receive_poll_answer,
 )
 
-from handlers.challenge import (
-    duel_button_handler,
-)
-
 from handlers.game_setup import (
     start_game,
     postpone,
@@ -238,13 +234,6 @@ def main():
 
     app.add_handler(
         CallbackQueryHandler(
-            duel_button_handler,
-            pattern=r"^duel_",
-        )
-    )
-
-    app.add_handler(
-        CallbackQueryHandler(
             menu_handler,
             pattern=r"^menu_",
         )
@@ -257,7 +246,7 @@ def main():
         )
     )
 
-    # All poll answers go here; duel polls are routed inside receive_poll_answer
+    # All poll answers go here
     app.add_handler(PollAnswerHandler(receive_poll_answer))
 
     app.add_handler(

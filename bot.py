@@ -24,6 +24,10 @@ from handlers.game import (
 from handlers.game_play import (
     receive_poll_answer,
 )
+from handlers.challenge import (
+    duel_button_handler,
+    handle_duel_poll_answer,
+)
 
 from handlers.game_setup import (
     start_game,
@@ -261,9 +265,6 @@ def main():
 
     # normal game polls
     app.add_handler(PollAnswerHandler(receive_poll_answer))
-
-    # duel polls
-    app.add_handler(PollAnswerHandler(handle_duel_poll_answer))
 
     app.add_handler(
         ChatMemberHandler(

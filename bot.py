@@ -55,6 +55,7 @@ from handlers.group_bonus import bot_added_to_group_handler
 
 from handlers.challenge import (
     duel_button_handler,
+    handle_duel_poll_answer,
 )
 
 from handlers.admin import (
@@ -258,7 +259,11 @@ def main():
         )
     )
 
+    # normal game polls
     app.add_handler(PollAnswerHandler(receive_poll_answer))
+
+    # duel polls
+    app.add_handler(PollAnswerHandler(handle_duel_poll_answer))
 
     app.add_handler(
         ChatMemberHandler(

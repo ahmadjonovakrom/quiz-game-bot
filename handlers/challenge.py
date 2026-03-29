@@ -104,15 +104,6 @@ def duel_lobby_keyboard(duel_id):
     ])
 
 
-def duel_answer_keyboard(duel_id, q_index):
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("A", callback_data=f"duel_answer:{duel_id}:{q_index}:1"),
-         InlineKeyboardButton("B", callback_data=f"duel_answer:{duel_id}:{q_index}:2")],
-        [InlineKeyboardButton("C", callback_data=f"duel_answer:{duel_id}:{q_index}:3"),
-         InlineKeyboardButton("D", callback_data=f"duel_answer:{duel_id}:{q_index}:4")],
-    ])
-
-
 def format_duel_menu_text():
     return (
         "⚔️ <b>1v1 Challenge</b>\n\n"
@@ -155,10 +146,9 @@ def format_duel_ready_text(duel):
     )
 
 
-def format_question_text(duel, question_number, question):
+def format_question_header_text(duel, question_number):
     return (
-        f"⚔️ <b>Duel • Question {question_number}/{duel['questions_count']}</b>\n\n"
-        f"{html.escape(question['question_text'])}"
+        f"⚔️ <b>Duel • Question {question_number}/{duel['questions_count']}</b>"
     )
 
 
@@ -418,6 +408,9 @@ async def duel_button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
             },
             "question_started_at": None,
             "message_id": None,
+            "current_poll_id": None,
+            "current_poll_message_id": None,
+            "current_poll_chat_id": None,
         }
 
         sent = await query.edit_message_text(
@@ -488,82 +481,88 @@ async def duel_button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         await send_next_duel_question(context, duel_id)
         return True
 
-    if data.startswith("duel_answer:"):
-        _, duel_id, q_index_str, option_str = data.split(":")
-        q_index = int(q_index_str)
-        selected_option = int(option_str)
+    return False
 
-        duel = active_duels.get(duel_id)
-        if not duel:
-            await query.answer("This duel no longer exists.", show_alert=True)
-            return True
 
-        if duel["status"] != "running":
-            await query.answer("This duel is not active.", show_alert=True)
-            return True
+async def handle_duel_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    answer = update.poll_answer
+    user_id = answer.user.id
+    option_ids = answer.option_ids
 
-        if user.id not in {duel["creator_id"], duel["opponent_id"]}:
-            await query.answer("This duel is not for you.", show_alert=True)
-            return True
+    if not option_ids:
+        return
 
-        if q_index != duel["current_question"]:
-            await query.answer("This question is already closed.", show_alert=True)
-            return True
+    selected_option = option_ids[0]
 
-        answers_for_question = duel["answers"][q_index]
-        if user.id in answers_for_question:
-            await query.answer("You already answered this question.", show_alert=True)
-            return True
+    duel = None
+    duel_id = None
+    for current_duel_id, current_duel in active_duels.items():
+        if current_duel.get("current_poll_id") == answer.poll_id:
+            duel = current_duel
+            duel_id = current_duel_id
+            break
 
-        question = duel["questions"][q_index]
-        correct_option = question["correct_option"]
+    if not duel or duel["status"] != "running":
+        return
 
+    if user_id not in {duel["creator_id"], duel["opponent_id"]}:
+        return
+
+    q_index = duel["current_question"]
+    if q_index >= duel["questions_count"]:
+        return
+
+    answers_for_question = duel["answers"][q_index]
+    if user_id in answers_for_question:
+        return
+
+    question = duel["questions"][q_index]
+    correct_option_index = question["correct_option"] - 1
+
+    if duel["question_started_at"] is None:
+        elapsed = 0.0
+    else:
         elapsed = max(0.0, time.time() - duel["question_started_at"])
-        is_correct = selected_option == correct_option
 
-        answers_for_question[user.id] = {
-            "selected_option": selected_option,
-            "is_correct": is_correct,
-            "time": elapsed,
-        }
+    is_correct = selected_option == correct_option_index
 
-        if is_correct:
-            duel["players"][user.id]["correct"] += 1
-        else:
-            duel["players"][user.id]["wrong"] += 1
+    answers_for_question[user_id] = {
+        "selected_option": selected_option + 1,
+        "is_correct": is_correct,
+        "time": elapsed,
+    }
 
-        duel["players"][user.id]["total_time"] += elapsed
+    if is_correct:
+        duel["players"][user_id]["correct"] += 1
+    else:
+        duel["players"][user_id]["wrong"] += 1
 
-        await query.answer("Answer recorded!")
+    duel["players"][user_id]["total_time"] += elapsed
 
-        creator_id = duel["creator_id"]
-        opponent_id = duel["opponent_id"]
+    creator_id = duel["creator_id"]
+    opponent_id = duel["opponent_id"]
 
-        if creator_id in answers_for_question and opponent_id in answers_for_question:
-            correct_label = ["A", "B", "C", "D"][correct_option - 1]
+    if creator_id in answers_for_question and opponent_id in answers_for_question:
+        correct_label = ["A", "B", "C", "D"][correct_option_index]
 
+        await context.bot.send_message(
+            chat_id=duel["chat_id"],
+            text=format_question_result_text(duel, q_index + 1, correct_label),
+            parse_mode="HTML",
+        )
+
+        duel["current_question"] += 1
+
+        if duel["current_question"] >= duel["questions_count"]:
+            duel["status"] = "finished"
             await context.bot.send_message(
                 chat_id=duel["chat_id"],
-                text=format_question_result_text(duel, q_index + 1, correct_label),
+                text=format_duel_result_text(duel),
                 parse_mode="HTML",
             )
-
-            duel["current_question"] += 1
-
-            if duel["current_question"] >= duel["questions_count"]:
-                duel["status"] = "finished"
-                await context.bot.send_message(
-                    chat_id=duel["chat_id"],
-                    text=format_duel_result_text(duel),
-                    parse_mode="HTML",
-                )
-                cleanup_duel(duel_id)
-            else:
-                await send_next_duel_question(context, duel_id)
-
-        return True
-
-    return False
+            cleanup_duel(duel_id)
+        else:
+            await send_next_duel_question(context, duel_id)
 
 
 async def send_next_duel_question(context: ContextTypes.DEFAULT_TYPE, duel_id: str):
@@ -575,26 +574,30 @@ async def send_next_duel_question(context: ContextTypes.DEFAULT_TYPE, duel_id: s
     question_number = q_index + 1
     question = duel["questions"][q_index]
 
-    options = [
-        question["option_a"],
-        question["option_b"],
-        question["option_c"],
-        question["option_d"],
-    ]
-
-    text = format_question_text(duel, question_number, question)
-    text += (
-        f"\n\nA) {html.escape(options[0])}"
-        f"\nB) {html.escape(options[1])}"
-        f"\nC) {html.escape(options[2])}"
-        f"\nD) {html.escape(options[3])}"
+    await context.bot.send_message(
+        chat_id=duel["chat_id"],
+        text=format_question_header_text(duel, question_number),
+        parse_mode="HTML",
     )
+
+    options = [
+        f"A) {question['option_a']}",
+        f"B) {question['option_b']}",
+        f"C) {question['option_c']}",
+        f"D) {question['option_d']}",
+    ]
 
     duel["question_started_at"] = time.time()
 
-    await context.bot.send_message(
+    poll_message = await context.bot.send_poll(
         chat_id=duel["chat_id"],
-        text=text,
-        reply_markup=duel_answer_keyboard(duel_id, q_index),
-        parse_mode="HTML",
+        question=question["question_text"],
+        options=options,
+        type="quiz",
+        correct_option_id=question["correct_option"] - 1,
+        is_anonymous=False,
     )
+
+    duel["current_poll_id"] = poll_message.poll.id
+    duel["current_poll_message_id"] = poll_message.message_id
+    duel["current_poll_chat_id"] = poll_message.chat.id

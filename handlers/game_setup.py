@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import math
 import time
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -100,7 +99,16 @@ def get_join_keyboard(chat_id: int):
     )
 
 
-def format_setup_step_1_text() -> str:
+def format_setup_step_1_text(mode: str = "solo") -> str:
+    if mode == "duel":
+        return (
+            "⚔️ Duel Setup\n\n"
+            "Step 1 of 1 — Choose number of questions\n\n"
+            "• Mode: 1 vs 1\n"
+            "• Category: Mixed\n"
+            "• Difficulty: Mixed"
+        )
+
     return (
         "🎮 Game Setup\n\n"
         "Step 1 of 2 — Choose number of questions"
@@ -115,9 +123,25 @@ def format_setup_step_2_text(selected_count: int) -> str:
     )
 
 
-def format_setup_summary(question_count: int, category: str) -> str:
+def format_setup_summary(question_count: int, category: str, mode: str = "solo") -> str:
     settings = load_dynamic_settings()
     points = settings["POINTS"]
+
+    if mode == "duel":
+        return (
+            "⚔️ Duel Setup\n\n"
+            "✅ Ready to Start\n\n"
+            "📋 Setup:\n"
+            f"• Questions: {question_count}\n"
+            "• Category: Mixed\n"
+            "• Difficulty: Mixed\n"
+            "• Players: 2 max\n\n"
+            "🍋 Rewards:\n"
+            f"• Easy: +{points['easy']}\n"
+            f"• Medium: +{points['medium']}\n"
+            f"• Hard: +{points['hard']}\n\n"
+            "🚀 Press Start when you're ready"
+        )
 
     return (
         "🎮 Game Setup\n\n"
@@ -192,7 +216,7 @@ async def cleanup_join_reminder(chat_id: int, context: ContextTypes.DEFAULT_TYPE
 async def send_join_reminders(chat_id: int, context: ContextTypes.DEFAULT_TYPE):
     try:
         game = active_games.get(chat_id)
-        if not game:
+        if not game or game.get("mode") == "duel":
             return
 
         join_seconds = int(game.get("join_seconds") or load_dynamic_settings()["JOIN_SECONDS"])
@@ -262,6 +286,10 @@ async def postpone(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await message.reply_text("There is no waiting lobby to postpone.")
             return
 
+        if game.get("mode") == "duel":
+            await message.reply_text("Duel lobbies cannot be extended.")
+            return
+
         allowed = await is_game_controller(context, chat.id, user.id, game)
         if not allowed:
             await message.reply_text("Only the game starter or an admin can postpone the lobby.")
@@ -295,7 +323,6 @@ async def postpone(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Extensions left: {extensions_left}"
     )
 
-    # auto delete after 5 seconds
     async def delete_later():
         await asyncio.sleep(5)
         await safe_delete_message(context.bot, chat.id, msg.message_id)
@@ -331,6 +358,8 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await message.reply_text("Use /startgame in a group.")
         return
 
+    mode = context.user_data.get("game_mode", "solo")
+
     lock = get_game_lock(chat.id)
     async with lock:
         if has_active_game(chat.id):
@@ -359,11 +388,18 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
         game["postpone_seconds"] = POSTPONE_SECONDS
         game["reminder_task"] = None
         game["reminder_message_id"] = None
+        game["mode"] = mode
+
+        if mode == "duel":
+            game["category"] = "mixed"
+            game["difficulty"] = "mixed"
+            game["min_players"] = 2
+            game["max_players"] = 2
 
         add_player_to_game(game, user)
         active_games[chat.id] = game
 
-    text = format_setup_step_1_text()
+    text = format_setup_step_1_text(mode=mode)
     keyboard = get_question_count_keyboard()
 
     if query:
@@ -423,6 +459,8 @@ async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFA
             await query.answer("Game already started.", show_alert=True)
             return True
 
+        mode = game.get("mode", "solo")
+
         if data.startswith("setup_questions_"):
             try:
                 count = int(data.split("_")[-1])
@@ -436,16 +474,29 @@ async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFA
 
             game["questions_per_game"] = count
 
-            await query.edit_message_text(
-                format_setup_step_2_text(count),
-                reply_markup=get_category_keyboard(),
-            )
+            if mode == "duel":
+                game["category"] = "mixed"
+                game["difficulty"] = "mixed"
+                await query.edit_message_text(
+                    format_setup_summary(
+                        question_count=game["questions_per_game"],
+                        category="mixed",
+                        mode="duel",
+                    ),
+                    reply_markup=get_setup_confirmation_keyboard(),
+                )
+            else:
+                await query.edit_message_text(
+                    format_setup_step_2_text(count),
+                    reply_markup=get_category_keyboard(),
+                )
+
             game["setup_message_id"] = query.message.message_id
             return True
 
         if data == "setup_back_to_questions":
             await query.edit_message_text(
-                format_setup_step_1_text(),
+                format_setup_step_1_text(mode=mode),
                 reply_markup=get_question_count_keyboard(back_callback="menu_main"),
             )
             game["setup_message_id"] = query.message.message_id
@@ -465,6 +516,7 @@ async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFA
                 format_setup_summary(
                     question_count=game["questions_per_game"],
                     category=game["category"],
+                    mode="solo",
                 ),
                 reply_markup=get_setup_confirmation_keyboard(),
             )
@@ -485,7 +537,12 @@ async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFA
                 return True
 
             try:
-                game["min_players"] = settings["MIN_PLAYERS"]
+                if game.get("mode") == "duel":
+                    game["min_players"] = 2
+                    game["max_players"] = 2
+                else:
+                    game["min_players"] = settings["MIN_PLAYERS"]
+
                 game["join_seconds"] = join_seconds
                 game["postpone_count"] = 0
                 game["max_postpones"] = MAX_POSTPONES
@@ -502,8 +559,9 @@ async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFA
                 game["join_message_id"] = query.message.message_id
                 game["setup_message_id"] = query.message.message_id
 
-                reminder_task = safe_task(send_join_reminders(chat_id, context))
-                game["reminder_task"] = reminder_task
+                if game.get("mode") != "duel":
+                    reminder_task = safe_task(send_join_reminders(chat_id, context))
+                    game["reminder_task"] = reminder_task
 
                 safe_task(begin_game_after_join(chat_id, context))
                 return True
@@ -533,6 +591,9 @@ async def begin_game_after_join(chat_id, context):
                 if not game or game["status"] != "joining":
                     return
 
+                if game.get("mode") == "duel" and len(game["players"]) >= 2:
+                    break
+
                 actual_remaining = get_join_remaining_seconds(game)
 
             if actual_remaining > 10:
@@ -558,13 +619,17 @@ async def begin_game_after_join(chat_id, context):
             join_message_id = game.get("join_message_id")
             reminder_message_id = game.get("reminder_message_id")
 
-            if len(game["players"]) < min_players:
+            needed_players = 2 if game.get("mode") == "duel" else min_players
+
+            if len(game["players"]) < needed_players:
                 active_games.pop(chat_id, None)
                 cleanup_game_lock(chat_id)
                 not_enough_players = True
+                is_duel = game.get("mode") == "duel"
             else:
                 game["status"] = "running"
                 not_enough_players = False
+                is_duel = game.get("mode") == "duel"
 
         if reminder_message_id:
             await safe_delete_message(context.bot, chat_id, reminder_message_id)
@@ -572,10 +637,16 @@ async def begin_game_after_join(chat_id, context):
         await safe_delete_message(context.bot, chat_id, join_message_id)
 
         if not_enough_players:
-            await context.bot.send_message(
-                chat_id,
-                f"❌ Not enough players.\nGame cancelled.\n\nMinimum players needed: {min_players}",
-            )
+            if is_duel:
+                await context.bot.send_message(
+                    chat_id,
+                    "❌ Duel cancelled.\nNot enough players joined.",
+                )
+            else:
+                await context.bot.send_message(
+                    chat_id,
+                    f"❌ Not enough players.\nGame cancelled.\n\nMinimum players needed: {min_players}",
+                )
             return
 
         lock = get_game_lock(chat_id)
@@ -597,10 +668,16 @@ async def begin_game_after_join(chat_id, context):
             except Exception:
                 logger.exception("Failed to create game record for chat %s", chat_id)
 
-        await context.bot.send_message(
-            chat_id,
-            "Game started! Get ready for the first question."
-        )
+        if game.get("mode") == "duel":
+            await context.bot.send_message(
+                chat_id,
+                "⚔️ Duel started! Get ready for the first question."
+            )
+        else:
+            await context.bot.send_message(
+                chat_id,
+                "Game started! Get ready for the first question."
+            )
 
         from handlers.game_play import send_question
         await send_question(chat_id, context)

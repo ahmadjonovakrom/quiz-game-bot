@@ -62,6 +62,8 @@ def create_new_game_data(
 ) -> dict:
     return {
         "status": "setup",
+        "mode": "solo",
+        "max_players": None,
         "started_by": started_by,
         "players": {},
         "player_objects": {},
@@ -169,7 +171,11 @@ def get_join_remaining_seconds(game: dict) -> int:
 
 
 def add_player_to_game(game: dict, user) -> bool:
+    max_players = game.get("max_players")
     if user.id in game["players"]:
+        return False
+
+    if max_players is not None and len(game["players"]) >= max_players:
         return False
 
     game["players"][user.id] = {

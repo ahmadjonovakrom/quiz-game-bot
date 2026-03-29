@@ -66,10 +66,6 @@ async def _send_play_again_setup_message(
     chat_id: int,
     context: ContextTypes.DEFAULT_TYPE,
 ):
-    """
-    Send a fresh setup message after pressing Play Again.
-    The old results message stays in chat.
-    """
     return await context.bot.send_message(
         chat_id=chat_id,
         text="🎮 Game Setup\n\nStep 1 of 2 — Choose number of questions",
@@ -179,7 +175,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user = query.from_user
 
         try:
-            int(data.split(":")[1])  # validate callback format
+            int(data.split(":")[1])
         except (IndexError, ValueError):
             await query.answer("Invalid game.", show_alert=True)
             return
@@ -213,6 +209,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 difficulty="mixed",
             )
             game["chat_id"] = chat_id
+            game["mode"] = "solo"
             add_player_to_game(game, user)
             game["results_message_id"] = query.message.message_id
             game["setup_message_id"] = None
@@ -270,18 +267,24 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
 
             user = query.from_user
+
+            if game.get("mode") == "duel" and len(game["players"]) >= 2:
+                await query.answer("This duel already has 2 players.")
+                return
+
             added = add_player_to_game(game, user)
 
             if not added:
-                await query.answer("Already joined")
+                if user.id in game.get("players", {}):
+                    await query.answer("Already joined")
+                else:
+                    await query.answer("This duel already has 2 players.")
                 return
 
         ensure_player(user)
 
         if chat_id < 0:
             ensure_group_player(chat_id, user)
-
-        from services.game_service import get_join_remaining_seconds
 
         await refresh_join_message(context, chat_id)
         await query.answer("Joined!")

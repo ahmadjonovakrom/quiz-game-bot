@@ -72,6 +72,43 @@ def build_join_text(game, remaining: int, blink: bool = False) -> str:
     players = game.get("players", {})
     total = len(players)
     min_players = game.get("min_players", MIN_PLAYERS)
+    mode = game.get("mode", "solo")
+
+    if mode == "duel":
+        if total >= 2:
+            timer_line = "⚔️ Duel ready!"
+        else:
+            if remaining <= 10:
+                timer_line = f"⚠️ Waiting for opponent ({remaining}s)"
+            else:
+                timer_line = f"Waiting for opponent ({remaining}s)"
+
+        joined_names = []
+        for user_id, player in players.items():
+            if isinstance(player, dict):
+                name = player.get("full_name") or player.get("username") or "Player"
+            else:
+                name = getattr(player, "full_name", None) or getattr(player, "username", None) or "Player"
+
+            safe_name = html.escape(str(name))
+            mention = f'<a href="tg://user?id={user_id}">{safe_name}</a>'
+            joined_names.append(mention)
+
+        joined_text = ", ".join(joined_names) if joined_names else "-"
+
+        return "\n".join([
+            "⚔️ DUEL LOBBY",
+            "",
+            f"Questions: {game.get('questions_per_game', 5)}",
+            "Category: Mixed",
+            "Difficulty: Mixed",
+            "",
+            "Players:",
+            joined_text,
+            "",
+            f"Players joined: {total}/2",
+            "Waiting for one more player..." if total < 2 else "Starting duel...",
+        ])
 
     if remaining <= 10:
         if blink:

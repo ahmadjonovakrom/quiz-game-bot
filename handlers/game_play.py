@@ -18,7 +18,6 @@ from database import (
 from utils.helpers import safe_task, safe_delete_message
 from utils.shuffle import shuffle_question
 
-from handlers.challenge import active_duels, handle_duel_poll_answer
 from handlers.game_results import end_game
 from handlers.game_setup import load_dynamic_settings
 
@@ -175,12 +174,6 @@ async def wait_and_continue(chat_id, context, poll_id, round_number):
 
 
 async def receive_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Route duel polls first
-    for duel in active_duels.values():
-        if duel.get("current_poll_id") == update.poll_answer.poll_id:
-            await handle_duel_poll_answer(update, context)
-            return
-
     settings = load_dynamic_settings()
     points_map = settings["POINTS"]
     speed_bonus_seconds = settings["SPEED_BONUS_SECONDS"]

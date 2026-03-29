@@ -72,7 +72,6 @@ def build_join_text(game, remaining: int, blink: bool = False) -> str:
     players = game.get("players", {})
     total = len(players)
     min_players = game.get("min_players", MIN_PLAYERS)
-    needed = max(0, min_players - total)
 
     if remaining <= 10:
         if blink:
@@ -95,36 +94,20 @@ def build_join_text(game, remaining: int, blink: bool = False) -> str:
 
     joined_text = ", ".join(joined_names) if joined_names else "-"
 
-    if needed == 0:
-        need_line = "✅ Enough players joined"
-    elif needed == 1:
-        need_line = "Need 1 more player to start"
+    if total >= min_players:
+        min_needed_text = f"{min_players} ✅"
     else:
-        need_line = f"Need {needed} more players to start"
+        min_needed_text = str(min_players)
 
-    postpone_count = int(game.get("postpone_count", 0))
-    max_postpones = int(game.get("max_postpones", 0))
-
-    if max_postpones > 0:
-        extensions_left = max(0, max_postpones - postpone_count)
-        extension_line = f"Extensions left: {extensions_left}"
-    else:
-        extension_line = None
-
-    parts = [
+    return "\n".join([
         timer_line,
-        "",
-        f"Players: {total}/{min_players}",
-        need_line,
         "",
         "Joined:",
         joined_text,
-    ]
-
-    if extension_line:
-        parts.extend(["", extension_line])
-
-    return "\n".join(parts)
+        "",
+        f"Total: {total}",
+        f"Minimum needed: {min_needed_text}",
+    ])
 
 
 async def safe_delete_message(bot, chat_id, message_id):

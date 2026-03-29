@@ -21,6 +21,7 @@ from utils.helpers import (
     safe_task,
     safe_delete_message,
     build_join_text,
+    is_game_controller,
 )
 from utils.keyboards import (
     game_setup_questions_keyboard,
@@ -37,6 +38,7 @@ from services.game_service import (
     get_existing_game_message,
     add_player_to_game,
     mark_game_joining,
+    get_join_remaining_seconds,
 )
 
 logger = logging.getLogger(__name__)
@@ -49,6 +51,9 @@ CATEGORY_LABELS = {
     "synonyms": "Synonyms",
     "collocations": "Collocations",
 }
+
+POSTPONE_SECONDS = 30
+MAX_POSTPONES = 2
 
 
 def load_dynamic_settings():
@@ -150,11 +155,7 @@ async def refresh_join_message(
     try:
         remaining = seconds_left
         if remaining is None:
-            end_time = game.get("join_end_time")
-            if end_time is not None:
-                remaining = max(0, math.ceil(end_time - time.monotonic()))
-            else:
-                remaining = 0
+            remaining = get_join_remaining_seconds(game)
 
         await context.bot.edit_message_text(
             chat_id=chat_id,
@@ -194,8 +195,7 @@ async def send_join_reminders(chat_id: int, context: ContextTypes.DEFAULT_TYPE):
         if not game:
             return
 
-        settings = load_dynamic_settings()
-        join_seconds = int(settings["JOIN_SECONDS"])
+        join_seconds = int(game.get("join_seconds") or load_dynamic_settings()["JOIN_SECONDS"])
 
         if join_seconds <= 20:
             first_wait = max(1, join_seconds - 20)
@@ -242,6 +242,60 @@ async def send_join_reminders(chat_id: int, context: ContextTypes.DEFAULT_TYPE):
         logger.exception("Reminder error in chat %s", chat_id)
 
 
+async def postpone(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    message = update.effective_message
+    chat = update.effective_chat
+    user = update.effective_user
+
+    if not message or not chat or not user:
+        return
+
+    if chat.type == "private":
+        await message.reply_text("This command works only in groups.")
+        return
+
+    lock = get_game_lock(chat.id)
+    async with lock:
+        game = active_games.get(chat.id)
+
+        if not game or game.get("status") != "joining":
+            await message.reply_text("There is no waiting lobby to postpone.")
+            return
+
+        allowed = await is_game_controller(context, chat.id, user.id, game)
+        if not allowed:
+            await message.reply_text("Only the game starter or an admin can postpone the lobby.")
+            return
+
+        postpone_count = int(game.get("postpone_count", 0))
+        max_postpones = int(game.get("max_postpones", MAX_POSTPONES))
+        postpone_seconds = int(game.get("postpone_seconds", POSTPONE_SECONDS))
+
+        if postpone_count >= max_postpones:
+            await message.reply_text("This lobby cannot be extended anymore.")
+            return
+
+        current_deadline = game.get("join_deadline")
+        now = time.monotonic()
+
+        if current_deadline is None:
+            current_deadline = now
+
+        game["join_deadline"] = max(current_deadline, now) + postpone_seconds
+        game["postpone_count"] = postpone_count + 1
+
+        remaining = get_join_remaining_seconds(game)
+        extensions_left = max_postpones - game["postpone_count"]
+
+    await refresh_join_message(context, chat.id, remaining)
+
+    await message.reply_text(
+        f"⏳ Lobby extended by {postpone_seconds} seconds.\n"
+        f"Time left: {remaining}s\n"
+        f"Extensions left: {extensions_left}"
+    )
+
+
 async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.warning("START GAME COMMAND RECEIVED")
 
@@ -256,14 +310,17 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not user:
         if query:
             await query.edit_message_text("❌ Could not identify user.")
-        else:
+        elif message:
             await message.reply_text("❌ Could not identify user.")
+        return
+
+    if not chat:
         return
 
     if chat.type == "private":
         if query:
             await query.edit_message_text("Use /startgame in a group.")
-        else:
+        elif message:
             await message.reply_text("Use /startgame in a group.")
         return
 
@@ -275,7 +332,7 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             if query:
                 await query.answer(text, show_alert=True)
-            else:
+            elif message:
                 await message.reply_text(text)
             return
 
@@ -288,7 +345,11 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
         game["chat_id"] = chat.id
         game["setup_message_id"] = None
         game["join_message_id"] = None
-        game["join_end_time"] = None
+        game["join_deadline"] = None
+        game["join_seconds"] = None
+        game["postpone_count"] = 0
+        game["max_postpones"] = MAX_POSTPONES
+        game["postpone_seconds"] = POSTPONE_SECONDS
         game["reminder_task"] = None
         game["reminder_message_id"] = None
 
@@ -318,6 +379,9 @@ async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFA
     join_seconds = settings["JOIN_SECONDS"]
 
     query = update.callback_query
+    if not query or not query.message:
+        return False
+
     logger.warning("SETUP CALLBACK: %s", query.data)
 
     data = query.data
@@ -416,6 +480,10 @@ async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFA
             try:
                 game["min_players"] = settings["MIN_PLAYERS"]
                 game["join_seconds"] = join_seconds
+                game["postpone_count"] = 0
+                game["max_postpones"] = MAX_POSTPONES
+                game["postpone_seconds"] = POSTPONE_SECONDS
+
                 mark_game_joining(game, join_seconds)
 
                 await query.edit_message_text(
@@ -426,7 +494,6 @@ async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFA
 
                 game["join_message_id"] = query.message.message_id
                 game["setup_message_id"] = query.message.message_id
-                game["join_end_time"] = time.monotonic() + join_seconds
 
                 reminder_task = safe_task(send_join_reminders(chat_id, context))
                 game["reminder_task"] = reminder_task
@@ -446,21 +513,10 @@ async def game_setup_callback_handler(update: Update, context: ContextTypes.DEFA
 async def begin_game_after_join(chat_id, context):
     settings = load_dynamic_settings()
     min_players = settings["MIN_PLAYERS"]
-    join_seconds = settings["JOIN_SECONDS"]
 
     logger.warning("BEGIN GAME AFTER JOIN: %s", chat_id)
 
     try:
-        loop = asyncio.get_running_loop()
-
-        lock = get_game_lock(chat_id)
-        async with lock:
-            game = active_games.get(chat_id)
-            if not game or game["status"] != "joining":
-                return
-
-            game["join_end_time"] = loop.time() + join_seconds
-
         last_shown = None
 
         while True:
@@ -470,11 +526,7 @@ async def begin_game_after_join(chat_id, context):
                 if not game or game["status"] != "joining":
                     return
 
-                end_time = game.get("join_end_time")
-                if end_time is None:
-                    return
-
-                actual_remaining = max(0, math.ceil(end_time - loop.time()))
+                actual_remaining = get_join_remaining_seconds(game)
 
             if actual_remaining > 10:
                 shown_remaining = ((actual_remaining + 9) // 10) * 10

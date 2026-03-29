@@ -72,6 +72,10 @@ def create_new_game_data(
         "correct": None,
         "join_message_id": None,
         "join_deadline": None,
+        "join_seconds": None,
+        "postpone_count": 0,
+        "max_postpones": 2,
+        "postpone_seconds": 30,
         "used_question_ids": set(),
         "question_started_at": None,
         "speed_bonus_awarded": {},
@@ -133,7 +137,6 @@ def get_unused_question(game: dict):
         difficulty=game.get("difficulty"),
     )
 
-    # Fallback 1: ignore recent chat history, but still avoid repeats in current game
     if not question:
         question = get_random_question(
             exclude_ids=used_ids,
@@ -141,7 +144,6 @@ def get_unused_question(game: dict):
             difficulty=game.get("difficulty"),
         )
 
-    # Fallback 2: if pool is too small, allow any matching question
     if not question:
         question = get_random_question(
             category=game.get("category"),
@@ -185,6 +187,7 @@ def add_player_to_game(game: dict, user) -> bool:
 
 def mark_game_joining(game: dict, join_seconds: int) -> None:
     game["status"] = "joining"
+    game["join_seconds"] = join_seconds
     game["join_deadline"] = time.monotonic() + join_seconds
 
 

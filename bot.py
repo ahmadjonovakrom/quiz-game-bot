@@ -28,6 +28,7 @@ from handlers.game_play import (
 
 from handlers.game_setup import (
     start_game,
+    postpone,
 )
 
 from handlers.game_menu import (
@@ -186,7 +187,6 @@ def main():
     app.add_handler(admin_conv)
 
     # ================= GROUP ACTIVITY TRACKER =================
-    # Saves active users from normal group messages so /callplayers can tag them later
     app.add_handler(
         MessageHandler(
             filters.ChatType.GROUPS
@@ -201,6 +201,8 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("play", start_game))
     app.add_handler(CommandHandler("startgame", start_game))
+    app.add_handler(CommandHandler("postpone", postpone))
+    app.add_handler(CommandHandler("extend", postpone))
     app.add_handler(CommandHandler("stopgame", stop_game))
 
     app.add_handler(CommandHandler("leaderboard", leaderboard))
@@ -218,7 +220,6 @@ def main():
 
     # ================= CALLBACKS =================
 
-    # 1. Results pagination
     app.add_handler(
         CallbackQueryHandler(
             final_results_callback_handler,
@@ -226,7 +227,6 @@ def main():
         )
     )
 
-    # 2. Game setup / join / play again
     app.add_handler(
         CallbackQueryHandler(
             button_handler,
@@ -234,7 +234,6 @@ def main():
         )
     )
 
-    # 3. Menu buttons
     app.add_handler(
         CallbackQueryHandler(
             menu_handler,
@@ -242,7 +241,6 @@ def main():
         )
     )
 
-    # 4. Profile / leaderboard
     app.add_handler(
         CallbackQueryHandler(
             profile_callback_handler,
@@ -250,10 +248,8 @@ def main():
         )
     )
 
-    # Poll answers
     app.add_handler(PollAnswerHandler(receive_poll_answer))
 
-    # Bot added to group
     app.add_handler(
         ChatMemberHandler(
             bot_added_to_group_handler,

@@ -135,6 +135,9 @@ async def show_saved_results(query, context, result_id: int):
 
 async def final_results_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
+    if not query:
+        return
+
     await query.answer()
 
     try:
@@ -210,12 +213,10 @@ async def end_game(chat_id, context):
 
         winner_user_id = normalized_results[0]["user_id"] if normalized_results else None
 
-        # Update stats for all players
         for row in normalized_results:
             user_id = row["user_id"]
             increment_games_played(user_id)
 
-        # Update winner
         if winner_user_id:
             increment_games_won(winner_user_id)
 
@@ -257,22 +258,22 @@ async def stop_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     chat = update.effective_chat
     user = update.effective_user
+    message = update.effective_message
 
-    if not user:
-        await update.message.reply_text("Only the game starter or a group admin can stop this game.")
+    if not chat or not message or not user:
         return
 
     game = active_games.get(chat.id)
     allowed = await is_game_controller(context, chat.id, user.id, game)
 
     if not allowed:
-        await update.message.reply_text("Only the game starter or a group admin can stop this game.")
+        await message.reply_text("Only the game starter or a group admin can stop this game.")
         return
 
     lock = get_game_lock(chat.id)
     async with lock:
         if chat.id not in active_games:
-            await update.message.reply_text("No game is currently running.")
+            await message.reply_text("No game is currently running.")
             return
 
         game = active_games.get(chat.id)
@@ -302,4 +303,4 @@ async def stop_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception:
             logger.exception("Failed to mark stopped game in database for chat %s", chat.id)
 
-    await update.message.reply_text("Game stopped.")
+    await message.reply_text("Game stopped.")

@@ -24,9 +24,9 @@ from handlers.game import (
 from handlers.game_play import (
     receive_poll_answer,
 )
+
 from handlers.challenge import (
     duel_button_handler,
-    handle_duel_poll_answer,
 )
 
 from handlers.game_setup import (
@@ -56,11 +56,6 @@ from handlers.profile import (
 )
 
 from handlers.group_bonus import bot_added_to_group_handler
-
-from handlers.challenge import (
-    duel_button_handler,
-    handle_duel_poll_answer,
-)
 
 from handlers.admin import (
     admin_panel,
@@ -227,7 +222,6 @@ def main():
     app.add_handler(CommandHandler("callplayers", callplayers))
 
     # ================= CALLBACKS =================
-
     app.add_handler(
         CallbackQueryHandler(
             final_results_callback_handler,
@@ -263,7 +257,7 @@ def main():
         )
     )
 
-    # normal game polls
+    # All poll answers go here; duel polls are routed inside receive_poll_answer
     app.add_handler(PollAnswerHandler(receive_poll_answer))
 
     app.add_handler(

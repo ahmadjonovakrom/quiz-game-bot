@@ -289,11 +289,18 @@ async def postpone(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await refresh_join_message(context, chat.id, remaining)
 
-    await message.reply_text(
+    msg = await message.reply_text(
         f"⏳ Lobby extended by {postpone_seconds} seconds.\n"
         f"Time left: {remaining}s\n"
         f"Extensions left: {extensions_left}"
     )
+
+    # auto delete after 5 seconds
+    async def delete_later():
+        await asyncio.sleep(5)
+        await safe_delete_message(context.bot, chat.id, msg.message_id)
+
+    safe_task(delete_later())
 
 
 async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):

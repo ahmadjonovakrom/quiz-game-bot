@@ -8,6 +8,7 @@ FINAL_RESULTS_PAGE_SIZE = 10
 def main_menu_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("🎮 Play Quiz", callback_data="menu_play")],
+        [InlineKeyboardButton("⚔️ Challenge", callback_data="menu_challenge")],  # ✅ NEW
         [InlineKeyboardButton("🏆 Leaderboard", callback_data="menu_leaderboard")],
         [InlineKeyboardButton("👤 My Profile", callback_data="menu_profile")],
         [InlineKeyboardButton("❓ Help", callback_data="menu_help")],

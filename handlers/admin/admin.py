@@ -1,0 +1,626 @@
+import csv
+import io
+from telegram import (
+    Update,
+    InlineKeyboardMarkup,
+    InputFile,
+)
+from telegram.ext import ContextTypes, ConversationHandler
+from database import get_top_groups
+from config import ALLOWED_CATEGORIES, ALLOWED_DIFFICULTIES
+from utils.helpers import is_admin
+from database import get_top_groups
+from database import recalculate_all_player_wins
+from utils.keyboards import (
+    admin_main_keyboard,
+    admin_questions_keyboard,
+    admin_danger_keyboard,
+    admin_reset_confirm_keyboard,
+    broadcast_confirm_keyboard,
+    edit_question_menu_keyboard,
+    edit_options_keyboard,
+    delete_confirm_keyboard,
+    question_action_keyboard,
+    questions_pagination_keyboard,
+    admin_settings_keyboard,
+    bot_stats_keyboard,
+    bot_groups_keyboard,
+    bot_group_details_keyboard,
+)
+from utils.texts import (
+    admin_only_text,
+    format_admin_panel_text,
+    format_bot_stats_text,
+    format_import_help_text,
+    format_latest_questions_text,
+    format_question_details_text,
+    format_question_preview,
+    format_questions_menu_text,
+    format_groups_list_text,
+    format_group_details_text,
+)
+from database import (
+    get_question_by_id,
+    get_conn,
+    get_total_questions_count,
+    get_active_question_count,
+    get_question_count_by_category,
+    get_question_count_by_difficulty,
+    get_total_games,
+    get_total_groups,
+    get_total_players,
+    get_total_users_count,
+    get_all_groups,
+    get_group_stats,
+    get_top_groups,
+)
+
+from services.question_service import (
+    list_questions_paginated_service,
+    update_question_service,
+    toggle_question_status_service,
+    export_questions_service,
+)
+from services.stats_service import get_bot_stats_service
+from services.broadcast_service import broadcast_copied_message_service
+
+from .questions import (
+    nav_keyboard,
+    questions_keyboard,
+    show_search_results,
+    question_step,
+    a_step,
+    b_step,
+    c_step,
+    d_step,
+    correct_step,
+    delete_id_step,
+    delete_confirm_step,
+    search_keyword_step,
+    import_questions_file_step,
+)
+from .states import *
+from .routes_edit import handle_edit_routes
+from .routes_questions import handle_question_routes
+from .routes_misc import handle_misc_routes
+from telegram.constants import ParseMode
+
+
+async def show_question_details(target, qid: int, source: str = "questions"):
+    q = get_question_by_id(qid)
+    if not q:
+        if hasattr(target, "edit_message_text"):
+            await target.edit_message_text(
+                "Question not found.",
+                reply_markup=nav_keyboard("admin_questions"),
+            )
+        else:
+            await target.reply_text(
+                "Question not found.",
+                reply_markup=nav_keyboard("admin_questions"),
+            )
+        return ADMIN_MENU
+
+    text = format_question_details_text(q)
+    markup = question_action_keyboard(qid, q[9], source)
+
+    if hasattr(target, "edit_message_text"):
+        await target.edit_message_text(text, reply_markup=markup)
+    else:
+        await target.reply_text(text, reply_markup=markup)
+
+    return ADMIN_MENU
+
+
+async def show_admin_panel_message(target):
+    await target.edit_message_text(
+        format_admin_panel_text(),
+        reply_markup=admin_main_keyboard(),
+    )
+    return ADMIN_MENU
+
+
+async def show_questions_menu(target):
+    await target.edit_message_text(
+        format_questions_menu_text(),
+        reply_markup=questions_keyboard(),
+    )
+    return ADMIN_MENU
+
+
+async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+
+    if not is_admin(user.id):
+        if update.message:
+            await update.message.reply_text(admin_only_text())
+        elif update.callback_query:
+            await update.callback_query.answer(admin_only_text(), show_alert=True)
+        return ConversationHandler.END
+
+    text = format_admin_panel_text()
+
+    if update.message:
+        await update.message.reply_text(
+            text,
+            reply_markup=admin_main_keyboard(),
+        )
+    elif update.callback_query:
+        await update.callback_query.answer()
+        await update.callback_query.edit_message_text(
+            text,
+            reply_markup=admin_main_keyboard(),
+        )
+
+    return ADMIN_MENU
+
+
+async def fixwins(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+
+    if not is_admin(user.id):
+        await update.message.reply_text("❌ Admin only")
+        return
+
+    try:
+        recalculate_all_player_wins()
+        await update.message.reply_text("✅ Wins recalculated for ALL users!")
+    except Exception as e:
+        await update.message.reply_text(f"❌ Error: {e}")
+
+
+async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data.clear()
+
+    if update.message:
+        await update.message.reply_text(
+            "Cancelled.",
+            reply_markup=admin_main_keyboard(),
+        )
+    elif update.callback_query:
+        await update.callback_query.answer()
+        await update.callback_query.edit_message_text(
+            format_admin_panel_text(),
+            reply_markup=admin_main_keyboard(),
+        )
+
+    return ConversationHandler.END
+
+
+async def bot_stats_command(update, context):
+    stats = {
+        "total_users": get_total_users_count(),
+        "total_players": get_total_players(),
+        "total_questions": get_total_questions_count(),
+        "total_games": get_total_games(),
+        "total_groups": get_total_groups(),
+    }
+
+    top_groups = get_top_groups(limit=5)
+    text = format_bot_stats_text(stats, top_groups=top_groups)
+
+    if update.callback_query:
+        query = update.callback_query
+        await query.answer()
+        await query.edit_message_text(
+            text=text,
+            reply_markup=bot_stats_keyboard(stats["total_groups"]),
+        )
+    else:
+        await update.message.reply_text(
+            text=text,
+            reply_markup=bot_stats_keyboard(stats["total_groups"]),
+        )
+
+
+async def reset_all_time_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+
+    if not is_admin(user.id):
+        await update.effective_message.reply_text(admin_only_text())
+        return
+
+    try:
+        with get_conn() as conn:
+            table_rows = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            ).fetchall()
+            table_names = {row[0] for row in table_rows}
+
+            if "players" in table_names:
+                player_columns = {
+                    row[1]
+                    for row in conn.execute("PRAGMA table_info(players)").fetchall()
+                }
+
+                set_parts = []
+
+                for col in (
+                    "points",
+                    "total_points",
+                    "games_played",
+                    "games_won",
+                    "correct_answers",
+                    "wrong_answers",
+                    "current_streak",
+                    "best_streak",
+                    "daily_streak",
+                    "best_daily_streak",
+                    "wins",
+                    "losses",
+                    "correct",
+                    "wrong",
+                ):
+                    if col in player_columns:
+                        set_parts.append(f"{col} = 0")
+
+                if "fastest_answer_time" in player_columns:
+                    set_parts.append("fastest_answer_time = NULL")
+                if "last_played_at" in player_columns:
+                    set_parts.append("last_played_at = NULL")
+
+                if set_parts:
+                    conn.execute(f"UPDATE players SET {', '.join(set_parts)}")
+
+            if "group_scores" in table_names:
+                group_columns = {
+                    row[1]
+                    for row in conn.execute("PRAGMA table_info(group_scores)").fetchall()
+                }
+
+                set_parts = []
+
+                for col in (
+                    "total_points",
+                    "correct_answers",
+                    "wrong_answers",
+                    "games_played",
+                    "games_won",
+                    "score",
+                    "points",
+                    "wins",
+                    "losses",
+                    "correct",
+                    "wrong",
+                ):
+                    if col in group_columns:
+                        set_parts.append(f"{col} = 0")
+
+                if "last_played_at" in group_columns:
+                    set_parts.append("last_played_at = NULL")
+
+                if set_parts:
+                    conn.execute(f"UPDATE group_scores SET {', '.join(set_parts)}")
+
+        await update.effective_message.reply_text(
+            "✅ All-time leaderboard stats reset completed.\n"
+            "Daily, weekly, and monthly rankings were not cleared."
+        )
+
+    except Exception as e:
+        await update.effective_message.reply_text(f"❌ Reset failed: {e}")
+
+
+async def full_reset_all_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+
+    if not is_admin(user.id):
+        await update.effective_message.reply_text(admin_only_text())
+        return
+
+    try:
+        with get_conn() as conn:
+            table_rows = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            ).fetchall()
+            table_names = {row[0] for row in table_rows}
+
+            delete_tables = [
+                "answers",
+                "game_results",
+                "games",
+                "group_points_history",
+                "player_points_history",
+                "daily_quiz_attempts",
+                "daily_reward_claims",
+                "group_bonus_claims",
+                "bot_group_invites",
+            ]
+
+            for table in delete_tables:
+                if table in table_names:
+                    conn.execute(f"DELETE FROM {table}")
+
+            if "players" in table_names:
+                player_columns = {
+                    row[1]
+                    for row in conn.execute("PRAGMA table_info(players)").fetchall()
+                }
+
+                set_parts = []
+
+                for col in (
+                    "points",
+                    "total_points",
+                    "games_played",
+                    "games_won",
+                    "correct_answers",
+                    "wrong_answers",
+                    "current_streak",
+                    "best_streak",
+                    "daily_streak",
+                    "best_daily_streak",
+                    "wins",
+                    "losses",
+                    "correct",
+                    "wrong",
+                ):
+                    if col in player_columns:
+                        set_parts.append(f"{col} = 0")
+
+                if "fastest_answer_time" in player_columns:
+                    set_parts.append("fastest_answer_time = NULL")
+                if "last_played_at" in player_columns:
+                    set_parts.append("last_played_at = NULL")
+
+                if set_parts:
+                    conn.execute(f"UPDATE players SET {', '.join(set_parts)}")
+
+            if "group_scores" in table_names:
+                group_columns = {
+                    row[1]
+                    for row in conn.execute("PRAGMA table_info(group_scores)").fetchall()
+                }
+
+                set_parts = []
+
+                for col in (
+                    "total_points",
+                    "correct_answers",
+                    "wrong_answers",
+                    "games_played",
+                    "games_won",
+                    "score",
+                    "points",
+                    "wins",
+                    "losses",
+                    "correct",
+                    "wrong",
+                ):
+                    if col in group_columns:
+                        set_parts.append(f"{col} = 0")
+
+                if "last_played_at" in group_columns:
+                    set_parts.append("last_played_at = NULL")
+
+                if set_parts:
+                    conn.execute(f"UPDATE group_scores SET {', '.join(set_parts)}")
+
+        await update.effective_message.reply_text(
+            "💥 Full reset completed.\n"
+            "Gameplay data was cleared.\n"
+            "Questions and settings were kept."
+        )
+
+    except Exception as e:
+        await update.effective_message.reply_text(f"❌ Full reset failed: {e}")
+
+
+async def import_questions_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    if not is_admin(user.id):
+        if update.message:
+            await update.message.reply_text(admin_only_text())
+        elif update.callback_query:
+            await update.callback_query.answer(admin_only_text(), show_alert=True)
+        return ConversationHandler.END
+
+    text = format_import_help_text(ALLOWED_CATEGORIES, ALLOWED_DIFFICULTIES)
+
+    if update.message:
+        await update.message.reply_text(
+            text,
+            reply_markup=nav_keyboard(),
+        )
+    elif update.callback_query:
+        await update.callback_query.answer()
+        await update.callback_query.edit_message_text(
+            text,
+            reply_markup=nav_keyboard(),
+        )
+
+    return IMPORT_FILE
+
+
+async def admin_button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user = update.effective_user
+
+    if not is_admin(user.id):
+        await query.answer(admin_only_text(), show_alert=True)
+        return ConversationHandler.END
+
+    await query.answer()
+    data = query.data
+
+    result = await handle_edit_routes(query, context)
+    if result is not None:
+        return result
+
+    result = await handle_question_routes(
+        query,
+        context,
+        update,
+        show_question_details,
+        show_questions_menu,
+        import_questions_entry,
+    )
+    if result is not None:
+        return result
+
+    result = await handle_misc_routes(
+        query,
+        context,
+        update,
+        show_admin_panel_message,
+        show_questions_menu,
+        reset_all_time_leaderboard,
+        full_reset_all_data,
+    )
+    if result is not None:
+        return result
+
+    if data == "admin_botstats":
+        stats = {
+            "total_users": get_total_users_count(),
+            "total_players": get_total_players(),
+            "total_questions": get_total_questions_count(),
+            "total_games": get_total_games(),
+            "total_groups": get_total_groups(),
+        }
+
+        top_groups = get_top_groups(limit=5)
+
+        await query.edit_message_text(
+            text=format_bot_stats_text(stats, top_groups=top_groups),
+            reply_markup=bot_stats_keyboard(stats["total_groups"]),
+        )
+        return ADMIN_MENU
+
+    if data.startswith("admin_stats_groups_page_"):
+        page = int(data.replace("admin_stats_groups_page_", ""))
+        groups = get_all_groups()
+
+        await query.edit_message_text(
+            text=format_groups_list_text(groups, page=page, per_page=10),
+            reply_markup=bot_groups_keyboard(groups, page=page, per_page=10),
+        )
+        return ADMIN_MENU
+
+    if data == "admin_stats_groups":
+        page = 1
+        groups = get_all_groups()
+
+        await query.edit_message_text(
+            text=format_groups_list_text(groups, page=page, per_page=10),
+            reply_markup=bot_groups_keyboard(groups, page=page, per_page=10),
+        )
+        return ADMIN_MENU
+
+    if data.startswith("admin_stats_group_"):
+        raw = data.replace("admin_stats_group_", "")
+
+        if "_page_" in raw:
+            chat_id_str, page_str = raw.split("_page_")
+            chat_id = int(chat_id_str)
+            page = int(page_str)
+        else:
+            chat_id = int(raw)
+            page = 1
+
+        group_stats = get_group_stats(chat_id)
+        chat = group_stats.get("chat")
+        username = chat["username"] if chat and chat["username"] else None
+
+        await query.edit_message_text(
+            text=format_group_details_text(group_stats),
+            reply_markup=bot_group_details_keyboard(username=username, page=page),
+            parse_mode="HTML",
+            disable_web_page_preview=True,
+        )
+        return ADMIN_MENU
+
+    if data.startswith("admin_return_"):
+        source = data.replace("admin_return_", "").strip()
+
+        if source == "search":
+            keyword = context.user_data.get("search_keyword")
+            if keyword:
+                return await show_search_results(query, keyword)
+
+        if source == "questions":
+            return await show_questions_menu(query)
+
+        return await show_admin_panel_message(query)
+
+    return ADMIN_MENU
+
+
+async def broadcast_message_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    message = update.message
+
+    context.user_data["broadcast_source_chat_id"] = message.chat_id
+    context.user_data["broadcast_source_message_id"] = message.message_id
+
+    await update.message.reply_text(
+        "📣 Broadcast preview saved.\n\nSend confirmation?",
+        reply_markup=broadcast_confirm_keyboard(),
+    )
+    return BROADCAST_CONFIRM
+
+
+async def settings_update_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    from database import set_setting
+
+    key = context.user_data.get("setting_key")
+    value = update.message.text.strip()
+
+    if not key:
+        await update.message.reply_text(
+            "No setting selected.",
+            reply_markup=admin_main_keyboard(),
+        )
+        return ConversationHandler.END
+
+    set_setting(key, value)
+
+    await update.message.reply_text(
+        f"✅ Updated {key} = {value}",
+        reply_markup=admin_main_keyboard(),
+    )
+
+    context.user_data.clear()
+    return ConversationHandler.END
+
+
+async def broadcast_confirm_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    if query.data == "broadcast_no":
+        context.user_data.pop("broadcast_source_chat_id", None)
+        context.user_data.pop("broadcast_source_message_id", None)
+        await query.edit_message_text(
+            "Broadcast cancelled.",
+            reply_markup=admin_main_keyboard(),
+        )
+        return ConversationHandler.END
+
+    source_chat_id = context.user_data.get("broadcast_source_chat_id")
+    source_message_id = context.user_data.get("broadcast_source_message_id")
+
+    if not source_chat_id or not source_message_id:
+        await query.edit_message_text(
+            "Broadcast data missing. Please try again.",
+            reply_markup=admin_main_keyboard(),
+        )
+        return ConversationHandler.END
+
+    await query.edit_message_text("📡 Broadcasting...")
+
+    result = await broadcast_copied_message_service(
+        bot=context.bot,
+        source_chat_id=source_chat_id,
+        source_message_id=source_message_id,
+    )
+
+    context.user_data.pop("broadcast_source_chat_id", None)
+    context.user_data.pop("broadcast_source_message_id", None)
+
+    await query.message.reply_text(
+        "✅ Broadcast finished.\n\n"
+        f"Delivered: {result['success']}\n"
+        f"Failed: {result['failed']}",
+        reply_markup=admin_main_keyboard(),
+    )
+    return ConversationHandler.END

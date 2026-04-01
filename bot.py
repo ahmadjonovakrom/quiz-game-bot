@@ -1,5 +1,11 @@
-import logging
+# bot.py - Main entry point for the Telegram bot
 
+# This file configures and runs the Telegram bot for a quiz/game application.
+# It imports command and callback handlers from the handlers modules, sets up
+# logging, creates the application, registers all command/callback/message
+# handlers, and then starts polling.
+
+import logging
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -10,37 +16,18 @@ from telegram.ext import (
     ChatMemberHandler,
     filters,
 )
-
 from config import BOT_TOKEN
 from database import create_tables
+
+# Import various handler functions and constants from custom modules,
+# organized by functionality
 from handlers.tag_players import callplayers
 from handlers.group_activity import track_group_activity
-
-from handlers.game import (
-    button_handler,
-    daily_quiz,
-)
-
-from handlers.game_play import (
-    receive_poll_answer,
-)
-
-from handlers.game_setup import (
-    start_game,
-    postpone,
-)
-
-from handlers.game_menu import (
-    start,
-    menu_handler,
-    myid,
-)
-
-from handlers.game_results import (
-    stop_game,
-    final_results_callback_handler,
-)
-
+from handlers.game import button_handler, daily_quiz
+from handlers.game_play import receive_poll_answer
+from handlers.game_setup import start_game, postpone
+from handlers.game_menu import start, menu_handler, myid
+from handlers.game_results import stop_game, final_results_callback_handler
 from handlers.profile import (
     profile,
     leaderboard,
@@ -50,10 +37,9 @@ from handlers.profile import (
     global_leaderboard,
     profile_callback_handler,
 )
-
 from handlers.group_bonus import bot_added_to_group_handler
-
 from handlers.admin import (
+    # Handlers for admin panel and question management
     admin_panel,
     admin_button_handler,
     bot_stats_command,
@@ -81,6 +67,7 @@ from handlers.admin import (
     import_questions_file_step,
     cancel,
     fixwins,
+    # State constants for admin ConversationHandler
     ADMIN_MENU,
     QUESTION,
     A,
@@ -116,6 +103,7 @@ from handlers.admin import (
     settings_update_step,
 )
 
+# Setup logging for debugging and monitoring
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO,
@@ -124,12 +112,17 @@ logger = logging.getLogger(__name__)
 
 
 def main():
+    """
+    Main function to initialize database, build the Application,
+    register all handlers, and start the Telegram bot poller.
+    """
     logger.warning("BOT STARTED")
-    create_tables()
+    create_tables()  # Ensure DB tables exist
 
     app = Application.builder().token(BOT_TOKEN).build()
 
-    # ================= ADMIN =================
+    # ============ ADMIN PANEL CONVERSATION HANDLER ============
+    # All admin flows (question creation/editing, broadcast, etc.)
     admin_conv = ConversationHandler(
         entry_points=[
             CommandHandler("admin", admin_panel),
@@ -185,7 +178,8 @@ def main():
     )
     app.add_handler(admin_conv)
 
-    # ================= GROUP ACTIVITY TRACKER =================
+    # ============ GROUP ACTIVITY TRACKER ============
+    # Records activity in group chats for analytics or tracking
     app.add_handler(
         MessageHandler(
             filters.ChatType.GROUPS
@@ -196,28 +190,28 @@ def main():
         group=0,
     )
 
-    # ================= COMMANDS =================
+    # ============ BASIC COMMANDS ============
+    # Core gameplay, stats, and utility commands
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("play", start_game))
     app.add_handler(CommandHandler("startgame", start_game))
     app.add_handler(CommandHandler("postpone", postpone))
     app.add_handler(CommandHandler("extend", postpone))
     app.add_handler(CommandHandler("stopgame", stop_game))
-
     app.add_handler(CommandHandler("leaderboard", leaderboard))
     app.add_handler(CommandHandler("global", global_leaderboard))
     app.add_handler(CommandHandler("daily", daily))
     app.add_handler(CommandHandler("weekly", weekly))
     app.add_handler(CommandHandler("monthly", monthly))
     app.add_handler(CommandHandler("profile", profile))
-
     app.add_handler(CommandHandler("botstats", bot_stats_command))
     app.add_handler(CommandHandler("fixwins", fixwins))
     app.add_handler(CommandHandler("dailyquiz", daily_quiz))
     app.add_handler(CommandHandler("myid", myid))
     app.add_handler(CommandHandler("callplayers", callplayers))
 
-    # ================= CALLBACKS =================
+    # ============ CALLBACK QUERY HANDLERS ============
+    # Menu navigation, quiz controls, profile/leaderboard callbacks, etc.
     app.add_handler(
         CallbackQueryHandler(
             final_results_callback_handler,
@@ -246,9 +240,10 @@ def main():
         )
     )
 
-    # All poll answers go here
+    # ============ POLL ANSWERS HANDLER ============
     app.add_handler(PollAnswerHandler(receive_poll_answer))
 
+    # ============ GROUP/BOT STATUS HANDLER ============
     app.add_handler(
         ChatMemberHandler(
             bot_added_to_group_handler,

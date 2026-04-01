@@ -3,7 +3,7 @@
 from contextlib import closing
 from database import get_conn
 
-ADMIN_MENU = 0  # matches the value in handlers/admin/states.py
+ADMIN_MENU = 0
 
 
 async def reset_all_time_leaderboard(query, context):
@@ -61,3 +61,16 @@ async def full_reset_all_data(query, context):
     except Exception as e:
         await query.edit_message_text(f"❌ Error during full reset: {e}")
     return ADMIN_MENU
+```
+
+Now follow these steps exactly:
+
+**Step 1** — In VS Code, make sure `admin_reset.py` is at `handlers/admin_reset.py` (NOT inside `handlers/admin/`)
+
+**Step 2** — Paste the code above into it and save
+
+**Step 3** — In terminal run:
+```
+git add -A
+git commit -m "fix admin_reset"
+git push

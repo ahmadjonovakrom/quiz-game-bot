@@ -1,16 +1,40 @@
 import csv
 import io
+
 from telegram import (
     Update,
     InlineKeyboardMarkup,
     InputFile,
 )
+from telegram.constants import ParseMode
 from telegram.ext import ContextTypes, ConversationHandler
-from database import get_top_groups
+
 from config import ALLOWED_CATEGORIES, ALLOWED_DIFFICULTIES
+from database import (
+    get_question_by_id,
+    get_conn,
+    get_total_questions_count,
+    get_active_question_count,
+    get_question_count_by_category,
+    get_question_count_by_difficulty,
+    get_total_games,
+    get_total_groups,
+    get_total_players,
+    get_total_users_count,
+    get_all_groups,
+    get_group_stats,
+    get_top_groups,
+    recalculate_all_player_wins,
+)
+from services.question_service import (
+    list_questions_paginated_service,
+    update_question_service,
+    toggle_question_status_service,
+    export_questions_service,
+)
+from services.stats_service import get_bot_stats_service
+from services.broadcast_service import broadcast_copied_message_service
 from utils.helpers import is_admin
-from database import get_top_groups
-from database import recalculate_all_player_wins
 from utils.keyboards import (
     admin_main_keyboard,
     admin_questions_keyboard,
@@ -39,30 +63,6 @@ from utils.texts import (
     format_groups_list_text,
     format_group_details_text,
 )
-from database import (
-    get_question_by_id,
-    get_conn,
-    get_total_questions_count,
-    get_active_question_count,
-    get_question_count_by_category,
-    get_question_count_by_difficulty,
-    get_total_games,
-    get_total_groups,
-    get_total_players,
-    get_total_users_count,
-    get_all_groups,
-    get_group_stats,
-    get_top_groups,
-)
-
-from services.question_service import (
-    list_questions_paginated_service,
-    update_question_service,
-    toggle_question_status_service,
-    export_questions_service,
-)
-from services.stats_service import get_bot_stats_service
-from services.broadcast_service import broadcast_copied_message_service
 
 from .questions import (
     nav_keyboard,
@@ -83,14 +83,34 @@ from .states import *
 from .routes_edit import handle_edit_routes
 from .routes_questions import handle_question_routes
 from .routes_misc import handle_misc_routes
-from telegram.constants import ParseMode
 
-# --- Imports for admin module split ---
 from handlers.admin_reset import reset_all_time_leaderboard, full_reset_all_data
-from handlers.admin_stats import bot_stats_command
-from handlers.admin_broadcast import broadcast_message_step, broadcast_confirm_step
-from handlers.admin_settings import settings_update_step
-# -------------------------------------
+from handlers.broadcast import broadcast_message_step, broadcast_confirm_step
+
+
+async def settings_update_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    from database import set_setting
+
+    key = context.user_data.get("setting_key")
+    value = update.message.text.strip()
+
+    if not key:
+        await update.message.reply_text(
+            "No setting selected.",
+            reply_markup=admin_main_keyboard(),
+        )
+        return ConversationHandler.END
+
+    set_setting(key, value)
+
+    await update.message.reply_text(
+        f"✅ Updated {key} = {value}",
+        reply_markup=admin_main_keyboard(),
+    )
+
+    context.user_data.clear()
+    return ConversationHandler.END
+
 
 async def show_question_details(target, qid: int, source: str = "questions"):
     q = get_question_by_id(qid)
@@ -159,6 +179,32 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
     return ADMIN_MENU
+
+
+async def bot_stats_command(update, context):
+    stats = {
+        "total_users": get_total_users_count(),
+        "total_players": get_total_players(),
+        "total_questions": get_total_questions_count(),
+        "total_games": get_total_games(),
+        "total_groups": get_total_groups(),
+    }
+
+    top_groups = get_top_groups(limit=5)
+    text = format_bot_stats_text(stats, top_groups=top_groups)
+
+    if update.callback_query:
+        query = update.callback_query
+        await query.answer()
+        await query.edit_message_text(
+            text=text,
+            reply_markup=bot_stats_keyboard(stats["total_groups"]),
+        )
+    else:
+        await update.message.reply_text(
+            text=text,
+            reply_markup=bot_stats_keyboard(stats["total_groups"]),
+        )
 
 
 async def fixwins(update: Update, context: ContextTypes.DEFAULT_TYPE):

@@ -1,13 +1,12 @@
 # handlers/admin_reset.py
 
 from contextlib import closing
-from telegram.ext import ContextTypes
 from database import get_conn
-from .states import ADMIN_MENU
+
+ADMIN_MENU = 0  # matches the value in handlers/admin/states.py
 
 
 async def reset_all_time_leaderboard(query, context):
-    """Resets all-time leaderboard: points, streaks, game stats for all players."""
     try:
         with closing(get_conn()) as conn, conn:
             conn.execute("""
@@ -24,7 +23,6 @@ async def reset_all_time_leaderboard(query, context):
                     fastest_answer_time = NULL
             """)
             conn.execute("DELETE FROM player_points_history")
-
         await query.edit_message_text("✅ All-time leaderboard has been reset.")
     except Exception as e:
         await query.edit_message_text(f"❌ Error resetting leaderboard: {e}")
@@ -32,7 +30,6 @@ async def reset_all_time_leaderboard(query, context):
 
 
 async def full_reset_all_data(query, context):
-    """Full reset: clears all game history and player stats."""
     try:
         with closing(get_conn()) as conn, conn:
             conn.execute("DELETE FROM game_results")
@@ -60,7 +57,6 @@ async def full_reset_all_data(query, context):
                     correct_answers = 0,
                     wrong_answers = 0
             """)
-
         await query.edit_message_text("✅ All data has been fully reset.")
     except Exception as e:
         await query.edit_message_text(f"❌ Error during full reset: {e}")

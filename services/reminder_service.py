@@ -75,8 +75,12 @@ async def _send_private_reminders(bot):
         try:
             await bot.send_message(
                 chat_id=int(user_id),
-                text="🔥 Daily reminder: don't lose your streak! Play today's quiz in English Lemon 🍋",
-            )
+                text=(
+                    "🍋 DAILY QUIZ\n\n"
+                    "🔥 Don’t lose your streak!\n\n"
+                    "🎯 Your daily challenge is waiting.\n"
+                    "🏆 Climb the leaderboard today!"
+                )
             sent += 1
         except Exception:
             failed += 1
@@ -101,8 +105,12 @@ async def _send_group_reminders(bot):
         try:
             await bot.send_message(
                 chat_id=chat_id,
-                text="🔥 Daily reminder: today's quiz is waiting in English Lemon 🍋\n\n/startgame to play with your group!",
-            )
+                text=(
+                    "🏆 DAILY QUIZ TIME\n\n"
+                    "🔥 Battle for the leaderboard!\n"
+                    "🍋 Earn lemons and take the lead.\n\n"
+                    "👉 /startgame"
+                )
             sent += 1
         except Exception:
             failed += 1

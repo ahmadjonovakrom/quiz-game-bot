@@ -44,6 +44,22 @@ def row_value(row, key, default=None):
         return default
 
 
+def row_to_dict(row):
+    if row is None:
+        return None
+
+    try:
+        if hasattr(row, "keys"):
+            return {key: row[key] for key in row.keys()}
+    except Exception:
+        pass
+
+    try:
+        return dict(row)
+    except Exception:
+        return str(row)
+
+
 def get_question_points(difficulty: str):
     settings = load_dynamic_settings()
     points = settings["POINTS"]
@@ -82,7 +98,10 @@ async def send_question(chat_id, context):
 
         try:
             question = get_unused_question(game)
-            logger.warning("Fetched game question: %s", dict(question) if question else None)
+            logger.warning(
+                "Fetched game question: %s",
+                row_to_dict(question) if question else None,
+            )
         except Exception:
             logger.exception("Failed to fetch question for chat %s", chat_id)
             await context.bot.send_message(chat_id, "❌ Failed to load question from database.")
@@ -100,10 +119,18 @@ async def send_question(chat_id, context):
         return
 
     try:
-        q_id = question["id"]
-        q_text = question["question_text"]
+        q_id = row_value(question, "id")
+        q_text = row_value(question, "question_text")
         difficulty = row_value(question, "difficulty", "easy")
         points = get_question_points(difficulty)
+
+        if q_id is None or not q_text:
+            await context.bot.send_message(
+                chat_id,
+                "❌ Question data is incomplete.\nEnding game.",
+            )
+            await end_game(chat_id, context)
+            return
 
         options, correct_index = shuffle_question(question)
 

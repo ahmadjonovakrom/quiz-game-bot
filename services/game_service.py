@@ -168,7 +168,7 @@ def get_unused_question(game: dict):
         return None
 
     q_id = question.get("id")
-    if q_id is None or not isinstance(q_id, int):
+    if q_id is None:
         return None
 
     used_question_ids = game.get("used_question_ids")
@@ -176,12 +176,9 @@ def get_unused_question(game: dict):
         used_question_ids = set()
         game["used_question_ids"] = used_question_ids
 
-    if q_id in used_question_ids:
-        return None
-
     used_question_ids.add(q_id)
 
-    if chat_id is not None:
+    if chat_id is not None and isinstance(q_id, int):
         remember_question(chat_id, q_id)
 
     return question

@@ -1,4 +1,5 @@
 from contextlib import closing
+from typing import Optional, Tuple
 
 from .connection import get_conn
 
@@ -18,7 +19,11 @@ WEEK_STREAK_STEP = 7
 
 def _normalize_user_input(user_or_id, username: str = None, full_name: str = None):
     if hasattr(user_or_id, "id"):
-        return user_or_id.id, user_or_id.username, user_or_id.full_name
+        return (
+            user_or_id.id,
+            user_or_id.username if user_or_id.username is not None else username,
+            user_or_id.full_name if user_or_id.full_name is not None else full_name,
+        )
     return user_or_id, username, full_name
 
 
@@ -32,68 +37,143 @@ def _get_local_yesterday(conn) -> str:
     return row["d"]
 
 
+def _ensure_player_row_in_conn(conn, user_id: int, username: str = None, full_name: str = None):
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO players (user_id, username, full_name)
+        VALUES (?, ?, ?)
+        """,
+        (user_id, username, full_name),
+    )
+
+    if username is not None or full_name is not None:
+        conn.execute(
+            """
+            UPDATE players
+            SET
+                username = COALESCE(?, username),
+                full_name = COALESCE(?, full_name)
+            WHERE user_id = ?
+            """,
+            (username, full_name, user_id),
+        )
+
+
+def _ensure_user_row_in_conn(conn, user_id: int, username: str = None, full_name: str = None):
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO users (user_id, username, full_name)
+        VALUES (?, ?, ?)
+        """,
+        (user_id, username, full_name),
+    )
+
+    if username is not None or full_name is not None:
+        conn.execute(
+            """
+            UPDATE users
+            SET
+                username = COALESCE(?, username),
+                full_name = COALESCE(?, full_name)
+            WHERE user_id = ?
+            """,
+            (username, full_name, user_id),
+        )
+
+
+def _require_player_updated(result, user_id: int):
+    if result.rowcount == 0:
+        raise ValueError(f"Player {user_id} does not exist. Use ensure_player first.")
+
+
+def _fetch_player_rank_and_points(conn, user_id: int) -> Tuple[Optional[int], int]:
+    target = conn.execute(
+        """
+        SELECT total_points, correct_answers, games_won
+        FROM players
+        WHERE user_id = ?
+        """,
+        (user_id,),
+    ).fetchone()
+
+    if not target:
+        return None, 0
+
+    row = conn.execute(
+        """
+        SELECT COUNT(*) + 1 AS rank
+        FROM players
+        WHERE
+            COALESCE(total_points, 0) > COALESCE(?, 0)
+            OR (
+                COALESCE(total_points, 0) = COALESCE(?, 0)
+                AND COALESCE(correct_answers, 0) > COALESCE(?, 0)
+            )
+            OR (
+                COALESCE(total_points, 0) = COALESCE(?, 0)
+                AND COALESCE(correct_answers, 0) = COALESCE(?, 0)
+                AND COALESCE(games_won, 0) > COALESCE(?, 0)
+            )
+            OR (
+                COALESCE(total_points, 0) = COALESCE(?, 0)
+                AND COALESCE(correct_answers, 0) = COALESCE(?, 0)
+                AND COALESCE(games_won, 0) = COALESCE(?, 0)
+                AND user_id < ?
+            )
+        """,
+        (
+            target["total_points"], target["total_points"],
+            target["correct_answers"], target["total_points"],
+            target["correct_answers"], target["games_won"],
+            target["total_points"], target["correct_answers"],
+            target["games_won"], user_id,
+        ),
+    ).fetchone()
+
+    return (row["rank"] if row else None, target["total_points"] or 0)
+
+
+def _period_rows_sql(where_clause: str):
+    return f"""
+        SELECT
+            p.user_id,
+            p.username,
+            p.full_name,
+            COALESCE(SUM(h.points), 0) AS period_points,
+            p.correct_answers,
+            p.games_won
+        FROM players p
+        JOIN player_points_history h ON p.user_id = h.user_id
+        WHERE {where_clause}
+        GROUP BY
+            p.user_id,
+            p.username,
+            p.full_name,
+            p.correct_answers,
+            p.games_won
+        {PERIOD_ORDER_BY}
+    """
+
+
+def _get_rank_from_rows(rows, user_id: int, points_key: str):
+    for index, row in enumerate(rows, start=1):
+        if row["user_id"] == user_id:
+            return index, row[points_key]
+    return None, 0
+
+
 def ensure_player(user_or_id, username: str = None, full_name: str = None):
     user_id, username, full_name = _normalize_user_input(user_or_id, username, full_name)
 
     with closing(get_conn()) as conn, conn:
-        existing = conn.execute(
-            "SELECT user_id FROM players WHERE user_id = ?",
-            (user_id,),
-        ).fetchone()
-
-        if existing:
-            conn.execute(
-                """
-                UPDATE players
-                SET username = ?, full_name = ?
-                WHERE user_id = ?
-                """,
-                (username, full_name, user_id),
-            )
-            return
-
-        conn.execute(
-            """
-            INSERT INTO players (
-                user_id,
-                username,
-                full_name
-            ) VALUES (?, ?, ?)
-            """,
-            (user_id, username, full_name),
-        )
+        _ensure_player_row_in_conn(conn, user_id, username, full_name)
 
 
 def ensure_user(user_or_id, username: str = None, full_name: str = None):
     user_id, username, full_name = _normalize_user_input(user_or_id, username, full_name)
 
     with closing(get_conn()) as conn, conn:
-        existing = conn.execute(
-            "SELECT user_id FROM users WHERE user_id = ?",
-            (user_id,),
-        ).fetchone()
-
-        if existing:
-            conn.execute(
-                """
-                UPDATE users
-                SET username = ?, full_name = ?
-                WHERE user_id = ?
-                """,
-                (username, full_name, user_id),
-            )
-            return
-
-        conn.execute(
-            """
-            INSERT INTO users (
-                user_id,
-                username,
-                full_name
-            ) VALUES (?, ?, ?)
-            """,
-            (user_id, username, full_name),
-        )
+        _ensure_user_row_in_conn(conn, user_id, username, full_name)
 
 
 def get_player(user_id: int):
@@ -138,8 +218,11 @@ def get_player_stats(user_id: int):
 
 
 def add_points(user_id: int, points: int):
+    if points == 0:
+        return
+
     with closing(get_conn()) as conn, conn:
-        conn.execute(
+        result = conn.execute(
             """
             UPDATE players
             SET total_points = COALESCE(total_points, 0) + ?,
@@ -148,6 +231,7 @@ def add_points(user_id: int, points: int):
             """,
             (points, user_id),
         )
+        _require_player_updated(result, user_id)
 
         conn.execute(
             """
@@ -165,7 +249,7 @@ def add_manual_points(user_id: int, points: int):
 def record_correct_answer(user_id: int, answer_time=None):
     with closing(get_conn()) as conn, conn:
         if answer_time is None:
-            conn.execute(
+            result = conn.execute(
                 """
                 UPDATE players
                 SET correct_answers = COALESCE(correct_answers, 0) + 1,
@@ -181,7 +265,7 @@ def record_correct_answer(user_id: int, answer_time=None):
                 (user_id,),
             )
         else:
-            conn.execute(
+            result = conn.execute(
                 """
                 UPDATE players
                 SET correct_answers = COALESCE(correct_answers, 0) + 1,
@@ -202,10 +286,12 @@ def record_correct_answer(user_id: int, answer_time=None):
                 (answer_time, answer_time, user_id),
             )
 
+        _require_player_updated(result, user_id)
+
 
 def record_wrong_answer(user_id: int):
     with closing(get_conn()) as conn, conn:
-        conn.execute(
+        result = conn.execute(
             """
             UPDATE players
             SET wrong_answers = COALESCE(wrong_answers, 0) + 1,
@@ -215,11 +301,12 @@ def record_wrong_answer(user_id: int):
             """,
             (user_id,),
         )
+        _require_player_updated(result, user_id)
 
 
 def increment_games_played(user_id: int):
     with closing(get_conn()) as conn, conn:
-        conn.execute(
+        result = conn.execute(
             """
             UPDATE players
             SET games_played = COALESCE(games_played, 0) + 1,
@@ -228,11 +315,12 @@ def increment_games_played(user_id: int):
             """,
             (user_id,),
         )
+        _require_player_updated(result, user_id)
 
 
 def increment_games_won(user_id: int):
     with closing(get_conn()) as conn, conn:
-        conn.execute(
+        result = conn.execute(
             """
             UPDATE players
             SET games_won = COALESCE(games_won, 0) + 1,
@@ -241,30 +329,35 @@ def increment_games_won(user_id: int):
             """,
             (user_id,),
         )
+        _require_player_updated(result, user_id)
 
 
 def increment_duel_games_played(user_id: int):
     with closing(get_conn()) as conn, conn:
-        conn.execute(
+        result = conn.execute(
             """
             UPDATE players
-            SET duel_games_played = COALESCE(duel_games_played, 0) + 1
+            SET duel_games_played = COALESCE(duel_games_played, 0) + 1,
+                last_played_at = CURRENT_TIMESTAMP
             WHERE user_id = ?
             """,
             (user_id,),
         )
+        _require_player_updated(result, user_id)
 
 
 def increment_duel_games_won(user_id: int):
     with closing(get_conn()) as conn, conn:
-        conn.execute(
+        result = conn.execute(
             """
             UPDATE players
-            SET duel_games_won = COALESCE(duel_games_won, 0) + 1
+            SET duel_games_won = COALESCE(duel_games_won, 0) + 1,
+                last_played_at = CURRENT_TIMESTAMP
             WHERE user_id = ?
             """,
             (user_id,),
         )
+        _require_player_updated(result, user_id)
 
 
 def get_top_players(limit: int = 10, offset: int = 0):
@@ -311,18 +404,8 @@ def get_global_leaderboard_page(limit: int = 10, offset: int = 0):
 
 def get_player_rank(user_id: int):
     with closing(get_conn()) as conn:
-        rows = conn.execute(
-            f"""
-            SELECT user_id
-            FROM players
-            {GLOBAL_ORDER_BY}
-            """
-        ).fetchall()
-
-    for index, row in enumerate(rows, start=1):
-        if row["user_id"] == user_id:
-            return index
-    return None
+        rank, _ = _fetch_player_rank_and_points(conn, user_id)
+        return rank
 
 
 def get_player_profile(user_id: int):
@@ -345,11 +428,11 @@ def get_player_profile(user_id: int):
             (user_id,),
         ).fetchone()
 
-    if not player:
-        return None, None
+        if not player:
+            return None, None
 
-    rank = get_player_rank(user_id)
-    return player, rank
+        rank, _ = _fetch_player_rank_and_points(conn, user_id)
+        return player, rank
 
 
 def get_player_full_profile(user_id: int):
@@ -378,60 +461,20 @@ def get_player_full_profile(user_id: int):
             (user_id,),
         ).fetchone()
 
-    if not player:
-        return None, None
+        if not player:
+            return None, None
 
-    rank = get_player_rank(user_id)
-    return player, rank
+        rank, _ = _fetch_player_rank_and_points(conn, user_id)
+        return player, rank
 
 
 def get_player_global_rank_info(user_id: int):
     with closing(get_conn()) as conn:
-        rows = conn.execute(
-            f"""
-            SELECT user_id, total_points
-            FROM players
-            {GLOBAL_ORDER_BY}
-            """
-        ).fetchall()
-
-    for index, row in enumerate(rows, start=1):
-        if row["user_id"] == user_id:
-            return index, row["total_points"]
-    return None, 0
-
-
-def _period_rows_sql(where_clause: str):
-    return f"""
-        SELECT
-            p.user_id,
-            p.username,
-            p.full_name,
-            COALESCE(SUM(h.points), 0) AS period_points,
-            p.correct_answers,
-            p.games_won
-        FROM players p
-        JOIN player_points_history h ON p.user_id = h.user_id
-        WHERE {where_clause}
-        GROUP BY
-            p.user_id,
-            p.username,
-            p.full_name,
-            p.correct_answers,
-            p.games_won
-        {PERIOD_ORDER_BY}
-    """
+        return _fetch_player_rank_and_points(conn, user_id)
 
 
 def recalculate_all_player_wins():
     with closing(get_conn()) as conn, conn:
-        conn.execute(
-            """
-            UPDATE players
-            SET games_won = 0
-            """
-        )
-
         conn.execute(
             """
             UPDATE players
@@ -475,13 +518,6 @@ def get_monthly_leaderboard_page(limit: int = 10, offset: int = 0):
             + "\nLIMIT ? OFFSET ?",
             (limit, offset),
         ).fetchall()
-
-
-def _get_rank_from_rows(rows, user_id: int, points_key: str):
-    for index, row in enumerate(rows, start=1):
-        if row["user_id"] == user_id:
-            return index, row[points_key]
-    return None, 0
 
 
 def get_player_daily_rank_info(user_id: int):
@@ -534,18 +570,18 @@ def get_daily_reward_status(user_id: int):
             (user_id, today),
         ).fetchone()
 
+        daily_streak = (player["daily_streak"] or 0) if player else 0
+        best_daily_streak = (player["best_daily_streak"] or 0) if player else 0
+
         return {
             "claimed_today": bool(claim),
             "today": today,
-            "daily_streak": player["daily_streak"] if player else 0,
-            "best_daily_streak": player["best_daily_streak"] if player else 0,
+            "daily_streak": daily_streak,
+            "best_daily_streak": best_daily_streak,
             "base_points": claim["base_points"] if claim else 0,
             "bonus_points": claim["bonus_points"] if claim else 0,
             "streak_after_claim": claim["streak_after_claim"] if claim else 0,
-            "next_bonus_at": (
-                ((player["daily_streak"] // WEEK_STREAK_STEP) + 1) * WEEK_STREAK_STEP
-                if player and player["daily_streak"] >= 0 else WEEK_STREAK_STEP
-            ),
+            "next_bonus_at": ((daily_streak // WEEK_STREAK_STEP) + 1) * WEEK_STREAK_STEP,
         }
 
 
@@ -559,16 +595,32 @@ def claim_daily_reward(
         today = _get_local_today(conn)
         yesterday = _get_local_yesterday(conn)
 
-        already_claimed = conn.execute(
+        _ensure_player_row_in_conn(conn, user_id)
+
+        player = conn.execute(
             """
-            SELECT 1
-            FROM daily_reward_claims
-            WHERE user_id = ? AND reward_date = ?
+            SELECT daily_streak, best_daily_streak
+            FROM players
+            WHERE user_id = ?
             """,
-            (user_id, today),
+            (user_id,),
         ).fetchone()
 
-        if already_claimed:
+        current_daily_streak = (player["daily_streak"] or 0) if player else 0
+        best_daily_streak = (player["best_daily_streak"] or 0) if player else 0
+
+        last_claim = conn.execute(
+            """
+            SELECT reward_date
+            FROM daily_reward_claims
+            WHERE user_id = ?
+            ORDER BY reward_date DESC
+            LIMIT 1
+            """,
+            (user_id,),
+        ).fetchone()
+
+        if last_claim and last_claim["reward_date"] == today:
             claim = conn.execute(
                 """
                 SELECT base_points, bonus_points, streak_after_claim
@@ -586,42 +638,8 @@ def claim_daily_reward(
                 "bonus_points": claim["bonus_points"],
                 "total_points": claim["base_points"] + claim["bonus_points"],
                 "daily_streak": claim["streak_after_claim"],
-                "best_daily_streak": None,
+                "best_daily_streak": best_daily_streak,
             }
-
-        ensure_row = conn.execute(
-            """
-            SELECT user_id, daily_streak, best_daily_streak
-            FROM players
-            WHERE user_id = ?
-            """,
-            (user_id,),
-        ).fetchone()
-
-        if not ensure_row:
-            conn.execute(
-                """
-                INSERT INTO players (user_id, total_points, daily_streak, best_daily_streak)
-                VALUES (?, 0, 0, 0)
-                """,
-                (user_id,),
-            )
-            current_daily_streak = 0
-            best_daily_streak = 0
-        else:
-            current_daily_streak = ensure_row["daily_streak"] or 0
-            best_daily_streak = ensure_row["best_daily_streak"] or 0
-
-        last_claim = conn.execute(
-            """
-            SELECT reward_date
-            FROM daily_reward_claims
-            WHERE user_id = ?
-            ORDER BY reward_date DESC
-            LIMIT 1
-            """,
-            (user_id,),
-        ).fetchone()
 
         if last_claim and last_claim["reward_date"] == yesterday:
             new_daily_streak = current_daily_streak + 1
@@ -632,7 +650,41 @@ def claim_daily_reward(
         bonus_points = streak_bonus_points if new_daily_streak % streak_step == 0 else 0
         total_points = base_points + bonus_points
 
-        conn.execute(
+        try:
+            conn.execute(
+                """
+                INSERT INTO daily_reward_claims (
+                    user_id,
+                    reward_date,
+                    base_points,
+                    bonus_points,
+                    streak_after_claim
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                (user_id, today, base_points, bonus_points, new_daily_streak),
+            )
+        except Exception:
+            claim = conn.execute(
+                """
+                SELECT base_points, bonus_points, streak_after_claim
+                FROM daily_reward_claims
+                WHERE user_id = ? AND reward_date = ?
+                """,
+                (user_id, today),
+            ).fetchone()
+
+            return {
+                "claimed": False,
+                "already_claimed": True,
+                "reward_date": today,
+                "base_points": claim["base_points"],
+                "bonus_points": claim["bonus_points"],
+                "total_points": claim["base_points"] + claim["bonus_points"],
+                "daily_streak": claim["streak_after_claim"],
+                "best_daily_streak": best_daily_streak,
+            }
+
+        result = conn.execute(
             """
             UPDATE players
             SET total_points = COALESCE(total_points, 0) + ?,
@@ -643,6 +695,7 @@ def claim_daily_reward(
             """,
             (total_points, new_daily_streak, new_best_daily_streak, user_id),
         )
+        _require_player_updated(result, user_id)
 
         conn.execute(
             """
@@ -650,19 +703,6 @@ def claim_daily_reward(
             VALUES (?, ?)
             """,
             (user_id, total_points),
-        )
-
-        conn.execute(
-            """
-            INSERT INTO daily_reward_claims (
-                user_id,
-                reward_date,
-                base_points,
-                bonus_points,
-                streak_after_claim
-            ) VALUES (?, ?, ?, ?, ?)
-            """,
-            (user_id, today, base_points, bonus_points, new_daily_streak),
         )
 
         return {
@@ -692,18 +732,7 @@ def reset_daily_streak_if_missed(user_id: int):
             (user_id,),
         ).fetchone()
 
-        if not last_claim:
-            conn.execute(
-                """
-                UPDATE players
-                SET daily_streak = 0
-                WHERE user_id = ?
-                """,
-                (user_id,),
-            )
-            return True
-
-        if last_claim["reward_date"] != yesterday:
+        if not last_claim or last_claim["reward_date"] != yesterday:
             conn.execute(
                 """
                 UPDATE players

@@ -100,29 +100,23 @@ async def handle_misc_routes(
 
         action = data.split(":", 1)[1]
         set_setting("streak_notify_enabled", 1 if action == "on" else 0)
+
         context.user_data.clear()
-        return await handle_misc_routes(
-            query,
-            context,
-            update,
-            show_admin_panel_message,
-            show_questions_menu,
-            reset_all_time_leaderboard,
-            full_reset_all_data,
-        ) if False else await _show_settings_again(
-            query,
-            context,
-        )
+
+        return await _show_settings_again(query, context)
 
     if data.startswith("settings_daily_time:"):
         from database import set_setting
 
         time_str = data.split(":", 1)[1]
         hour_str, minute_str = time_str.split(":")
+
         set_setting("streak_notify_hour", int(hour_str))
         set_setting("streak_notify_minute", int(minute_str))
         set_setting("streak_notify_enabled", 1)
+
         context.user_data.clear()
+
         return await _show_settings_again(query, context)
 
     if data == "settings_daily_custom":

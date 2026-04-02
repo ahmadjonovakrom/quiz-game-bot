@@ -362,33 +362,49 @@ def settings_value_keyboard(key: str, current_value=None) -> InlineKeyboardMarku
     return InlineKeyboardMarkup(rows)
 
 
-def settings_daily_reminder_keyboard(settings: dict) -> InlineKeyboardMarkup:
+def settings_daily_reminder_keyboard(settings) -> InlineKeyboardMarkup:
+    enabled = bool(settings.get("streak_notify_enabled", 0))
     hour = int(settings.get("streak_notify_hour", 20))
     minute = int(settings.get("streak_notify_minute", 0))
 
-    return InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("✅ ON", callback_data="settings_daily_toggle:on"),
-            InlineKeyboardButton("⛔ OFF", callback_data="settings_daily_toggle:off"),
-        ],
-        [
-            InlineKeyboardButton("18:00", callback_data="settings_daily_time:18:00"),
-            InlineKeyboardButton("20:00", callback_data="settings_daily_time:20:00"),
-            InlineKeyboardButton("21:00", callback_data="settings_daily_time:21:00"),
-        ],
-        [
-            InlineKeyboardButton("08:00", callback_data="settings_daily_time:08:00"),
-            InlineKeyboardButton("12:00", callback_data="settings_daily_time:12:00"),
-            InlineKeyboardButton("22:00", callback_data="settings_daily_time:22:00"),
-        ],
-        [
-            InlineKeyboardButton(
-                f"✍️ Type custom time ({hour:02d}:{minute:02d})",
-                callback_data="settings_daily_custom",
-            )
-        ],
-        [InlineKeyboardButton("⬅️ Back", callback_data="admin_settings")],
+    on_text = "✅ ON" if enabled else "ON"
+    off_text = "✅ OFF" if not enabled else "OFF"
+
+    current_time = f"{hour:02d}:{minute:02d}"
+
+    preset_times = ["08:00", "12:00", "18:00", "20:00", "21:00", "22:00"]
+    rows = []
+
+    rows.append([
+        InlineKeyboardButton(on_text, callback_data="settings_daily_toggle:on"),
+        InlineKeyboardButton(off_text, callback_data="settings_daily_toggle:off"),
     ])
+
+    row = []
+    for time_value in preset_times:
+        button_text = f"✅ {time_value}" if time_value == current_time else time_value
+        row.append(
+            InlineKeyboardButton(
+                button_text,
+                callback_data=f"settings_daily_time:{time_value}",
+            )
+        )
+        if len(row) == 3:
+            rows.append(row)
+            row = []
+
+    if row:
+        rows.append(row)
+
+    rows.append([
+        InlineKeyboardButton(
+            f"✍️ Type custom time ({current_time})",
+            callback_data="settings_daily_custom",
+        )
+    ])
+    rows.append([InlineKeyboardButton("⬅️ Back", callback_data="admin_settings")])
+
+    return InlineKeyboardMarkup(rows)
 
 
 def admin_reset_confirm_keyboard(yes_callback: str) -> InlineKeyboardMarkup:

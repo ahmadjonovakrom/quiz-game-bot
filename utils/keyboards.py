@@ -300,7 +300,7 @@ def admin_settings_keyboard(settings: dict) -> InlineKeyboardMarkup:
     ])
 
 
-def settings_value_keyboard(key: str) -> InlineKeyboardMarkup:
+def settings_value_keyboard(key: str, current_value=None) -> InlineKeyboardMarkup:
     presets = {
         "min_players": [1, 2, 3, 4, 5, 10],
         "join_seconds": [30, 45, 60, 90, 120, 180],
@@ -321,6 +321,11 @@ def settings_value_keyboard(key: str) -> InlineKeyboardMarkup:
         "points_hard": "🍋 Hard Points",
     }
 
+    try:
+        current_value = int(current_value) if current_value is not None else None
+    except (TypeError, ValueError):
+        current_value = None
+
     values = presets.get(key, [])
     rows = []
 
@@ -328,20 +333,30 @@ def settings_value_keyboard(key: str) -> InlineKeyboardMarkup:
         row = []
         for value in values:
             suffix = "s" if key in {"join_seconds", "question_seconds", "speed_bonus_seconds"} else ""
+            is_selected = current_value == value
+            button_text = f"✅ {value}{suffix}" if is_selected else f"{value}{suffix}"
+
             row.append(
                 InlineKeyboardButton(
-                    f"{value}{suffix}",
+                    button_text,
                     callback_data=f"settings_value:{key}:{value}",
                 )
             )
+
             if len(row) == 3:
                 rows.append(row)
                 row = []
+
         if row:
             rows.append(row)
 
     title = labels.get(key, key)
-    rows.append([InlineKeyboardButton(f"✍️ Type custom {title}", callback_data=f"settings_custom:{key}")])
+    rows.append([
+        InlineKeyboardButton(
+            f"✍️ Type custom {title}",
+            callback_data=f"settings_custom:{key}",
+        )
+    ])
     rows.append([InlineKeyboardButton("⬅️ Back", callback_data="admin_settings")])
 
     return InlineKeyboardMarkup(rows)

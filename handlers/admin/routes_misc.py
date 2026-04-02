@@ -167,6 +167,8 @@ async def handle_misc_routes(
         return SETTING_VALUE
 
     if data.startswith("settings_"):
+        from database import get_all_settings
+
         key = data.replace("settings_", "")
         if key in {
             "min_players",
@@ -188,9 +190,12 @@ async def handle_misc_routes(
             }
             label = labels.get(key, key)
 
+            settings = get_all_settings()
+            current_value = settings.get(key)
+
             await query.edit_message_text(
                 f"{label}\n\nChoose a value or type your own.",
-                reply_markup=settings_value_keyboard(key),
+                reply_markup=settings_value_keyboard(key, current_value),
             )
             return ADMIN_MENU
 

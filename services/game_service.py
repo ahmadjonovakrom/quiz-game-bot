@@ -2,13 +2,13 @@ import asyncio
 import math
 import time
 from collections import defaultdict, deque
-from typing import Any, Dict, List, Optional
+from typing import Dict, List
 
 from telegram.ext import ContextTypes
 
 from config import MIN_PLAYERS
 from database import get_random_question
-from utils.helpers import safe_delete_message, clickable_name
+from utils.helpers import safe_delete_message
 
 active_games: Dict[int, dict] = {}
 poll_map: Dict[str, dict] = {}
@@ -19,6 +19,16 @@ RECENT_QUESTION_HISTORY_SIZE = 40
 recent_questions_by_chat = defaultdict(
     lambda: deque(maxlen=RECENT_QUESTION_HISTORY_SIZE)
 )
+
+
+def _row_value(row, key, default=None):
+    if row is None:
+        return default
+    try:
+        value = row[key]
+        return default if value is None else value
+    except Exception:
+        return default
 
 
 def get_game_lock(chat_id: int) -> asyncio.Lock:
@@ -167,7 +177,7 @@ def get_unused_question(game: dict):
     if not question:
         return None
 
-    q_id = question.get("id")
+    q_id = _row_value(question, "id")
     if q_id is None:
         return None
 
@@ -398,4 +408,4 @@ def build_results_text(results):
     for row in results:
         text += f"{row['position']}. {row['name']} — {row['points']} 🍋\n"
 
-    return text
+    return textupdate

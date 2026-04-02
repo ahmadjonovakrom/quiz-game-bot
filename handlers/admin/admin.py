@@ -89,7 +89,7 @@ from handlers.broadcast import broadcast_message_step, broadcast_confirm_step
 
 
 async def settings_update_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    from database import set_setting
+    from database import set_setting, get_all_settings
 
     key = context.user_data.get("setting_key")
     value = update.message.text.strip()
@@ -101,6 +101,112 @@ async def settings_update_step(update: Update, context: ContextTypes.DEFAULT_TYP
         )
         return ConversationHandler.END
 
+    # 🔥 Special handling for daily reminder
+    if key == "daily_reminder":
+        value_lower = value.lower()
+
+        if value_lower == "on":
+            set_setting("streak_notify_enabled", 1)
+
+            settings = get_all_settings()
+            await update.message.reply_text(
+                "✅ Daily reminder enabled.\n\n"
+                f"Current time: {int(settings.get('streak_notify_hour', 20)):02d}:{int(settings.get('streak_notify_minute', 0)):02d}",
+                reply_markup=admin_main_keyboard(),
+            )
+            context.user_data.clear()
+            return ConversationHandler.END
+
+        if value_lower == "off":
+            set_setting("streak_notify_enabled", 0)
+
+            await update.message.reply_text(
+                "✅ Daily reminder disabled.",
+                reply_markup=admin_main_keyboard(),
+            )
+            context.user_data.clear()
+            return ConversationHandler.END
+
+        if ":" in value:
+            try:
+                hour_str, minute_str = value.split(":", 1)
+                hour = int(hour_str)
+                minute = int(minute_str)
+
+                if not (0 <= hour <= 23 and 0 <= minute <= 59):
+                    raise ValueError
+
+                set_setting("streak_notify_hour", hour)
+                set_setting("streak_notify_minute", minute)
+                set_setting("streak_notify_enabled", 1)
+
+                await update.message.reply_text(
+                    f"✅ Daily reminder time updated to {hour:02d}:{minute:02d}.",
+                    reply_markup=admin_main_keyboard(),
+                )
+                context.user_data.clear()
+                return ConversationHandler.END
+
+            except ValueError:
+                await update.message.reply_text(
+                    "❌ Invalid time format.\n\n"
+                    "Send:\n"
+                    "• on\n"
+                    "• off\n"
+                    "• or time like 20:00",
+                    reply_markup=nav_keyboard("admin_settings"),
+                )
+                return SETTING_VALUE
+
+        await update.message.reply_text(
+            "❌ Invalid input.\n\n"
+            "Send:\n"
+            "• on\n"
+            "• off\n"
+            "• or time like 20:00",
+            reply_markup=nav_keyboard("admin_settings"),
+        )
+        return SETTING_VALUE
+
+    # ✅ Validation for numeric settings
+    numeric_settings = {
+        "min_players": (1, 100),
+        "join_seconds": (10, 600),
+        "question_seconds": (5, 120),
+        "speed_bonus_seconds": (1, 60),
+        "points_easy": (1, 1000),
+        "points_medium": (1, 1000),
+        "points_hard": (1, 1000),
+    }
+
+    if key in numeric_settings:
+        try:
+            num = int(value)
+        except ValueError:
+            await update.message.reply_text(
+                "❌ Please send a valid number.",
+                reply_markup=nav_keyboard("admin_settings"),
+            )
+            return SETTING_VALUE
+
+        min_value, max_value = numeric_settings[key]
+        if not (min_value <= num <= max_value):
+            await update.message.reply_text(
+                f"❌ Value must be between {min_value} and {max_value}.",
+                reply_markup=nav_keyboard("admin_settings"),
+            )
+            return SETTING_VALUE
+
+        set_setting(key, num)
+
+        await update.message.reply_text(
+            f"✅ Updated {key} = {num}",
+            reply_markup=admin_main_keyboard(),
+        )
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    # fallback
     set_setting(key, value)
 
     await update.message.reply_text(

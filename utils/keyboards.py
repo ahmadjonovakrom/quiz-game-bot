@@ -247,16 +247,67 @@ def broadcast_confirm_keyboard() -> InlineKeyboardMarkup:
 # utils/keyboards.py  — ONLY the two affected functions shown
 # (rest of file unchanged)
 
-def admin_settings_keyboard() -> InlineKeyboardMarkup:
+def admin_settings_keyboard(settings: dict) -> InlineKeyboardMarkup:
+    reminder_enabled = bool(settings.get("streak_notify_enabled", 0))
+    reminder_hour = int(settings.get("streak_notify_hour", 20))
+    reminder_minute = int(settings.get("streak_notify_minute", 0))
+
+    reminder_label = (
+        f"🔥 Daily Reminder ({reminder_hour:02d}:{reminder_minute:02d})"
+        if reminder_enabled
+        else "🔥 Daily Reminder (OFF)"
+    )
+
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("👥 Min Players",        callback_data="settings_min_players")],
-        [InlineKeyboardButton("⏱ Join Time",           callback_data="settings_join_seconds")],
-        [InlineKeyboardButton("⏱ Question Time",       callback_data="settings_question_seconds")],  # ← FIXED label
-        [InlineKeyboardButton("⚡ Speed Bonus Time",   callback_data="settings_speed_bonus_seconds")],
-        [InlineKeyboardButton("🍋 Easy Points",        callback_data="settings_points_easy")],
-        [InlineKeyboardButton("🍋 Medium Points",      callback_data="settings_points_medium")],
-        [InlineKeyboardButton("🍋 Hard Points",        callback_data="settings_points_hard")],
-        [InlineKeyboardButton("⬅️ Back",               callback_data="admin_back")],
+        [
+            InlineKeyboardButton(
+                f"👥 Min Players ({settings.get('min_players', 2)})",
+                callback_data="settings_min_players",
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                f"⏱ Join Time ({settings.get('join_seconds', 90)}s)",
+                callback_data="settings_join_seconds",
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                f"⏱ Question Time ({settings.get('question_seconds', 18)}s)",
+                callback_data="settings_question_seconds",
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                f"⚡ Speed Bonus ({settings.get('speed_bonus_seconds', 5)}s)",
+                callback_data="settings_speed_bonus_seconds",
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                f"🍋 Easy Points ({settings.get('points_easy', 15)})",
+                callback_data="settings_points_easy",
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                f"🍋 Medium Points ({settings.get('points_medium', 25)})",
+                callback_data="settings_points_medium",
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                f"🍋 Hard Points ({settings.get('points_hard', 35)})",
+                callback_data="settings_points_hard",
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                reminder_label,
+                callback_data="settings_daily_reminder",
+            )
+        ],
+        [InlineKeyboardButton("⬅️ Back", callback_data="admin_back")],
     ])
 
 

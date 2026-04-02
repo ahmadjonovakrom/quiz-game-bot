@@ -27,6 +27,7 @@ from services.game_service import (
     create_new_game_data,
     get_existing_game_message,
     add_player_to_game,
+    get_join_remaining_seconds,
 )
 from handlers.game_setup import (
     load_dynamic_settings,
@@ -141,10 +142,8 @@ async def daily_quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
         q_id = question.get("id")
         q_text = question.get("question_text")
         difficulty = row_value(question, "difficulty", "easy")
-        # Logic issue fixed: Use scoring function for points, not hardcoded
         points = 450
 
-        # Defensive: no empty question or blank text
         if not q_id or not q_text:
             logger.error("Question fetched missing ID or text")
             await update.message.reply_text("Question data incomplete.")
@@ -152,12 +151,15 @@ async def daily_quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         options, correct_index = shuffle_question(question)
 
-        # Defensive: check for malformed shuffle (should always be 0...3 for four options)
         if correct_index not in range(len(options)):
             await update.message.reply_text(
                 "This daily question has an invalid correct answer."
             )
-            logger.error("Invalid correct option index: %s for options: %s", correct_index, options)
+            logger.error(
+                "Invalid correct option index: %s for options: %s",
+                correct_index,
+                options,
+            )
             return
 
         msg = await context.bot.send_poll(
@@ -201,7 +203,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info("BUTTON CALLBACK: %s", getattr(query, "data", None))
     data = query.data or ""
 
-    # Game setup or back/home
     if (
         data.startswith("setup_")
         or data in ("menu_back", "menu_main")
@@ -211,7 +212,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if handled is True:
             return
 
-    # 🔁 Duel rematch - Only same 2 players
     if data.startswith("duel_rematch:"):
         chat_id = query.message.chat.id
         user = query.from_user
@@ -224,13 +224,16 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.error("Malformed duel_rematch callback: %s", data)
             return
 
-        # Check user is allowed before blocking the lock
         if user.id not in allowed_players:
             await query.answer(
                 "This rematch is only for previous duel players.",
                 show_alert=True,
             )
-            logger.info("User %s is not allowed to start rematch, allowed: %s", user.id, allowed_players)
+            logger.info(
+                "User %s is not allowed to start rematch, allowed: %s",
+                user.id,
+                allowed_players,
+            )
             return
 
         await query.answer()
@@ -270,10 +273,10 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             msg = await context.bot.send_message(
                 chat_id=chat_id,
                 text="⚔️ Duel Setup\n\n"
-                    "Step 1 of 1 — Choose number of questions\n\n"
-                    "• Mode: 1 vs 1\n"
-                    "• Category: Mixed\n"
-                    "• Difficulty: Mixed",
+                     "Step 1 of 1 — Choose number of questions\n\n"
+                     "• Mode: 1 vs 1\n"
+                     "• Category: Mixed\n"
+                     "• Difficulty: Mixed",
                 reply_markup=game_setup_questions_keyboard(),
             )
         except Exception:
@@ -288,7 +291,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         return
 
-    # 🚀 New duel (open to everyone)
     if data == "duel_new_game":
         chat_id = query.message.chat.id
         user = query.from_user
@@ -318,7 +320,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "max_players": 2,
                 "category": "mixed",
                 "difficulty": "mixed",
-                "allowed_players": None,  # open duel
+                "allowed_players": None,
             })
             add_player_to_game(game, user)
             active_games[chat_id] = game
@@ -336,7 +338,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.exception("Failed to edit duel setup message.")
         return
 
-    # "Play again" after results
     if data.startswith("results_play_again:"):
         chat_id = query.message.chat.id
         user = query.from_user
@@ -350,7 +351,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await query.answer()
 
-        # Clean up old game & messages before creating a new game
         lock = get_game_lock(chat_id)
         async with lock:
             if has_active_game(chat_id):
@@ -384,7 +384,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             add_player_to_game(game, user)
             active_games[chat_id] = game
 
-        # Try to clean up old messages, ignore failures
         if old_setup_message_id:
             try:
                 await safe_delete_message(
@@ -393,7 +392,10 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     old_setup_message_id,
                 )
             except Exception:
-                logger.exception("Failed to delete old setup message %s", old_setup_message_id)
+                logger.exception(
+                    "Failed to delete old setup message %s",
+                    old_setup_message_id,
+                )
 
         if old_join_message_id and old_join_message_id != old_setup_message_id:
             try:
@@ -403,10 +405,12 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     old_join_message_id,
                 )
             except Exception:
-                logger.exception("Failed to delete old join message %s", old_join_message_id)
+                logger.exception(
+                    "Failed to delete old join message %s",
+                    old_join_message_id,
+                )
 
         setup_message = await _send_play_again_setup_message(chat_id, context)
-        # Defensive: If failed to send display, remove game
         if setup_message is None:
             lock = get_game_lock(chat_id)
             async with lock:
@@ -421,7 +425,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 game["setup_message_id"] = setup_message.message_id
         return
 
-    # "join|chat_id" callback pattern
     parts = data.split("|")
     if parts[0] == "join":
         try:
@@ -431,13 +434,11 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.error("join callback: could not parse chat_id from '%s'", data)
             return
 
-        # Defensive ensure_chat, don't allow propagation of db errors.
         try:
             if query.message.chat:
                 ensure_chat(query.message.chat)
         except Exception:
             logger.exception("Failed to ensure chat on join")
-            # User can still try to join, don't hard fail here
 
         join_message_id = None
         should_start_duel = False
@@ -460,11 +461,14 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logger.info("No active game in chat %s on join", chat_id)
                 return
 
-            # Defensive: games should always have status; fallback to joining if missing
             status = game.get("status", "joining")
             if status != "joining":
                 await query.answer("Joining closed")
-                logger.info("Joining is closed in chat %s on join; status=%s", chat_id, status)
+                logger.info(
+                    "Joining is closed in chat %s on join; status=%s",
+                    chat_id,
+                    status,
+                )
                 return
 
             player_dict = game.get("players", {})
@@ -477,7 +481,11 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         "This rematch is only for previous duel players.",
                         show_alert=True,
                     )
-                    logger.info("User %s not allowed in duel; allowed_players: %s", user.id, allowed_players)
+                    logger.info(
+                        "User %s not allowed in duel; allowed_players: %s",
+                        user.id,
+                        allowed_players,
+                    )
                     return
 
                 if len(player_dict) >= 2:
@@ -492,7 +500,11 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         "This rematch is only for players from the previous match.",
                         show_alert=True,
                     )
-                    logger.info("User %s not allowed in rematch; allowed_players: %s", user.id, allowed_players)
+                    logger.info(
+                        "User %s not allowed in rematch; allowed_players: %s",
+                        user.id,
+                        allowed_players,
+                    )
                     return
 
             added = add_player_to_game(game, user)
@@ -510,10 +522,14 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         )
                     else:
                         await query.answer("Unable to join.")
-                logger.info("User %s unable to join, added=%s, mode=%s", user.id, added, game.get("mode"))
+                logger.info(
+                    "User %s unable to join, added=%s, mode=%s",
+                    user.id,
+                    added,
+                    game.get("mode"),
+                )
                 return
 
-            # Only start duel if 2nd player joins!
             if game.get("mode") == "duel" and len(game["players"]) == 2:
                 game["status"] = "running"
                 join_message_id = game.get("join_message_id")
@@ -557,12 +573,16 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try:
                 await safe_delete_message(context.bot, chat_id, join_message_id)
             except Exception:
-                logger.warning("Failed to safe delete join message %s in chat %s", join_message_id, chat_id)
+                logger.warning(
+                    "Failed to safe delete join message %s in chat %s",
+                    join_message_id,
+                    chat_id,
+                )
 
             try:
                 await context.bot.send_message(
                     chat_id,
-                    duel_intro_text or "⚔️ Duel started!\nGet ready for the first question."
+                    duel_intro_text or "⚔️ Duel started!\nGet ready for the first question.",
                 )
             except Exception:
                 logger.exception("Failed to send duel intro message to chat %s", chat_id)
@@ -576,14 +596,24 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         try:
-            await refresh_join_message(context, chat_id)
+            game = active_games.get(chat_id)
+            shown_remaining = None
+
+            if game and game.get("status") == "joining":
+                actual_remaining = get_join_remaining_seconds(game)
+
+                if actual_remaining > 10:
+                    shown_remaining = ((actual_remaining + 9) // 10) * 10
+                else:
+                    shown_remaining = actual_remaining
+
+            await refresh_join_message(context, chat_id, shown_remaining)
         except Exception:
             logger.exception("Failed to refresh join message for chat %s", chat_id)
 
         await query.answer(answer_text, show_alert=answer_alert)
         return
 
-    # By default, answer to prevent stuck button UI
     try:
         await query.answer()
     except Exception:

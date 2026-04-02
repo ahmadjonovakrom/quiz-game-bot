@@ -46,9 +46,27 @@ async def handle_misc_routes(
 
         settings = get_all_settings()
 
-        text = "⚙️ Settings\n\n"
-        for k, v in settings.items():
-            text += f"• {k}: {v}\n"
+        reminder_enabled = bool(settings.get("streak_notify_enabled", 0))
+        reminder_hour = settings.get("streak_notify_hour", 20)
+        reminder_minute = settings.get("streak_notify_minute", 0)
+
+        reminder_text = (
+            f"ON ({int(reminder_hour):02d}:{int(reminder_minute):02d})"
+            if reminder_enabled
+            else "OFF"
+        )
+
+        text = (
+            "⚙️ Settings\n\n"
+            f"👥 Min Players: {settings.get('min_players', 2)}\n"
+            f"⏱ Join Time: {settings.get('join_seconds', 90)}s\n"
+            f"⏱ Question Time: {settings.get('question_seconds', 18)}s\n"
+            f"⚡ Speed Bonus Time: {settings.get('speed_bonus_seconds', 5)}s\n\n"
+            f"🍋 Easy Points: {settings.get('points_easy', 15)}\n"
+            f"🍋 Medium Points: {settings.get('points_medium', 25)}\n"
+            f"🍋 Hard Points: {settings.get('points_hard', 35)}\n\n"
+            f"🔥 Daily Reminder: {reminder_text}"
+        )
 
         await query.edit_message_text(
             text,

@@ -4,6 +4,8 @@ from utils.keyboards import (
     admin_danger_keyboard,
     admin_reset_confirm_keyboard,
     admin_settings_keyboard,
+    settings_value_keyboard,
+    settings_daily_reminder_keyboard,
 )
 
 from .questions import nav_keyboard
@@ -87,18 +89,64 @@ async def handle_misc_routes(
             "🔥 Daily Reminder\n\n"
             f"Current status: {'ON' if enabled else 'OFF'}\n"
             f"Current time: {hour:02d}:{minute:02d}\n\n"
-            "Send one of these:\n"
-            "• on\n"
-            "• off\n"
-            "• 20:00\n"
-            "• 21:30",
-            reply_markup=nav_keyboard("admin_settings"),
+            "Choose an option below or type a custom time.",
+            reply_markup=settings_daily_reminder_keyboard(settings),
         )
         context.user_data["setting_key"] = "daily_reminder"
+        return ADMIN_MENU
+
+    if data.startswith("settings_daily_toggle:"):
+        from database import set_setting
+
+        action = data.split(":", 1)[1]
+        set_setting("streak_notify_enabled", 1 if action == "on" else 0)
+        context.user_data.clear()
+        return await handle_misc_routes(
+            query,
+            context,
+            update,
+            show_admin_panel_message,
+            show_questions_menu,
+            reset_all_time_leaderboard,
+            full_reset_all_data,
+        ) if False else await _show_settings_again(
+            query,
+            context,
+        )
+
+    if data.startswith("settings_daily_time:"):
+        from database import set_setting
+
+        time_str = data.split(":", 1)[1]
+        hour_str, minute_str = time_str.split(":")
+        set_setting("streak_notify_hour", int(hour_str))
+        set_setting("streak_notify_minute", int(minute_str))
+        set_setting("streak_notify_enabled", 1)
+        context.user_data.clear()
+        return await _show_settings_again(query, context)
+
+    if data == "settings_daily_custom":
+        context.user_data["setting_key"] = "daily_reminder"
+        await query.edit_message_text(
+            "🔥 Daily Reminder\n\n"
+            "Send:\n"
+            "• on\n"
+            "• off\n"
+            "• or custom time like 20:00",
+            reply_markup=nav_keyboard("admin_settings"),
+        )
         return SETTING_VALUE
 
-    if data.startswith("settings_"):
-        key = data.replace("settings_", "")
+    if data.startswith("settings_value:"):
+        from database import set_setting
+
+        _, key, value = data.split(":", 2)
+        set_setting(key, int(value))
+        context.user_data.clear()
+        return await _show_settings_again(query, context)
+
+    if data.startswith("settings_custom:"):
+        key = data.split(":", 1)[1]
         context.user_data["setting_key"] = key
 
         labels = {
@@ -112,12 +160,39 @@ async def handle_misc_routes(
         }
 
         label = labels.get(key, key)
-
         await query.edit_message_text(
-            f"✏️ Update Setting\n\nSend new value for:\n{label}",
+            f"✏️ Update Setting\n\nSend custom value for:\n{label}",
             reply_markup=nav_keyboard("admin_settings"),
         )
         return SETTING_VALUE
+
+    if data.startswith("settings_"):
+        key = data.replace("settings_", "")
+        if key in {
+            "min_players",
+            "join_seconds",
+            "question_seconds",
+            "speed_bonus_seconds",
+            "points_easy",
+            "points_medium",
+            "points_hard",
+        }:
+            labels = {
+                "min_players": "👥 Min Players",
+                "join_seconds": "⏱ Join Time",
+                "question_seconds": "⏱ Question Time",
+                "speed_bonus_seconds": "⚡ Speed Bonus Time",
+                "points_easy": "🍋 Easy Points",
+                "points_medium": "🍋 Medium Points",
+                "points_hard": "🍋 Hard Points",
+            }
+            label = labels.get(key, key)
+
+            await query.edit_message_text(
+                f"{label}\n\nChoose a value or type your own.",
+                reply_markup=settings_value_keyboard(key),
+            )
+            return ADMIN_MENU
 
     if data == "admin_danger_zone":
         await query.edit_message_text(
@@ -173,3 +248,38 @@ async def handle_misc_routes(
         return BROADCAST_MESSAGE
 
     return None
+
+
+async def _show_settings_again(query, context):
+    from database import get_all_settings
+
+    settings = get_all_settings()
+
+    reminder_enabled = bool(settings.get("streak_notify_enabled", 0))
+    reminder_hour = int(settings.get("streak_notify_hour", 20))
+    reminder_minute = int(settings.get("streak_notify_minute", 0))
+
+    reminder_text = (
+        f"ON ({reminder_hour:02d}:{reminder_minute:02d})"
+        if reminder_enabled
+        else "OFF"
+    )
+
+    text = (
+        "⚙️ Settings\n\n"
+        f"👥 Min Players: {settings.get('min_players', 2)}\n"
+        f"⏱ Join Time: {settings.get('join_seconds', 90)}s\n"
+        f"⏱ Question Time: {settings.get('question_seconds', 18)}s\n"
+        f"⚡ Speed Bonus: +{settings.get('speed_bonus_points', 5)} 🍋 "
+        f"(first {settings.get('speed_bonus_seconds', 5)}s)\n\n"
+        f"🍋 Easy Points: {settings.get('points_easy', 15)}\n"
+        f"🍋 Medium Points: {settings.get('points_medium', 25)}\n"
+        f"🍋 Hard Points: {settings.get('points_hard', 35)}\n\n"
+        f"🔥 Daily Reminder: {reminder_text}"
+    )
+
+    await query.edit_message_text(
+        text,
+        reply_markup=admin_settings_keyboard(settings),
+    )
+    return ADMIN_MENU

@@ -89,7 +89,7 @@ from handlers.broadcast import broadcast_message_step, broadcast_confirm_step
 
 
 async def settings_update_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    from database import set_setting, get_all_settings
+    from database import set_setting
 
     key = context.user_data.get("setting_key")
     value = update.message.text.strip()
@@ -101,17 +101,13 @@ async def settings_update_step(update: Update, context: ContextTypes.DEFAULT_TYP
         )
         return ConversationHandler.END
 
-    # 🔥 Special handling for daily reminder
     if key == "daily_reminder":
         value_lower = value.lower()
 
         if value_lower == "on":
             set_setting("streak_notify_enabled", 1)
-
-            settings = get_all_settings()
             await update.message.reply_text(
-                "✅ Daily reminder enabled.\n\n"
-                f"Current time: {int(settings.get('streak_notify_hour', 20)):02d}:{int(settings.get('streak_notify_minute', 0)):02d}",
+                "✅ Daily reminder enabled.",
                 reply_markup=admin_main_keyboard(),
             )
             context.user_data.clear()
@@ -119,7 +115,6 @@ async def settings_update_step(update: Update, context: ContextTypes.DEFAULT_TYP
 
         if value_lower == "off":
             set_setting("streak_notify_enabled", 0)
-
             await update.message.reply_text(
                 "✅ Daily reminder disabled.",
                 reply_markup=admin_main_keyboard(),
@@ -146,29 +141,19 @@ async def settings_update_step(update: Update, context: ContextTypes.DEFAULT_TYP
                 )
                 context.user_data.clear()
                 return ConversationHandler.END
-
             except ValueError:
                 await update.message.reply_text(
-                    "❌ Invalid time format.\n\n"
-                    "Send:\n"
-                    "• on\n"
-                    "• off\n"
-                    "• or time like 20:00",
+                    "❌ Invalid time format.\n\nSend like: 20:00",
                     reply_markup=nav_keyboard("admin_settings"),
                 )
                 return SETTING_VALUE
 
         await update.message.reply_text(
-            "❌ Invalid input.\n\n"
-            "Send:\n"
-            "• on\n"
-            "• off\n"
-            "• or time like 20:00",
+            "❌ Invalid input.\n\nSend: on, off, or time like 20:00",
             reply_markup=nav_keyboard("admin_settings"),
         )
         return SETTING_VALUE
 
-    # ✅ Validation for numeric settings
     numeric_settings = {
         "min_players": (1, 100),
         "join_seconds": (10, 600),
@@ -206,7 +191,6 @@ async def settings_update_step(update: Update, context: ContextTypes.DEFAULT_TYP
         context.user_data.clear()
         return ConversationHandler.END
 
-    # fallback
     set_setting(key, value)
 
     await update.message.reply_text(

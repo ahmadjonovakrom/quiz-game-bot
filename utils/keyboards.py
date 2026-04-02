@@ -8,7 +8,7 @@ FINAL_RESULTS_PAGE_SIZE = 10
 def main_menu_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("🎮 Play Quiz", callback_data="menu_play")],
-        [InlineKeyboardButton("⚔️ Challenge", callback_data="menu_challenge")],  # ✅ NEW
+        [InlineKeyboardButton("⚔️ Challenge", callback_data="menu_challenge")],
         [InlineKeyboardButton("🏆 Leaderboard", callback_data="menu_leaderboard")],
         [InlineKeyboardButton("👤 My Profile", callback_data="menu_profile")],
         [InlineKeyboardButton("❓ Help", callback_data="menu_help")],
@@ -147,6 +147,7 @@ def final_results_keyboard(game_id: int, page: int, has_next: bool) -> InlineKey
 
     return InlineKeyboardMarkup(rows)
 
+
 def game_setup_questions_keyboard(
     back_callback: str = "menu_main",
 ) -> InlineKeyboardMarkup:
@@ -226,15 +227,6 @@ def delete_confirm_keyboard() -> InlineKeyboardMarkup:
     ])
 
 
-def admin_reset_confirm_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("✅ Yes, Reset", callback_data="admin_reset_stats_yes"),
-            InlineKeyboardButton("❌ Cancel", callback_data="admin_danger_zone"),
-        ]
-    ])
-
-
 def broadcast_confirm_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [
@@ -243,9 +235,6 @@ def broadcast_confirm_keyboard() -> InlineKeyboardMarkup:
         ]
     ])
 
-
-# utils/keyboards.py  — ONLY the two affected functions shown
-# (rest of file unchanged)
 
 def admin_settings_keyboard(settings: dict) -> InlineKeyboardMarkup:
     reminder_enabled = bool(settings.get("streak_notify_enabled", 0))
@@ -311,13 +300,87 @@ def admin_settings_keyboard(settings: dict) -> InlineKeyboardMarkup:
     ])
 
 
-# REMOVE the first definition of admin_reset_confirm_keyboard() (~line 250)
-# KEEP only this one (which accepts yes_callback param):
+def settings_value_keyboard(key: str) -> InlineKeyboardMarkup:
+    presets = {
+        "min_players": [1, 2, 3, 4, 5, 10],
+        "join_seconds": [30, 45, 60, 90, 120, 180],
+        "question_seconds": [10, 15, 18, 20, 25, 30],
+        "speed_bonus_seconds": [3, 5, 7, 10, 12, 15],
+        "points_easy": [5, 10, 15, 20, 25, 30],
+        "points_medium": [10, 15, 20, 25, 30, 35],
+        "points_hard": [15, 20, 25, 35, 40, 50],
+    }
+
+    labels = {
+        "min_players": "👥 Min Players",
+        "join_seconds": "⏱ Join Time",
+        "question_seconds": "⏱ Question Time",
+        "speed_bonus_seconds": "⚡ Speed Bonus Time",
+        "points_easy": "🍋 Easy Points",
+        "points_medium": "🍋 Medium Points",
+        "points_hard": "🍋 Hard Points",
+    }
+
+    values = presets.get(key, [])
+    rows = []
+
+    if values:
+        row = []
+        for value in values:
+            suffix = "s" if key in {"join_seconds", "question_seconds", "speed_bonus_seconds"} else ""
+            row.append(
+                InlineKeyboardButton(
+                    f"{value}{suffix}",
+                    callback_data=f"settings_value:{key}:{value}",
+                )
+            )
+            if len(row) == 3:
+                rows.append(row)
+                row = []
+        if row:
+            rows.append(row)
+
+    title = labels.get(key, key)
+    rows.append([InlineKeyboardButton(f"✍️ Type custom {title}", callback_data=f"settings_custom:{key}")])
+    rows.append([InlineKeyboardButton("⬅️ Back", callback_data="admin_settings")])
+
+    return InlineKeyboardMarkup(rows)
+
+
+def settings_daily_reminder_keyboard(settings: dict) -> InlineKeyboardMarkup:
+    hour = int(settings.get("streak_notify_hour", 20))
+    minute = int(settings.get("streak_notify_minute", 0))
+
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("✅ ON", callback_data="settings_daily_toggle:on"),
+            InlineKeyboardButton("⛔ OFF", callback_data="settings_daily_toggle:off"),
+        ],
+        [
+            InlineKeyboardButton("18:00", callback_data="settings_daily_time:18:00"),
+            InlineKeyboardButton("20:00", callback_data="settings_daily_time:20:00"),
+            InlineKeyboardButton("21:00", callback_data="settings_daily_time:21:00"),
+        ],
+        [
+            InlineKeyboardButton("08:00", callback_data="settings_daily_time:08:00"),
+            InlineKeyboardButton("12:00", callback_data="settings_daily_time:12:00"),
+            InlineKeyboardButton("22:00", callback_data="settings_daily_time:22:00"),
+        ],
+        [
+            InlineKeyboardButton(
+                f"✍️ Type custom time ({hour:02d}:{minute:02d})",
+                callback_data="settings_daily_custom",
+            )
+        ],
+        [InlineKeyboardButton("⬅️ Back", callback_data="admin_settings")],
+    ])
+
+
 def admin_reset_confirm_keyboard(yes_callback: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("✅ Yes, Reset", callback_data=yes_callback),
-            InlineKeyboardButton("❌ Cancel",     callback_data="admin_danger_zone"),
+            InlineKeyboardButton("❌ Cancel", callback_data="admin_danger_zone"),
         ]
     ])
 
@@ -390,23 +453,11 @@ def search_results_keyboard(results) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(rows)
 
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-
-
 def admin_danger_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("♻️ Reset All-Time Leaderboard", callback_data="admin_reset_all_time_confirm")],
         [InlineKeyboardButton("💥 Full Reset (All Data)", callback_data="admin_full_reset_confirm")],
         [InlineKeyboardButton("⬅️ Back", callback_data="admin_back")],
-    ])
-
-
-def admin_reset_confirm_keyboard(yes_callback: str) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("✅ Yes, Reset", callback_data=yes_callback),
-            InlineKeyboardButton("❌ Cancel", callback_data="admin_danger_zone"),
-        ]
     ])
 
 
@@ -435,8 +486,6 @@ def edit_options_keyboard() -> InlineKeyboardMarkup:
         ],
         [InlineKeyboardButton("⬅️ Back", callback_data="edit_back_menu")],
     ])
-
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 
 def bot_stats_keyboard(total_groups: int) -> InlineKeyboardMarkup:

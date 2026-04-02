@@ -2,14 +2,13 @@ import asyncio
 import math
 import time
 from collections import defaultdict, deque
-from typing import Dict
+from typing import Any, Dict, List, Optional
 
 from telegram.ext import ContextTypes
 
 from config import MIN_PLAYERS
 from database import get_random_question
 from utils.helpers import safe_delete_message, clickable_name
-
 
 active_games: Dict[int, dict] = {}
 poll_map: Dict[str, dict] = {}
@@ -23,28 +22,37 @@ recent_questions_by_chat = defaultdict(
 
 
 def get_game_lock(chat_id: int) -> asyncio.Lock:
-    lock = _game_locks.get(chat_id)
-    if lock is None:
-        lock = asyncio.Lock()
-        _game_locks[chat_id] = lock
-    return lock
+    if not isinstance(chat_id, int):
+        raise ValueError(f"chat_id must be int, got {type(chat_id)}")
+
+    if chat_id not in _game_locks:
+        _game_locks[chat_id] = asyncio.Lock()
+
+    return _game_locks[chat_id]
 
 
 def cleanup_game_lock(chat_id: int) -> None:
     _game_locks.pop(chat_id, None)
 
 
-def get_recent_question_ids(chat_id: int):
+def get_recent_question_ids(chat_id: int) -> List[int]:
+    if chat_id is None:
+        return []
     return list(recent_questions_by_chat.get(chat_id, []))
 
 
 def remember_question(chat_id: int, question_id: int):
     if chat_id is None or question_id is None:
         return
+    if not isinstance(question_id, int):
+        return
     recent_questions_by_chat[chat_id].append(question_id)
 
 
 def format_difficulty_name(value: str) -> str:
+    if not isinstance(value, str):
+        return ""
+
     mapping = {
         "easy": "Easy",
         "medium": "Medium",
@@ -60,6 +68,9 @@ def create_new_game_data(
     category: str,
     difficulty: str,
 ) -> dict:
+    if not isinstance(questions_per_game, int) or questions_per_game < 1:
+        raise ValueError("questions_per_game must be a positive integer")
+
     return {
         "status": "setup",
         "mode": "solo",
@@ -95,7 +106,6 @@ def create_new_game_data(
 
 def get_existing_game_message(game: dict) -> str:
     status = game.get("status")
-
     if status == "setup":
         return "Game setup is already in progress."
     if status == "joining":
@@ -118,7 +128,7 @@ async def clear_game(context: ContextTypes.DEFAULT_TYPE, chat_id: int):
         poll_map.pop(current_poll_id, None)
 
     join_message_id = game.get("join_message_id")
-    if join_message_id:
+    if join_message_id and getattr(context, "bot", None):
         await safe_delete_message(context.bot, chat_id, join_message_id)
 
     active_games.pop(chat_id, None)
@@ -126,38 +136,53 @@ async def clear_game(context: ContextTypes.DEFAULT_TYPE, chat_id: int):
 
 
 def get_unused_question(game: dict):
-    used_ids = list(game["used_question_ids"])
+    used_ids = list(game.get("used_question_ids", set()))
     chat_id = game.get("chat_id")
 
     recent_ids = get_recent_question_ids(chat_id) if chat_id is not None else []
-
     exclude_ids = list(dict.fromkeys(used_ids + recent_ids))
+
+    category = game.get("category")
+    difficulty = game.get("difficulty")
 
     question = get_random_question(
         exclude_ids=exclude_ids,
-        category=game.get("category"),
-        difficulty=game.get("difficulty"),
+        category=category,
+        difficulty=difficulty,
     )
 
     if not question:
         question = get_random_question(
             exclude_ids=used_ids,
-            category=game.get("category"),
-            difficulty=game.get("difficulty"),
+            category=category,
+            difficulty=difficulty,
         )
 
     if not question:
         question = get_random_question(
-            category=game.get("category"),
-            difficulty=game.get("difficulty"),
+            category=category,
+            difficulty=difficulty,
         )
 
-    if question:
-        q_id = question["id"]
-        game["used_question_ids"].add(q_id)
+    if not question:
+        return None
 
-        if chat_id is not None:
-            remember_question(chat_id, q_id)
+    q_id = question.get("id")
+    if q_id is None or not isinstance(q_id, int):
+        return None
+
+    used_question_ids = game.get("used_question_ids")
+    if not isinstance(used_question_ids, set):
+        used_question_ids = set()
+        game["used_question_ids"] = used_question_ids
+
+    if q_id in used_question_ids:
+        return None
+
+    used_question_ids.add(q_id)
+
+    if chat_id is not None:
+        remember_question(chat_id, q_id)
 
     return question
 
@@ -171,23 +196,61 @@ def get_join_remaining_seconds(game: dict) -> int:
 
 
 def add_player_to_game(game: dict, user) -> bool:
+    if not hasattr(user, "id"):
+        return False
+
+    players = game.get("players")
+    if not isinstance(players, dict):
+        players = {}
+        game["players"] = players
+
+    player_objects = game.get("player_objects")
+    if not isinstance(player_objects, dict):
+        player_objects = {}
+        game["player_objects"] = player_objects
+
+    scores = game.get("scores")
+    if not isinstance(scores, dict):
+        scores = {}
+        game["scores"] = scores
+
+    correct_counts = game.get("correct_counts")
+    if not isinstance(correct_counts, dict):
+        correct_counts = {}
+        game["correct_counts"] = correct_counts
+
+    wrong_counts = game.get("wrong_counts")
+    if not isinstance(wrong_counts, dict):
+        wrong_counts = {}
+        game["wrong_counts"] = wrong_counts
+
+    answer_times = game.get("answer_times")
+    if not isinstance(answer_times, dict):
+        answer_times = {}
+        game["answer_times"] = answer_times
+
     max_players = game.get("max_players")
-    if user.id in game["players"]:
+
+    if user.id in players:
         return False
 
-    if max_players is not None and len(game["players"]) >= max_players:
-        return False
+    if max_players is not None:
+        if not isinstance(max_players, int) or max_players < 1:
+            return False
+        if len(players) >= max_players:
+            return False
 
-    game["players"][user.id] = {
-        "full_name": user.full_name,
-        "username": user.username,
-        "first_name": user.first_name,
+    players[user.id] = {
+        "full_name": getattr(user, "full_name", None),
+        "username": getattr(user, "username", None),
+        "first_name": getattr(user, "first_name", None),
     }
-    game["player_objects"][user.id] = user
-    game["scores"][user.id] = 0
-    game["correct_counts"][user.id] = 0
-    game["wrong_counts"][user.id] = 0
-    game["answer_times"][user.id] = []
+    player_objects[user.id] = user
+    scores[user.id] = 0
+    correct_counts[user.id] = 0
+    wrong_counts[user.id] = 0
+    answer_times[user.id] = []
+
     return True
 
 
@@ -198,15 +261,20 @@ def mark_game_joining(game: dict, join_seconds: int) -> None:
 
 
 def start_next_round(game: dict):
-    game["round"] += 1
+    game["round"] = int(game.get("round", 0)) + 1
     current_round = game["round"]
-    questions_per_game = game["questions_per_game"]
+    questions_per_game = int(game.get("questions_per_game", 0))
     should_end = current_round > questions_per_game
     return current_round, questions_per_game, should_end
 
 
 def prepare_round_state(game: dict, poll_id: str, question_id: int, correct_index: int) -> None:
-    game["used_question_ids"].add(question_id)
+    used_question_ids = game.get("used_question_ids")
+    if not isinstance(used_question_ids, set):
+        used_question_ids = set()
+        game["used_question_ids"] = used_question_ids
+
+    used_question_ids.add(question_id)
     game["correct"] = correct_index
     game["answered"] = set()
     game["speed_bonus_awarded"] = {}
@@ -222,15 +290,37 @@ def apply_poll_answer(
     speed_bonus_seconds: int,
     speed_bonus_points: int,
 ):
-    if user_id not in game["players"]:
+    players = game.get("players", {})
+    answered = game.get("answered")
+    if not isinstance(answered, set):
+        answered = set()
+        game["answered"] = answered
+
+    if user_id not in players:
         return None
 
-    if user_id in game["answered"]:
+    if user_id in answered:
         return None
 
-    game["answered"].add(user_id)
+    answered.add(user_id)
 
-    is_correct = bool(option_ids) and option_ids[0] == game["correct"]
+    correct_index = game.get("correct")
+    is_correct = bool(option_ids) and option_ids[0] == correct_index
+
+    scores = game.get("scores", {})
+    correct_counts = game.get("correct_counts", {})
+    wrong_counts = game.get("wrong_counts", {})
+    answer_times = game.get("answer_times", {})
+    speed_bonus_awarded = game.get("speed_bonus_awarded", {})
+
+    game["scores"] = scores
+    game["correct_counts"] = correct_counts
+    game["wrong_counts"] = wrong_counts
+    game["answer_times"] = answer_times
+    game["speed_bonus_awarded"] = speed_bonus_awarded
+
+    if user_id not in answer_times:
+        answer_times[user_id] = []
 
     if is_correct:
         points_to_add = correct_points
@@ -240,19 +330,19 @@ def apply_poll_answer(
         started_at = game.get("question_started_at")
         if started_at is not None:
             elapsed = time.monotonic() - started_at
-            game["answer_times"][user_id].append(elapsed)
+            answer_times[user_id].append(elapsed)
 
             if elapsed <= speed_bonus_seconds:
                 points_to_add += speed_bonus_points
                 got_speed_bonus = True
-                game["speed_bonus_awarded"][user_id] = True
+                speed_bonus_awarded[user_id] = True
             else:
-                game["speed_bonus_awarded"][user_id] = False
+                speed_bonus_awarded[user_id] = False
 
-        game["scores"][user_id] += points_to_add
-        game["correct_counts"][user_id] += 1
+        scores[user_id] = scores.get(user_id, 0) + points_to_add
+        correct_counts[user_id] = correct_counts.get(user_id, 0) + 1
     else:
-        game["wrong_counts"][user_id] += 1
+        wrong_counts[user_id] = wrong_counts.get(user_id, 0) + 1
         points_to_add = 0
         got_speed_bonus = False
         elapsed = None
@@ -266,18 +356,24 @@ def apply_poll_answer(
 
 
 def build_final_results(game: dict) -> list[dict]:
+    scores = game.get("scores", {})
+    players = game.get("players", {})
+    correct_counts = game.get("correct_counts", {})
+    wrong_counts = game.get("wrong_counts", {})
+    answer_times = game.get("answer_times", {})
+
     ranking = sorted(
-        game["scores"].items(),
+        scores.items(),
         key=lambda x: (-x[1], x[0]),
     )
 
     final_results = []
 
     for position, (user_id, score) in enumerate(ranking, start=1):
-        times = game["answer_times"].get(user_id, [])
+        times = answer_times.get(user_id, [])
         avg_time = round(sum(times) / len(times), 2) if times else None
 
-        player = game["players"].get(user_id, {})
+        player = players.get(user_id, {})
 
         name = (
             player.get("full_name")
@@ -291,8 +387,8 @@ def build_final_results(game: dict) -> list[dict]:
             "user_id": user_id,
             "name": name,
             "points": score,
-            "correct": game["correct_counts"].get(user_id, 0),
-            "wrong": game["wrong_counts"].get(user_id, 0),
+            "correct": correct_counts.get(user_id, 0),
+            "wrong": wrong_counts.get(user_id, 0),
             "avg_time": avg_time,
         })
 

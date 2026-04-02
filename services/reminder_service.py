@@ -11,8 +11,25 @@ REMINDER_JOB_NAME = "daily_streak_reminder"
 REMINDER_TZ = ZoneInfo("Asia/Tashkent")
 
 
+def _get_job_queue(application):
+    job_queue = getattr(application, "job_queue", None)
+
+    if job_queue is None:
+        logger.error(
+            "JobQueue is not available. "
+            "Make sure APScheduler / python-telegram-bot[job-queue] is installed."
+        )
+        return None
+
+    return job_queue
+
+
 def remove_daily_reminder_job(application):
-    jobs = application.job_queue.get_jobs_by_name(REMINDER_JOB_NAME)
+    job_queue = _get_job_queue(application)
+    if job_queue is None:
+        return
+
+    jobs = job_queue.get_jobs_by_name(REMINDER_JOB_NAME)
     for job in jobs:
         job.schedule_removal()
         logger.warning("Removed old reminder job: %s", REMINDER_JOB_NAME)
@@ -21,7 +38,6 @@ def remove_daily_reminder_job(application):
 async def daily_streak_reminder_job(context):
     logger.warning("DAILY REMINDER JOB FIRED")
 
-    # for now: send to admin for testing
     chat_id = int(get_setting("streak_notify_chat_id", ADMIN_ID) or ADMIN_ID)
 
     try:
@@ -30,12 +46,21 @@ async def daily_streak_reminder_job(context):
             text="🔥 Daily reminder: don't lose your streak! Play today's quiz in English Lemon 🍋",
         )
         logger.warning("Reminder sent successfully to chat_id=%s", chat_id)
-    except Exception as e:
-        logger.exception("Failed to send daily reminder: %s", e)
+    except Exception:
+        logger.exception("Failed to send daily reminder to chat_id=%s", chat_id)
 
 
 def schedule_daily_reminder(application):
-    enabled = str(get_setting("streak_notify_enabled", "0")).lower() in ("1", "true", "yes", "on")
+    job_queue = _get_job_queue(application)
+    if job_queue is None:
+        return
+
+    enabled = str(get_setting("streak_notify_enabled", "0")).lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
     hour = int(get_setting("streak_notify_hour", 20))
     minute = int(get_setting("streak_notify_minute", 0))
 
@@ -45,7 +70,7 @@ def schedule_daily_reminder(application):
         logger.warning("Daily reminder is disabled; no job scheduled")
         return
 
-    application.job_queue.run_daily(
+    job_queue.run_daily(
         daily_streak_reminder_job,
         time=time(hour=hour, minute=minute, tzinfo=REMINDER_TZ),
         name=REMINDER_JOB_NAME,

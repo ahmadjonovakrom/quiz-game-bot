@@ -2,7 +2,8 @@ from datetime import time
 from zoneinfo import ZoneInfo
 import logging
 
-from database import get_all_user_ids, get_all_groups
+from database.players import get_all_user_ids
+from database.chats import get_all_groups
 from database.settings import get_setting
 
 logger = logging.getLogger(__name__)
@@ -80,7 +81,8 @@ async def _send_private_reminders(bot):
                     "🔥 Don’t lose your streak!\n\n"
                     "🎯 Your daily challenge is waiting.\n"
                     "🏆 Climb the leaderboard today!"
-                )
+                ),
+            )
             sent += 1
         except Exception:
             failed += 1
@@ -110,7 +112,8 @@ async def _send_group_reminders(bot):
                     "🔥 Battle for the leaderboard!\n"
                     "🍋 Earn lemons and take the lead.\n\n"
                     "👉 /startgame"
-                )
+                ),
+            )
             sent += 1
         except Exception:
             failed += 1

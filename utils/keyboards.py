@@ -244,16 +244,30 @@ def broadcast_confirm_keyboard() -> InlineKeyboardMarkup:
     ])
 
 
+# utils/keyboards.py  — ONLY the two affected functions shown
+# (rest of file unchanged)
+
 def admin_settings_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("👥 Min Players", callback_data="settings_min_players")],
-        [InlineKeyboardButton("⏱ Join Time", callback_data="settings_join_seconds")],
-        [InlineKeyboardButton("❓ Question Time", callback_data="settings_question_seconds")],
-        [InlineKeyboardButton("⚡ Speed Bonus Time", callback_data="settings_speed_bonus_seconds")],
-        [InlineKeyboardButton("🍋 Easy Points", callback_data="settings_points_easy")],
-        [InlineKeyboardButton("🍋 Medium Points", callback_data="settings_points_medium")],
-        [InlineKeyboardButton("🍋 Hard Points", callback_data="settings_points_hard")],
-        [InlineKeyboardButton("⬅️ Back", callback_data="admin_back")],
+        [InlineKeyboardButton("👥 Min Players",        callback_data="settings_min_players")],
+        [InlineKeyboardButton("⏱ Join Time",           callback_data="settings_join_seconds")],
+        [InlineKeyboardButton("⏱ Question Time",       callback_data="settings_question_seconds")],  # ← FIXED label
+        [InlineKeyboardButton("⚡ Speed Bonus Time",   callback_data="settings_speed_bonus_seconds")],
+        [InlineKeyboardButton("🍋 Easy Points",        callback_data="settings_points_easy")],
+        [InlineKeyboardButton("🍋 Medium Points",      callback_data="settings_points_medium")],
+        [InlineKeyboardButton("🍋 Hard Points",        callback_data="settings_points_hard")],
+        [InlineKeyboardButton("⬅️ Back",               callback_data="admin_back")],
+    ])
+
+
+# REMOVE the first definition of admin_reset_confirm_keyboard() (~line 250)
+# KEEP only this one (which accepts yes_callback param):
+def admin_reset_confirm_keyboard(yes_callback: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("✅ Yes, Reset", callback_data=yes_callback),
+            InlineKeyboardButton("❌ Cancel",     callback_data="admin_danger_zone"),
+        ]
     ])
 
 

@@ -71,6 +71,7 @@ async def _send_private_reminders(bot):
     failed = 0
 
     user_ids = get_all_user_ids()
+
     logger.warning("Private reminder target users: %s", user_ids)
 
     for user_id in user_ids:
@@ -86,6 +87,7 @@ async def _send_private_reminders(bot):
             )
             sent += 1
             logger.warning("Sent private reminder to user_id=%s", user_id)
+
         except Exception:
             failed += 1
             logger.exception("Failed private reminder for user_id=%s", user_id)
@@ -176,20 +178,12 @@ def schedule_daily_reminder(application):
         name=REMINDER_JOB_NAME,
     )
 
-    # TEMP TEST: fires once 10 seconds after startup/scheduling
-    job_queue.run_once(
-        daily_streak_reminder_job,
-        when=10,
-        name="test_daily_streak_reminder_once",
-    )
-
     logger.warning(
         "Scheduled daily reminder at %02d:%02d (%s)",
         hour,
         minute,
         REMINDER_TZ,
     )
-    logger.warning("Scheduled TEST reminder in 10 seconds")
 
 
 async def restore_daily_reminder_jobs(application):

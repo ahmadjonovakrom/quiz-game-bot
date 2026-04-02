@@ -90,6 +90,7 @@ from handlers.broadcast import broadcast_message_step, broadcast_confirm_step
 
 async def settings_update_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
     from database import set_setting
+    from services.reminder_service import schedule_daily_reminder
 
     key = context.user_data.get("setting_key")
     value = update.message.text.strip()
@@ -106,6 +107,8 @@ async def settings_update_step(update: Update, context: ContextTypes.DEFAULT_TYP
 
         if value_lower == "on":
             set_setting("streak_notify_enabled", 1)
+            schedule_daily_reminder(context.application)
+
             await update.message.reply_text(
                 "✅ Daily reminder enabled.",
                 reply_markup=admin_main_keyboard(),
@@ -115,6 +118,8 @@ async def settings_update_step(update: Update, context: ContextTypes.DEFAULT_TYP
 
         if value_lower == "off":
             set_setting("streak_notify_enabled", 0)
+            schedule_daily_reminder(context.application)
+
             await update.message.reply_text(
                 "✅ Daily reminder disabled.",
                 reply_markup=admin_main_keyboard(),
@@ -134,6 +139,8 @@ async def settings_update_step(update: Update, context: ContextTypes.DEFAULT_TYP
                 set_setting("streak_notify_hour", hour)
                 set_setting("streak_notify_minute", minute)
                 set_setting("streak_notify_enabled", 1)
+
+                schedule_daily_reminder(context.application)
 
                 await update.message.reply_text(
                     f"✅ Daily reminder time updated to {hour:02d}:{minute:02d}.",

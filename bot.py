@@ -1,10 +1,5 @@
 # bot.py - Main entry point for the Telegram bot
 
-# This file configures and runs the Telegram bot for a quiz/game application.
-# It imports command and callback handlers from the handlers modules, sets up
-# logging, creates the application, registers all command/callback/message
-# handlers, and then starts polling.
-
 import logging
 from telegram.ext import (
     Application,
@@ -16,8 +11,10 @@ from telegram.ext import (
     ChatMemberHandler,
     filters,
 )
+
 from config import BOT_TOKEN
 from database import create_tables
+from services.reminder_service import restore_daily_reminder_jobs
 
 # Import various handler functions and constants from custom modules,
 # organized by functionality
@@ -111,6 +108,14 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+async def post_init(application: Application):
+    """
+    Restore background reminder jobs after bot startup/restart.
+    """
+    logger.warning("POST_INIT: restoring reminder jobs")
+    await restore_daily_reminder_jobs(application)
+
+
 def main():
     """
     Main function to initialize database, build the Application,
@@ -119,10 +124,14 @@ def main():
     logger.warning("BOT STARTED")
     create_tables()  # Ensure DB tables exist
 
-    app = Application.builder().token(BOT_TOKEN).build()
+    app = (
+        Application.builder()
+        .token(BOT_TOKEN)
+        .post_init(post_init)
+        .build()
+    )
 
     # ============ ADMIN PANEL CONVERSATION HANDLER ============
-    # All admin flows (question creation/editing, broadcast, etc.)
     admin_conv = ConversationHandler(
         entry_points=[
             CommandHandler("admin", admin_panel),
@@ -179,7 +188,6 @@ def main():
     app.add_handler(admin_conv)
 
     # ============ GROUP ACTIVITY TRACKER ============
-    # Records activity in group chats for analytics or tracking
     app.add_handler(
         MessageHandler(
             filters.ChatType.GROUPS
@@ -191,7 +199,6 @@ def main():
     )
 
     # ============ BASIC COMMANDS ============
-    # Core gameplay, stats, and utility commands
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("play", start_game))
     app.add_handler(CommandHandler("startgame", start_game))
@@ -211,7 +218,6 @@ def main():
     app.add_handler(CommandHandler("callplayers", callplayers))
 
     # ============ CALLBACK QUERY HANDLERS ============
-    # Menu navigation, quiz controls, profile/leaderboard callbacks, etc.
     app.add_handler(
         CallbackQueryHandler(
             final_results_callback_handler,

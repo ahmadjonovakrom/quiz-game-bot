@@ -16,9 +16,10 @@ daily_quiz_players: Dict[int, dict] = {}
 _game_locks: Dict[int, asyncio.Lock] = {}
 
 RECENT_QUESTION_HISTORY_SIZE = 40
-recent_questions_by_chat = defaultdict(
-    lambda: deque(maxlen=RECENT_QUESTION_HISTORY_SIZE)
-)
+recent_questions_by_chat: Dict[int, deque] = {}
+
+# Max number of chats to keep in recent_questions_by_chat before evicting oldest
+_MAX_RECENT_CHATS = 500
 
 
 def _row_value(row, key, default=None):
@@ -48,7 +49,8 @@ def cleanup_game_lock(chat_id: int) -> None:
 def get_recent_question_ids(chat_id: int) -> List[int]:
     if chat_id is None:
         return []
-    return list(recent_questions_by_chat.get(chat_id, []))
+    dq = recent_questions_by_chat.get(chat_id)
+    return list(dq) if dq else []
 
 
 def remember_question(chat_id: int, question_id: int):
@@ -56,6 +58,14 @@ def remember_question(chat_id: int, question_id: int):
         return
     if not isinstance(question_id, int):
         return
+
+    if chat_id not in recent_questions_by_chat:
+        # Evict oldest entry if we're at the limit
+        if len(recent_questions_by_chat) >= _MAX_RECENT_CHATS:
+            oldest_key = next(iter(recent_questions_by_chat))
+            del recent_questions_by_chat[oldest_key]
+        recent_questions_by_chat[chat_id] = deque(maxlen=RECENT_QUESTION_HISTORY_SIZE)
+
     recent_questions_by_chat[chat_id].append(question_id)
 
 
@@ -292,7 +302,7 @@ def prepare_round_state(game: dict, poll_id: str, question_id: int, correct_inde
 def apply_poll_answer(
     game: dict,
     user_id: int,
-    option_ids: list[int],
+    option_ids: list,
     correct_points: int,
     speed_bonus_seconds: int,
     speed_bonus_points: int,
@@ -362,7 +372,7 @@ def apply_poll_answer(
     }
 
 
-def build_final_results(game: dict) -> list[dict]:
+def build_final_results(game: dict) -> list:
     scores = game.get("scores", {})
     players = game.get("players", {})
     correct_counts = game.get("correct_counts", {})
@@ -402,10 +412,11 @@ def build_final_results(game: dict) -> list[dict]:
     return final_results
 
 
-def build_results_text(results):
+def build_results_text(results) -> str:
+    # FIX: was `return textupdate` — undefined name caused ImportError at startup
     text = "🏆 Final Results\n\n"
 
     for row in results:
         text += f"{row['position']}. {row['name']} — {row['points']} 🍋\n"
 
-    return textupdate
+    return text

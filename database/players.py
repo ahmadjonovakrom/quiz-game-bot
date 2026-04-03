@@ -591,6 +591,15 @@ def claim_daily_reward(
     streak_step: int = WEEK_STREAK_STEP,
     streak_bonus_points: int = WEEK_STREAK_BONUS_POINTS,
 ):
+    """
+    Claim today's daily reward for user_id.
+
+    Race-condition fix: the INSERT OR IGNORE into daily_reward_claims is the
+    atomic gate.  We compute the streak and points *before* attempting the
+    insert, then use INSERT OR IGNORE so that only one concurrent caller
+    succeeds.  If rowcount == 0 the row already existed and we return
+    already_claimed=True without double-awarding points.
+    """
     with closing(get_conn()) as conn, conn:
         today = _get_local_today(conn)
         yesterday = _get_local_yesterday(conn)
@@ -620,27 +629,7 @@ def claim_daily_reward(
             (user_id,),
         ).fetchone()
 
-        if last_claim and last_claim["reward_date"] == today:
-            claim = conn.execute(
-                """
-                SELECT base_points, bonus_points, streak_after_claim
-                FROM daily_reward_claims
-                WHERE user_id = ? AND reward_date = ?
-                """,
-                (user_id, today),
-            ).fetchone()
-
-            return {
-                "claimed": False,
-                "already_claimed": True,
-                "reward_date": today,
-                "base_points": claim["base_points"],
-                "bonus_points": claim["bonus_points"],
-                "total_points": claim["base_points"] + claim["bonus_points"],
-                "daily_streak": claim["streak_after_claim"],
-                "best_daily_streak": best_daily_streak,
-            }
-
+        # Compute what the new streak would be
         if last_claim and last_claim["reward_date"] == yesterday:
             new_daily_streak = current_daily_streak + 1
         else:
@@ -650,20 +639,25 @@ def claim_daily_reward(
         bonus_points = streak_bonus_points if new_daily_streak % streak_step == 0 else 0
         total_points = base_points + bonus_points
 
-        try:
-            conn.execute(
-                """
-                INSERT INTO daily_reward_claims (
-                    user_id,
-                    reward_date,
-                    base_points,
-                    bonus_points,
-                    streak_after_claim
-                ) VALUES (?, ?, ?, ?, ?)
-                """,
-                (user_id, today, base_points, bonus_points, new_daily_streak),
-            )
-        except Exception:
+        # FIX: use INSERT OR IGNORE as the atomic gate.
+        # If two coroutines race here only one INSERT will succeed (rowcount=1).
+        # The loser gets rowcount=0 and we return already_claimed without
+        # awarding points twice.
+        cur = conn.execute(
+            """
+            INSERT OR IGNORE INTO daily_reward_claims (
+                user_id,
+                reward_date,
+                base_points,
+                bonus_points,
+                streak_after_claim
+            ) VALUES (?, ?, ?, ?, ?)
+            """,
+            (user_id, today, base_points, bonus_points, new_daily_streak),
+        )
+
+        if cur.rowcount == 0:
+            # Already claimed — fetch the existing record to return correct data
             claim = conn.execute(
                 """
                 SELECT base_points, bonus_points, streak_after_claim
@@ -677,13 +671,14 @@ def claim_daily_reward(
                 "claimed": False,
                 "already_claimed": True,
                 "reward_date": today,
-                "base_points": claim["base_points"],
-                "bonus_points": claim["bonus_points"],
-                "total_points": claim["base_points"] + claim["bonus_points"],
-                "daily_streak": claim["streak_after_claim"],
+                "base_points": claim["base_points"] if claim else base_points,
+                "bonus_points": claim["bonus_points"] if claim else 0,
+                "total_points": (claim["base_points"] + claim["bonus_points"]) if claim else base_points,
+                "daily_streak": claim["streak_after_claim"] if claim else current_daily_streak,
                 "best_daily_streak": best_daily_streak,
             }
 
+        # INSERT succeeded — award points and update streak
         result = conn.execute(
             """
             UPDATE players

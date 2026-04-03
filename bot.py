@@ -35,6 +35,10 @@ from handlers.profile import (
     profile_callback_handler,
 )
 from handlers.group_bonus import bot_added_to_group_handler
+from handlers.challenge import (
+    challenge_command,
+    challenge_callback_handler,
+)
 from handlers.admin import (
     # Handlers for admin panel and question management
     admin_panel,
@@ -216,6 +220,7 @@ def main():
     app.add_handler(CommandHandler("dailyquiz", daily_quiz))
     app.add_handler(CommandHandler("myid", myid))
     app.add_handler(CommandHandler("callplayers", callplayers))
+    app.add_handler(CommandHandler("challenge", challenge_command))
 
     # ============ CALLBACK QUERY HANDLERS ============
     app.add_handler(
@@ -229,6 +234,13 @@ def main():
         CallbackQueryHandler(
             button_handler,
             pattern=r"^(setup_|setup_back_to_results:|join\||results_play_again:|duel_rematch:|duel_new_game$)",
+        )
+    )
+
+    app.add_handler(
+        CallbackQueryHandler(
+            challenge_callback_handler,
+            pattern=r"^challenge_(accept|decline):",
         )
     )
 

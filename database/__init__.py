@@ -6,6 +6,7 @@ from .players import (
     ensure_player,
     ensure_user,
     get_player,
+    get_player_by_username,
     add_points,
     add_manual_points,
     record_correct_answer,
@@ -125,6 +126,7 @@ __all__ = [
     "ensure_player",
     "ensure_user",
     "get_player",
+    "get_player_by_username",
     "add_points",
     "add_manual_points",
     "record_correct_answer",
@@ -153,6 +155,7 @@ __all__ = [
     "claim_daily_reward",
     "reset_daily_streak_if_missed",
     "get_player_streak_info",
+    "recalculate_all_player_wins",
 
     # chats
     "ensure_chat",
@@ -216,10 +219,9 @@ __all__ = [
     "get_all_settings",
     "get_game_settings",
 
+    # group bonus
     "save_bot_group_invite",
     "get_inviter_for_group",
     "has_claimed_group_bonus",
     "mark_group_bonus_claimed",
-
-    "recalculate_all_player_wins",
 ]

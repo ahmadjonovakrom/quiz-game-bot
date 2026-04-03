@@ -188,6 +188,36 @@ def get_player(user_id: int):
         ).fetchone()
 
 
+def get_player_by_username(username: str):
+    if not username:
+        return None
+
+    normalized = username.strip().lstrip("@").lower()
+    if not normalized:
+        return None
+
+    with closing(get_conn()) as conn:
+        return conn.execute(
+            """
+            SELECT
+                user_id,
+                username,
+                full_name,
+                total_points,
+                games_played,
+                games_won,
+                duel_games_played,
+                duel_games_won,
+                correct_answers,
+                wrong_answers
+            FROM players
+            WHERE LOWER(COALESCE(username, '')) = ?
+            LIMIT 1
+            """,
+            (normalized,),
+        ).fetchone()
+
+
 def get_player_stats(user_id: int):
     with closing(get_conn()) as conn:
         return conn.execute(
@@ -595,9 +625,9 @@ def claim_daily_reward(
     Claim today's daily reward for user_id.
 
     Race-condition fix: the INSERT OR IGNORE into daily_reward_claims is the
-    atomic gate.  We compute the streak and points *before* attempting the
+    atomic gate. We compute the streak and points before attempting the
     insert, then use INSERT OR IGNORE so that only one concurrent caller
-    succeeds.  If rowcount == 0 the row already existed and we return
+    succeeds. If rowcount == 0 the row already existed and we return
     already_claimed=True without double-awarding points.
     """
     with closing(get_conn()) as conn, conn:
@@ -629,7 +659,6 @@ def claim_daily_reward(
             (user_id,),
         ).fetchone()
 
-        # Compute what the new streak would be
         if last_claim and last_claim["reward_date"] == yesterday:
             new_daily_streak = current_daily_streak + 1
         else:
@@ -639,10 +668,6 @@ def claim_daily_reward(
         bonus_points = streak_bonus_points if new_daily_streak % streak_step == 0 else 0
         total_points = base_points + bonus_points
 
-        # FIX: use INSERT OR IGNORE as the atomic gate.
-        # If two coroutines race here only one INSERT will succeed (rowcount=1).
-        # The loser gets rowcount=0 and we return already_claimed without
-        # awarding points twice.
         cur = conn.execute(
             """
             INSERT OR IGNORE INTO daily_reward_claims (
@@ -657,7 +682,6 @@ def claim_daily_reward(
         )
 
         if cur.rowcount == 0:
-            # Already claimed — fetch the existing record to return correct data
             claim = conn.execute(
                 """
                 SELECT base_points, bonus_points, streak_after_claim
@@ -678,7 +702,6 @@ def claim_daily_reward(
                 "best_daily_streak": best_daily_streak,
             }
 
-        # INSERT succeeded — award points and update streak
         result = conn.execute(
             """
             UPDATE players

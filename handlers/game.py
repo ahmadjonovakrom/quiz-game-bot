@@ -484,7 +484,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # FIX: check and set status to "running" INSIDE the lock so that
             # a second rapid join callback cannot also see 2 players and
             # trigger send_question twice.
-            if game.get("mode") == "duel" and len(game["players"]) == 2:
+            if game.get("allowed_players") and len(game["players"]) == 2:
                 # Guard: only trigger duel start once
                 if game.get("duel_start_triggered"):
                     await query.answer("Joined!")

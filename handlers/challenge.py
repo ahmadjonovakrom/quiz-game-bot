@@ -160,10 +160,7 @@ async def _expire_challenge(
             await context.bot.edit_message_text(
                 chat_id=chat_id,
                 message_id=challenge["message_id"],
-                text=(
-                    "⏳ Challenge expired.\n\n"
-                    "The challenged player did not respond in time."
-                ),
+                text="⏳ Challenge expired.\n\nNo response from opponent.",
             )
         except Exception:
             logger.exception(
@@ -332,6 +329,8 @@ async def challenge_callback_handler(update: Update, context: ContextTypes.DEFAU
     if not query or not query.message or not query.from_user:
         return
 
+    await query.answer()
+
     data = query.data or ""
     parts = data.split(":")
     if len(parts) != 3:
@@ -383,10 +382,7 @@ async def challenge_callback_handler(update: Update, context: ContextTypes.DEFAU
             ),
             parse_mode="HTML",
         )
-        await query.answer("Challenge declined.")
         return
-
-    await query.answer("Duel accepted.")
 
     lock = get_game_lock(chat_id)
     async with lock:
@@ -449,11 +445,28 @@ async def challenge_callback_handler(update: Update, context: ContextTypes.DEFAU
             "⚔️ Duel accepted! 🍋\n\n"
             f"{_display_name(challenger_user)} ✅\n"
             f"{_display_name(actor)} ✅\n\n"
+            "⚡ Get ready..."
+        ),
+        parse_mode="HTML",
+    )
+
+    for i in [3, 2, 1]:
+        await asyncio.sleep(1)
+        try:
+            await context.bot.send_message(chat_id, f"{i}...")
+        except Exception:
+            logger.exception("Failed to send duel countdown in chat %s", chat_id)
+
+    await asyncio.sleep(0.5)
+
+    await context.bot.send_message(
+        chat_id=chat_id,
+        text=(
+            "⚔️ Duel Setup\n\n"
             "Step 1 of 1 — Choose number of questions\n\n"
             "• Mode: 1 vs 1\n"
             "• Category: Mixed\n"
             "• Difficulty: Mixed"
         ),
         reply_markup=get_question_count_keyboard(back_callback="menu_main"),
-        parse_mode="HTML",
     )

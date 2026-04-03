@@ -111,26 +111,54 @@ def format_final_results_page(results, page=1):
     return "\n".join(lines), has_next
 
 
+def _accuracy(row):
+    correct = row.get("correct_answers", 0)
+    wrong = row.get("wrong_answers", 0)
+    total = correct + wrong
+    if total == 0:
+        return 0
+    return round((correct / total) * 100)
+
+
+def _fastest_time(row):
+    times = row.get("answer_times", [])
+    if not times:
+        return None
+    return min(times)
+
+
 def format_duel_results(results):
     if len(results) != 2:
         return None
 
     p1, p2 = results[0], results[1]
 
+    winner = None
     if p1["points"] > p2["points"]:
         winner = p1
     elif p2["points"] > p1["points"]:
         winner = p2
-    else:
-        winner = None
 
     p1_name = make_clickable_name(p1)
     p2_name = make_clickable_name(p2)
+
+    p1_acc = _accuracy(p1)
+    p2_acc = _accuracy(p2)
+
+    p1_fast = _fastest_time(p1)
+    p2_fast = _fastest_time(p2)
+
+    def fmt_time(t):
+        return f"{round(t, 2)}s" if t else "—"
 
     text = (
         "⚔️ DUEL RESULT 🍋\n\n"
         f"🥇 {p1_name} — {p1['points']} 🍋\n"
         f"🥈 {p2_name} — {p2['points']} 🍋\n\n"
+        "📊 Stats:\n"
+        f"• Correct: {p1.get('correct_answers',0)} vs {p2.get('correct_answers',0)}\n"
+        f"• Accuracy: {p1_acc}% vs {p2_acc}%\n"
+        f"• Fastest: {fmt_time(p1_fast)} vs {fmt_time(p2_fast)}\n\n"
     )
 
     if winner:

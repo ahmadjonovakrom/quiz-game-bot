@@ -75,10 +75,8 @@ def format_final_results_page(results, page=1):
             correct = row.get("correct_answers", 0)
             wrong = row.get("wrong_answers", 0)
             total_answers = correct + wrong
-
             if total_answers == 0:
                 return -1
-
             return (correct / total_answers) * 100
 
         valid_players = [
@@ -309,30 +307,14 @@ async def end_game(chat_id, context):
     result_id = db_game_id or chat_id
     context.bot_data.setdefault("final_results_pages", {})[result_id] = normalized_results
 
+    # NEW: duel results handled by handlers/duel.py
     if mode == "duel" and len(normalized_results) == 2:
-        duel_text = format_duel_results(normalized_results)
-
-        p1_id = normalized_results[0]["user_id"]
-        p2_id = normalized_results[1]["user_id"]
-
-        duel_markup = InlineKeyboardMarkup([
-            [
-                InlineKeyboardButton(
-                    "🔁 Rematch",
-                    callback_data=f"duel_rematch:{p1_id}:{p2_id}",
-                ),
-                InlineKeyboardButton(
-                    "🚀 New Duel",
-                    callback_data="duel_new_game",
-                ),
-            ]
-        ])
-
-        await context.bot.send_message(
+        from handlers.duel import post_duel_results
+        await post_duel_results(
             chat_id=chat_id,
-            text=duel_text,
-            reply_markup=duel_markup,
-            parse_mode="HTML",
+            context=context,
+            results=normalized_results,
+            db_game_id=result_id,
         )
         return
 
@@ -356,6 +338,25 @@ async def stop_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if not chat or not message or not user:
         return
+
+    # NEW: check if it's a duel and cancel it cleanly
+    from services.duel_state import duel_registry
+    from handlers.duel import stop_duel_if_active
+
+    if duel_registry.has_active_duel(chat.id):
+        from utils.helpers import is_admin, is_group_admin
+        allowed = is_admin(user.id) or await is_group_admin(context, chat.id, user.id)
+        if not allowed:
+            # Also allow the duel challenger
+            state = duel_registry.get_state(chat.id)
+            if state and user.id != state.challenger.user_id:
+                await message.reply_text("Only the challenger or a group admin can stop this duel.")
+                return
+
+        stopped = await stop_duel_if_active(chat.id, context, user.id)
+        if stopped:
+            await message.reply_text("Duel stopped.")
+            return
 
     game = active_games.get(chat.id)
     allowed = await is_game_controller(context, chat.id, user.id, game)

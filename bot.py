@@ -16,8 +16,6 @@ from config import BOT_TOKEN
 from database import create_tables
 from services.reminder_service import restore_daily_reminder_jobs
 
-# Import various handler functions and constants from custom modules,
-# organized by functionality
 from handlers.tag_players import callplayers
 from handlers.group_activity import track_group_activity
 from handlers.game import button_handler, daily_quiz
@@ -35,12 +33,14 @@ from handlers.profile import (
     profile_callback_handler,
 )
 from handlers.group_bonus import bot_added_to_group_handler
-from handlers.challenge import (
-    challenge_command,
-    challenge_callback_handler,
+
+# NEW: replaced handlers.challenge with handlers.duel
+from handlers.duel import (
+    duel_challenge_command,
+    duel_callback_handler,
 )
+
 from handlers.admin import (
-    # Handlers for admin panel and question management
     admin_panel,
     admin_button_handler,
     bot_stats_command,
@@ -68,7 +68,6 @@ from handlers.admin import (
     import_questions_file_step,
     cancel,
     fixwins,
-    # State constants for admin ConversationHandler
     ADMIN_MENU,
     QUESTION,
     A,
@@ -104,7 +103,6 @@ from handlers.admin import (
     settings_update_step,
 )
 
-# Setup logging for debugging and monitoring
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO,
@@ -113,20 +111,13 @@ logger = logging.getLogger(__name__)
 
 
 async def post_init(application: Application):
-    """
-    Restore background reminder jobs after bot startup/restart.
-    """
     logger.warning("POST_INIT: restoring reminder jobs")
     await restore_daily_reminder_jobs(application)
 
 
 def main():
-    """
-    Main function to initialize database, build the Application,
-    register all handlers, and start the Telegram bot poller.
-    """
     logger.warning("BOT STARTED")
-    create_tables()  # Ensure DB tables exist
+    create_tables()
 
     app = (
         Application.builder()
@@ -220,7 +211,9 @@ def main():
     app.add_handler(CommandHandler("dailyquiz", daily_quiz))
     app.add_handler(CommandHandler("myid", myid))
     app.add_handler(CommandHandler("callplayers", callplayers))
-    app.add_handler(CommandHandler("challenge", challenge_command))
+
+    # NEW: replaced challenge_command with duel_challenge_command
+    app.add_handler(CommandHandler("challenge", duel_challenge_command))
 
     # ============ CALLBACK QUERY HANDLERS ============
     app.add_handler(
@@ -230,17 +223,19 @@ def main():
         )
     )
 
+    # CHANGED: removed duel_rematch: and duel_new_game from pattern
     app.add_handler(
         CallbackQueryHandler(
             button_handler,
-            pattern=r"^(setup_|setup_back_to_results:|join\||results_play_again:|duel_rematch:|duel_new_game$)",
+            pattern=r"^(setup_|setup_back_to_results:|join\||results_play_again:)",
         )
     )
 
+    # NEW: single handler for all duel callbacks
     app.add_handler(
         CallbackQueryHandler(
-            challenge_callback_handler,
-            pattern=r"^challenge_(accept|decline):",
+            duel_callback_handler,
+            pattern=r"^duel:",
         )
     )
 

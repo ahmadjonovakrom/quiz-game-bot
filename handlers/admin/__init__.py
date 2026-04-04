@@ -46,8 +46,3 @@ from .edit import (
     edit_category_step,
     edit_difficulty_step,
 )
-
-# ✅ FIXED: removed old duel_button_handler
-from ..challenge import (
-    challenge_menu,
-)

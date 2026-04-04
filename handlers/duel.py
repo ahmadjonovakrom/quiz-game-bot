@@ -294,8 +294,7 @@ async def _edit_on_expiry(
 
     state = duel_registry.get_state(chat_id)
     # If state is gone or token changed, challenge was already handled.
-    if state is not None and state.token == token:
-        # Still pending — shouldn't happen (registry expires it), but guard.
+    if state is None or state.token != token:
         return
 
     try:
@@ -803,6 +802,8 @@ async def _resolve_target(
     if not raw or not raw.replace("_", "").isalnum():
         return None
 
+
+    # Fallback to DB
     row = get_player_by_username(raw)
     if not row:
         return None
@@ -812,5 +813,4 @@ async def _resolve_target(
         u = member.user
         return u if not u.is_bot else None
     except Exception:
-        logger.exception("Failed to resolve @%s in chat %s", raw, chat.id)
         return None

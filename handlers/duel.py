@@ -206,7 +206,7 @@ def _join_text(state: DuelState) -> str:
 # ---------------------------------------------------------------------------
 
 
-async def duel_challenge_command(
+async def duel_command(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
 ) -> None:

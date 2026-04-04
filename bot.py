@@ -36,7 +36,7 @@ from handlers.group_bonus import bot_added_to_group_handler
 
 # NEW: replaced handlers.challenge with handlers.duel
 from handlers.duel import (
-    duel_challenge_command,
+    duel_command,
     duel_callback_handler,
 )
 
@@ -213,7 +213,7 @@ def main():
     app.add_handler(CommandHandler("callplayers", callplayers))
 
     # NEW: replaced challenge_command with duel_challenge_command
-    app.add_handler(CommandHandler("challenge", duel_challenge_command))
+    app.add_handler(CommandHandler("challenge", duel_command))
 
     # ============ CALLBACK QUERY HANDLERS ============
     app.add_handler(
